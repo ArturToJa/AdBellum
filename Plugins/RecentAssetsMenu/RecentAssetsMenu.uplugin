@@ -1,0 +1,28 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.4",
+	"FriendlyName": "RecentAssetsMenu",
+	"Description": "Adds a menu to open recently opened assets in the file menu.\r\nIn UE5.3 and above, this plugin's functions is included as an engine feature, so in UE5.3 and above, this plugin essentially does nothing.",
+	"Category": "Editor",
+	"CreatedBy": "Naotsun",
+	"CreatedByURL": "https://twitter.com/Naotsun_UE",
+	"DocsURL": "https://github.com/Naotsun19B/RecentAssetsMenu-Document",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/44fa509ad97a455d8e7125f5d019a785",
+	"SupportURL": "https://github.com/Naotsun19B/RecentAssetsMenu-Document",
+	"EngineVersion": "5.4.0",
+	"CanContainContent": false,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "RecentAssetsMenu",
+			"Type": "EditorNoCommandlet",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64",
+				"Mac",
+				"Linux"
+			]
+		}
+	]
+}

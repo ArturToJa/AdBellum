@@ -1,0 +1,42 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Selectable.h"
+#include "OrderSystem/OrderSystem.h"
+
+class ADBELLUM_API MoveLocationOrder : public BaseOrder
+{
+public:
+	MoveLocationOrder(AActor* inTargetUnit, FVector inLocation) : BaseOrder(nullptr, inLocation) {}
+
+	virtual ~MoveLocationOrder() {}
+
+	virtual void Execute() override
+	{
+		IOrderable::Execute_DoStandUp(owningUnit);
+		IOrderable::Execute_MoveOrder(owningUnit, targetPosition);
+	}
+
+	virtual void Finalize() override
+	{
+		IOrderable::Execute_Stop(owningUnit, owningUnit->GetActorLocation());
+	}
+
+	virtual bool IsFinished() const override
+	{
+		return !ISelectable::Execute_IsAlive(owningUnit) || BaseOrder::IsFinished();
+	}
+
+	virtual OrderEnum GetOrderType() const override
+	{
+		return HasSubOrders() ? subOrder->GetOrderType() : OrderEnum::Move;
+	}
+};
+
+template<>
+struct ADBELLUM_API GeneralOrder<OrderEnum::Move>
+{
+	using OrderType = MoveLocationOrder;
+};

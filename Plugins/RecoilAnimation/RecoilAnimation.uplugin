@@ -1,0 +1,40 @@
+{
+	"FileVersion": 3,
+	"Version": 13,
+	"VersionName": "2023.2.0",
+	"FriendlyName": "Procedural Recoil Animation System",
+	"Description": "Advanced weapon recoil solution",
+	"Category": "Animation",
+	"CreatedBy": "guip97",
+	"CreatedByURL": "https://github.com/guip97",
+	"DocsURL": "https://github.com/guip97/ProceduralRecoilAnimationSystem/wiki",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/76194998d28247018bee7be203f6c948",
+	"SupportURL": "https://github.com/guip97/ProceduralRecoilAnimationSystem",
+	"EngineVersion": "5.4.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "RecoilAnimation",
+			"Type": "Runtime",
+			"LoadingPhase": "PreDefault",
+			"PlatformAllowList": [
+				"Win64",
+				"Linux",
+				"Mac",
+				"Android"
+			]
+		},
+		{
+			"Name": "ProceduralConverter",
+			"Type": "UncookedOnly",
+			"LoadingPhase": "PreDefault",
+			"PlatformAllowList": [
+				"Win64",
+				"Linux",
+				"Mac",
+				"Android"
+			]
+		}
+	]
+}

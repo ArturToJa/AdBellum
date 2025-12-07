@@ -1,0 +1,2 @@
+
+%~dp0..\..\..\RunUAT.bat BuildCookRun -project=AdBellum\AdBellum.uproject -target=AdBellum -WindowsNoEditor -clientconfig=Debug -build -cook -iterate -skipbuild -SkipCookingEditorContent  -additionalcookeroptions="-stdout -FullStdOutLogOutput -logcmds='LogDerivedDataCache Verbose'" -MapIniSectionsToCook=FinalRelease
