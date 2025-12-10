@@ -7,7 +7,7 @@
 #include "UnitAIController.generated.h"
 
 /**
- *
+ * 
  */
 UCLASS()
 class ADBELLUM_API AUnitAIController : public AALSAIController

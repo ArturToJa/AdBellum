@@ -203,8 +203,6 @@ public:
 
 	virtual void TriggerActionCompleted_Implementation() override;
 
-	virtual void ReloadAction_Implementation() override;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Input")
 	bool bIsReloading = false;
 
@@ -251,9 +249,9 @@ public:
 	virtual void DoStandUp_Implementation() override;
 	virtual TScriptInterface<IIWeapon> GetWeapon_Implementation() override;
 	virtual void OnWeaponUpdated_Implementation(AActor* Weapon) override;
-
-	//Weapon trigger actions
+	//weapon trigger handling
 	void WeaponTriggerAction();
+
 
 	//ITargetable
 	virtual FVector GetHeadLocation_Implementation() override;
@@ -297,7 +295,7 @@ protected:
 	AActor* PlayerPtr;
 	int32 SelectionCircleIndex;
 	FTimerHandle AIAttackTimer;
-	void StopWeaponTriggerAction();
+	void StopTriggerTimer();
 
 	TArray<AActor*> TargetingAtActorArray;
 	TArray<ABaseFormation*> SeenByFormation;

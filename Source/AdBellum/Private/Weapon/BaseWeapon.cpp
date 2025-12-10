@@ -266,7 +266,7 @@ AdBellumWeaponTypeEnum ABaseWeapon::GetWeaponType_Implementation()
 
 bool ABaseWeapon::IsReloading_Implementation() 
 {
-	return false;
+	return bIsReloading;
 }
 bool ABaseWeapon::HasAmmoToReload_Implementation() 
 {
@@ -283,17 +283,6 @@ float ABaseWeapon::GetMaxRange_Implementation()
 void ABaseWeapon::Reload_Implementation()
 {
 	bIsReloading = true;
-	if (TotalAmmo <= MagazineSize)
-	{
-		EBarrel->SetAmmo(TotalAmmo, false, false, false, EBarrel->GetAmmo(true));
-		TotalAmmo = 0;
-	}
-	else
-	{
-		EBarrel->SetAmmo(MagazineSize, false, false, false, EBarrel->GetAmmo(true));
-		TotalAmmo -= MagazineSize;
-	}
-	OnWeaponUpdate();
 }
 bool ABaseWeapon::HasAmmo_Implementation()
 {
@@ -396,16 +385,16 @@ void ABaseWeapon::SetupAim_Implementation(UObject* TargetObject)
 
 		EBarrel->CalculateAimDirectionFromLocation(BulletClass, StartLocation, TargetLocation, TargetVelocity, TargetAimDirection, PredictedTargetLocation, PredictedIntersectionLocation, PredictedFlightTime, Error, MaxTime, Step, NumIterations);
 		EBarrel->SetWorldRotation(TargetAimDirection.Rotation());
-		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), StartLocation, StartLocation + TargetAimDirection * 500000.0f, 10.0f, FColor::Blue, 5.0f, 2.0f);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), StartLocation, StartLocation + TargetAimDirection * 500000.0f, 10.0f, FColor::Blue, 0.5f, 2.0f);
 
 		//GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Red, "Calculated Rotator: ");
 		//GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Red, TargetAimDirection.Rotation().ToString());
 
 		//Angle calculation - set pitch on new angle
 
+	
 
-
-
+	
 
 		/*FRotator UnrealRotator = UKismetMathLibrary::FindLookAtRotation(StartLocation, TargetLocation);
 
@@ -430,4 +419,15 @@ void ABaseWeapon::SetWeaponSpread_Implementation(float Spread)
 void ABaseWeapon::ReloadComplete_Implementation()
 {
 	bIsReloading = false;
+	if (TotalAmmo <= MagazineSize)
+	{
+		EBarrel->SetAmmo(TotalAmmo, false, false, false, EBarrel->GetAmmo(true));
+		TotalAmmo = 0;
+	}
+	else
+	{
+		EBarrel->SetAmmo(MagazineSize, false, false, false, EBarrel->GetAmmo(true));
+		TotalAmmo -= MagazineSize;
+	}
+	OnWeaponUpdate();
 }

@@ -169,49 +169,44 @@ void AAdBellumGameMode::SpawnUnitsForPlayer(AActor* Player, int TeamId, int Play
 		{
 			SpawnArea = SpawnAreas[TeamId][0];
 		}
-
-		SpawnArea->GenerateTransforms(UnitPrefabs.Num() * 5);
+		SpawnArea->GenerateTransforms(UnitPrefabs.Num());
 
 		int TotalCost = 0;
 
-		for (int i = 0; i < 5; ++i)
+		for (const FMeshCreatorPrefabStruct& UnitData : UnitPrefabs)
+		{
+			TotalCost += UnitData.TicketCost;
+		}
+		if (IPlayerStateInterface::Execute_TryConsumeTickets(IIPlayer::Execute_GetPlayerStateActor(Player), TotalCost))
 		{
 			for (const FMeshCreatorPrefabStruct& UnitData : UnitPrefabs)
 			{
-				TotalCost += UnitData.TicketCost;
-			}
-			if (IPlayerStateInterface::Execute_TryConsumeTickets(IIPlayer::Execute_GetPlayerStateActor(Player), TotalCost))
-			{
-				for (const FMeshCreatorPrefabStruct& UnitData : UnitPrefabs)
+				TSubclassOf<APawn> Class = UnitData.UnitClass.LoadSynchronous();
+				FTransform SpawnTransform = SpawnArea->GetNextTransform();
+				APawn* SpawnedUnit = GetWorld()->SpawnActorDeferred<APawn>(Class, SpawnTransform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+				if (SpawnedUnit)
 				{
-					TSubclassOf<APawn> Class = UnitData.UnitClass.LoadSynchronous();
-					FTransform SpawnTransform = SpawnArea->GetNextTransform();
-					APawn* SpawnedUnit = GetWorld()->SpawnActorDeferred<APawn>(Class, SpawnTransform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
-					if (SpawnedUnit)
+					SpawnedUnit->SetOwner(Player);
+					SpawnedUnit->FinishSpawning(SpawnTransform);
+					AddUnitForPlayer(SpawnedUnit, Player, UnitData);
+					SpawnWeaponsForUnit(SpawnedUnit, UnitData.WeaponPrefabData, bIsDefault);
+					if (bIsDefault)
 					{
-						SpawnedUnit->SetOwner(Player);
-						SpawnedUnit->FinishSpawning(SpawnTransform);
-						AddUnitForPlayer(SpawnedUnit, Player, UnitData);
-						SpawnWeaponsForUnit(SpawnedUnit, UnitData.WeaponPrefabData, bIsDefault);
-						if (bIsDefault)
-						{
-							AllUnits.Add(SpawnedUnit);
-							AllUnitsPrefabs.Add(UnitData);
-						}
-						else
-						{
-							AllUnitsReady.Add(SpawnedUnit);
-							AllUnitsPrefabsReady.Add(UnitData);
-							ScheduleSpawnTimer();
-						}
-						IFormationInterface::Execute_AddUnitToFormation(Formation, SpawnedUnit);
-						AllActorsMap.Add(SpawnedUnit, InitializePlayerIsReplicatedMap());
+						AllUnits.Add(SpawnedUnit);
+						AllUnitsPrefabs.Add(UnitData);
 					}
-
+					else
+					{
+						AllUnitsReady.Add(SpawnedUnit);
+						AllUnitsPrefabsReady.Add(UnitData);
+						ScheduleSpawnTimer();
+					}
+					IFormationInterface::Execute_AddUnitToFormation(Formation, SpawnedUnit);
+					AllActorsMap.Add(SpawnedUnit, InitializePlayerIsReplicatedMap());
 				}
+
 			}
 		}
-
 		Formation->SetFormationCost(TotalCost);
 	}
 }
