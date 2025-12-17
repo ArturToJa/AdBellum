@@ -39,7 +39,7 @@ public:
 
 	virtual bool IsFinished() const override
 	{
-		return BaseOrder::IsFinished() && (WeaponObject == nullptr || !IIWeapon::Execute_IsReloading(WeaponObject));
+		return BaseOrder::IsFinished() || (WeaponObject == nullptr || !IIWeapon::Execute_IsReloading(WeaponObject));
 	}
 
 	virtual OrderEnum GetOrderType() const override

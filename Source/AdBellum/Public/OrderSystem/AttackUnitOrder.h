@@ -51,7 +51,7 @@ public:
 
 	virtual bool IsFinished() const override
 	{
-		return BaseOrder::IsFinished() && (!ISelectable::Execute_IsAlive(targetUnit) || WeaponObject == nullptr);
+		return BaseOrder::IsFinished() || (!ISelectable::Execute_IsAlive(targetUnit) || WeaponObject == nullptr);
 	}
 
 	virtual OrderEnum GetOrderType() const override
