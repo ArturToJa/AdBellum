@@ -109,7 +109,7 @@ public:
 	float WeaponAimSensivity = 0.3f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
-	FRecoilAnimData RecoilData;
+	TObjectPtr<URecoilData> RecoilData;
 
 	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
 	//float RecoilVerticalValue = 0.075f;

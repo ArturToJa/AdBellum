@@ -249,10 +249,8 @@ public:
 	virtual void DoStandUp_Implementation() override;
 	virtual TScriptInterface<IIWeapon> GetWeapon_Implementation() override;
 	virtual void OnWeaponUpdated_Implementation(AActor* Weapon) override;
-	//weapon trigger handling
-	void WeaponTriggerAction();
-
-
+	virtual bool IsReloading_Implementation() override;
+	
 	//ITargetable
 	virtual FVector GetHeadLocation_Implementation() override;
 	virtual FVector GetChestLocation_Implementation() override;
@@ -297,6 +295,12 @@ protected:
 	FTimerHandle AIAttackTimer;
 	void StopTriggerTimer();
 
+	// prevent re-triggering while already firing
+	bool bTriggerActive = false;
+
+	// weapon trigger handling
+	void WeaponTriggerAction();
+
 	TArray<AActor*> TargetingAtActorArray;
 	TArray<ABaseFormation*> SeenByFormation;
 
@@ -325,5 +329,15 @@ protected:
 	bool TriggerActive = false;
 
 	bool WasPlayerControlled = false;
+
+	// aim setup throttle to avoid redundant expensive calls
+	UPROPERTY()
+	TWeakObjectPtr<UObject> LastAimTarget;
+
+	// time in seconds when last aim setup was invoked
+	float LastAimSetupTime = 0.0f;
+
+	// minimum interval between aim setup calls from AttackTarget (seconds)
+	inline static constexpr float AimSetupCooldown = 0.2f;
 };
 

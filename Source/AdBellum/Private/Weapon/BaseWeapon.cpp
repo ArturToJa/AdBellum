@@ -282,7 +282,7 @@ float ABaseWeapon::GetMaxRange_Implementation()
 }
 void ABaseWeapon::Reload_Implementation()
 {
-	bIsReloading = true;
+
 }
 bool ABaseWeapon::HasAmmo_Implementation()
 {
@@ -368,7 +368,7 @@ void ABaseWeapon::SetupAim_Implementation(UObject* TargetObject)
 	if (TargetObject == nullptr) {
 		EBarrel->SetRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));
 	}
-	else {
+	else if(TargetObject){
 		FVector TargetLocation = IITargetable::Execute_GetChestLocation(TargetObject);
 		FVector TargetVelocity = Cast<AActor>(TargetObject)->GetVelocity();
 		TSubclassOf<class AEBBullet> BulletClass = EBarrel->Ammo[0];
@@ -386,23 +386,6 @@ void ABaseWeapon::SetupAim_Implementation(UObject* TargetObject)
 		EBarrel->CalculateAimDirectionFromLocation(BulletClass, StartLocation, TargetLocation, TargetVelocity, TargetAimDirection, PredictedTargetLocation, PredictedIntersectionLocation, PredictedFlightTime, Error, MaxTime, Step, NumIterations);
 		EBarrel->SetWorldRotation(TargetAimDirection.Rotation());
 		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), StartLocation, StartLocation + TargetAimDirection * 500000.0f, 10.0f, FColor::Blue, 0.5f, 2.0f);
-
-		//GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Red, "Calculated Rotator: ");
-		//GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Red, TargetAimDirection.Rotation().ToString());
-
-		//Angle calculation - set pitch on new angle
-
-	
-
-	
-
-		/*FRotator UnrealRotator = UKismetMathLibrary::FindLookAtRotation(StartLocation, TargetLocation);
-
-		GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Blue, "Unreal Rotator: ");
-		GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Blue, UnrealRotator.ToString());
-		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), StartLocation, StartLocation + UnrealRotator.Vector() * 5000.0f, 10.0f, FColor::Blue, 5.0f, 2.0f);*/
-
-
 	}
 }
 

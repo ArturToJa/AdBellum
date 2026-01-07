@@ -2,7 +2,6 @@
 
 
 #include "Vehicle/VehicleAccessPoint.h"
-#include "Misc/VRWheeledVehicle.h"
 #include "Player/IPlayer.h"
 #include "Vehicle/VehicleSeatComponent.h"
 #include <Vehicle/GunnerSeatComponent.h>

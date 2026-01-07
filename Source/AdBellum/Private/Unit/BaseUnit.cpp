@@ -943,70 +943,64 @@ void ABaseUnit::MoveOrder_Implementation(FVector TargetPosition)
 	GetController<AAIController>()->MoveToLocation(TargetPosition, 7.5f, true, true, true);
  }
 void ABaseUnit::AttackTarget_Implementation(UObject* TargetObject) {
-	UKismetSystemLibrary::PrintString(GetWorld(), "ORDER: Attack Target", true, true);
-	
-	
-	/*float Distance = FVector::DistSquared(GetActorLocation(),
-		IITargetable::Execute_GetChestLocation(Cast<AActor>(TargetObject)));*/
+	// lightweight early checks
+	if (!ActiveWeaponActor || !TargetObject) return;
 
-	/*UKismetSystemLibrary::DrawDebugArrow(GetWorld(), GetActorLocation(), GetActorLocation() + UKismetMathLibrary::FindLookAtRotation(GetActorLocation(),
-		IITargetable::Execute_GetChestLocation(TargetObject)).Vector() * 5000.0f, 10.0f, FColor::Blue, 5.0f, 2.0f);*/
-
-	/*GetController<AAIController>()->SetControlRotation(
-		UKismetMathLibrary::FindLookAtRotation(GetActorLocation(),
-			IITargetable::Execute_GetChestLocation(TargetObject)));*/
-	
-
-	IIWeapon::Execute_SetupAim(ActiveWeaponActor,TargetObject);
-
-	WeaponTriggerAction();
-	//get range fire mode data
-	//IWeapon - set firemode 
-
-
-	//REMEBER THAT DISTANCE IS SQUARED
-
-	// INPUT Distance = TargetObject -> IITargetable::Execute__GetBodyLocation()
-	//calculations: INPUT distance, target velocity, OUTPUT EBarrel &Vector AimDirection
-	
-	//make rotation from XVector AimDirection
-	//IWeapon - set aim direction
-
-
-	//get unit experience
-	//IWeapon - set weapon spread
-
-
-
-	//character reset weapon AimDirection
-	//on death, on possessed
-	//remember to invoke calculation when reseted
-
-}
-void ABaseUnit::WeaponTriggerAction() 
-{
-	if (ActiveWeaponActor)
+	// Avoid calling SetupAim too frequently
+	UWorld* World = GetWorld();
+	if (!World) return;
+	float CurrentTime = World->GetTimeSeconds();
+	if (!LastAimTarget.IsValid() || LastAimTarget.Get() != TargetObject || (CurrentTime - LastAimSetupTime) > AimSetupCooldown)
 	{
-		IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
-		GetWorldTimerManager().SetTimer(AIAttackTimer, this,
-			&ABaseUnit::StopTriggerTimer, FMath::FRandRange(0.1f, 0.1f), false);
+		LastAimSetupTime = CurrentTime;
+		LastAimTarget = TargetObject;
+		IIWeapon::Execute_SetupAim(ActiveWeaponActor, TargetObject);
+	}
+
+	// Fire only if not already firing to prevent redundant triggers
+	if (!bTriggerActive)
+	{
+		WeaponTriggerAction();
 	}
 }
 
+void ABaseUnit::WeaponTriggerAction() 
+{
+	if (!ActiveWeaponActor) return;
+
+	bTriggerActive = true;
+	IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
+
+	// reuse existing timer handle but ensure it's cleared first
+	if (GetWorld())
+	{
+		GetWorldTimerManager().ClearTimer(AIAttackTimer);
+		float Delay = FMath::FRandRange(0.1f, 0.2f);
+		GetWorldTimerManager().SetTimer(AIAttackTimer, this, &ABaseUnit::StopTriggerTimer, Delay, false);
+	}
+}
 
 void ABaseUnit::AttackLocation_Implementation(FVector TargetPosition) 
 {
-	if (ActiveWeaponActor)
-	{
-		IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
-		GetWorldTimerManager().SetTimer(AIAttackTimer, this,
-			&ABaseUnit::StopTriggerTimer, FMath::FRandRange(0.2f,0.75f), false);
-	}
+    if (!ActiveWeaponActor) return;
+    if (!bTriggerActive)
+    {
+        bTriggerActive = true;
+        IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
+        if (GetWorld())
+        {
+            GetWorldTimerManager().ClearTimer(AIAttackTimer);
+            GetWorldTimerManager().SetTimer(AIAttackTimer, this, &ABaseUnit::StopTriggerTimer, FMath::FRandRange(0.2f,0.75f), false);
+        }
+    }
 }
 
 void ABaseUnit::StopTriggerTimer()
 {
-	IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+    if (!ActiveWeaponActor) return;
+
+    IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+    bTriggerActive = false;
 }
 
 void ABaseUnit::DoCrouch_Implementation() 
@@ -1047,6 +1041,13 @@ void ABaseUnit::DoCrouch_Implementation()
 		 }
 	 }
  }
+
+
+bool ABaseUnit::IsReloading_Implementation()
+{
+	return bIsReloading;
+}
+
 //END ORDERABLE INTERFACE
 
 //ITARGETABBLE INTERAFACE
@@ -1100,4 +1101,4 @@ void ABaseUnit::DoCrouch_Implementation()
 		  SeenByFormation.Remove(Formation);
 	  }
   }
- //END ITARGETABBLE INTERAFACE
+ //END ITARGETABBLE INTERAFCE
