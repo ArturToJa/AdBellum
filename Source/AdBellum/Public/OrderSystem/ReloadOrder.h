@@ -44,7 +44,7 @@ public:
 
 	virtual OrderEnum GetOrderType() const override
 	{
-		return HasSubOrders() ? subOrder->GetOrderType() : OrderEnum::Reload;
+		return OrderEnum::Reload;
 	}
 	
 	virtual void Update() override

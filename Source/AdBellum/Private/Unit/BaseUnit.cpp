@@ -851,6 +851,95 @@ void ABaseUnit::RespawnUnit_Implementation(FTransform RespawnTransform)
 	
 }
 
+UAISense_Sight::EVisibilityResult ABaseUnit::CanBeSeenFrom(const FCanBeSeenFromContext& Context,
+	FVector& OutSeenLocation, int32& OutNumberOfLoSChecksPerformed, int32& OutNumberOfAsyncLosCheckRequested,
+	float& OutSightStrength, int32* UserData, const FOnPendingVisibilityQueryProcessedDelegate* Delegate)
+{
+	uint8 Flags6bit = 0;
+
+	FVector ChestLoc = GetChestLocation_Implementation();
+	FVector HeadLoc = GetHeadLocation_Implementation();
+	FVector LeftArmLoc = GetLeftArmLocation_Implementation();
+	FVector RightArmLoc = GetRightArmLocation_Implementation();
+	FVector LeftLegLoc = GetLeftLegLocation_Implementation();
+	FVector RightLegLoc = GetRightLegLocation_Implementation();
+
+	TArray<ETargetBodyPart> VisibleBodyParts;
+
+	FHitResult HitResult;
+	FCollisionQueryParams QueryParams;
+	FCollisionResponseParams ResponseParams;
+	QueryParams.AddIgnoredActor(Context.IgnoreActor);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Context.ObserverLocation, ChestLoc,
+		ECollisionChannel::ECC_Visibility, QueryParams);
+	if(bHit && HitResult.GetActor() == this)
+	{
+		VisibleBodyParts.Add(ETargetBodyPart::CHEST);
+		Flags6bit |= 1 << 0;
+	}
+	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Context.ObserverLocation, HeadLoc,
+		ECollisionChannel::ECC_Visibility, QueryParams);
+	if (bHit && HitResult.GetActor() == this)
+	{
+		VisibleBodyParts.Add(ETargetBodyPart::HEAD);
+		Flags6bit |= 1 << 1;
+	}
+	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Context.ObserverLocation, LeftArmLoc,
+		ECollisionChannel::ECC_Visibility, QueryParams);
+	if (bHit && HitResult.GetActor() == this)
+	{
+		VisibleBodyParts.Add(ETargetBodyPart::LEFT_ARM);
+		Flags6bit |= 1 << 2;
+	}
+	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Context.ObserverLocation, RightArmLoc,
+		ECollisionChannel::ECC_Visibility, QueryParams);
+	if (bHit && HitResult.GetActor() == this)
+	{
+		VisibleBodyParts.Add(ETargetBodyPart::RIGHT_ARM);
+		Flags6bit |= 1 << 3;
+	}
+	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Context.ObserverLocation, LeftLegLoc,
+		ECollisionChannel::ECC_Visibility, QueryParams);
+	if (bHit && HitResult.GetActor() == this)
+	{
+		VisibleBodyParts.Add(ETargetBodyPart::LEFT_LEG);
+		Flags6bit |= 1 << 4;
+	}
+	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Context.ObserverLocation, RightLegLoc,
+		ECollisionChannel::ECC_Visibility, QueryParams);
+	if (bHit && HitResult.GetActor() == this)
+	{
+		VisibleBodyParts.Add(ETargetBodyPart::RIGHT_LEG);
+		Flags6bit |= 1 << 5;
+	}
+
+	if (VisibleBodyParts.Num() > 0)
+	{
+		float Strength01 = VisibleBodyParts.Num() / 6.0f;
+
+		Flags6bit &= 0b00111111; // 6 bitów
+
+		// Quantize strength to 10 bits
+		uint32 StrengthQuantized = FMath::RoundToInt(Strength01 * 1023.0f);
+
+		// Pack bits
+		uint32 Packed =
+			(StrengthQuantized << 6) |
+			Flags6bit;
+
+		// Reinterpret as float
+		float Result;
+		FMemory::Memcpy(&Result, &Packed, sizeof(float));
+
+		OutSeenLocation = ChestLoc;
+		OutNumberOfLoSChecksPerformed += 6;
+		OutSightStrength = Result;
+		return UAISense_Sight::EVisibilityResult::Visible;
+	}
+	
+	return UAISense_Sight::EVisibilityResult::NotVisible;
+}
+
 void ABaseUnit::HideActorOnDeath()
 {
 	SetActorHiddenInGame(true);
@@ -1056,6 +1145,26 @@ void ABaseUnit::DoCrouch_Implementation()
  }
 
   FVector ABaseUnit::GetChestLocation_Implementation() 
+  {
+	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+  }
+
+  FVector ABaseUnit::GetLeftArmLocation_Implementation()
+  {
+	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+  }
+
+  FVector ABaseUnit::GetRightArmLocation_Implementation()
+  {
+	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+  }
+
+  FVector ABaseUnit::GetLeftLegLocation_Implementation()
+  {
+	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+  }
+
+  FVector ABaseUnit::GetRightLegLocation_Implementation()
   {
 	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
   }

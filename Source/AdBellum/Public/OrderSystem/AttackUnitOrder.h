@@ -56,7 +56,7 @@ public:
 
 	virtual OrderEnum GetOrderType() const override
 	{
-		return HasSubOrders() ? subOrder->GetOrderType() : OrderEnum::Attack;
+		return OrderEnum::Attack;
 	}
 	//
 	virtual void Update() override

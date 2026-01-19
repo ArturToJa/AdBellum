@@ -117,7 +117,7 @@ public:
 
 	virtual OrderEnum GetOrderType() const override
 	{
-		return HasSubOrders() ? subOrder->GetOrderType() : OrderEnum::TakeCover;
+		return OrderEnum::TakeCover;
 	}
 
 	void ToggleHiding()
