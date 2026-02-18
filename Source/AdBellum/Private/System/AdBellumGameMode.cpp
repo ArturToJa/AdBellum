@@ -246,6 +246,10 @@ void AAdBellumGameMode::SpawnWeaponsForUnit(AActor* Unit, TArray<FWeaponPrefabDa
 					}
 					AllActorsMap.Add(SpawnedWeapon, InitializePlayerIsReplicatedMap());
 				}
+				else
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 20.f, FColor::Red, "AAdBellumGameMode::SpawnWeaponsForUnit weapon not found in data table: " + WeaponPrefab.WeaponClass.ToString());
+				}
 			}
 		}
 	}

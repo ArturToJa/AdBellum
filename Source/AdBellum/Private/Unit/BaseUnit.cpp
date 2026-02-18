@@ -105,7 +105,7 @@ void ABaseUnit::PossessedBy(AController* NewController)
 	{
 		SetViewMode(EALSViewMode::FirstPerson);
 		RecoilAnimationComponent->Activate();
-		IIWeapon::Execute_SetupAim(ActiveWeaponActor, nullptr);
+		IIWeapon::Execute_ResetAim(ActiveWeaponActor);
 		OrdersManagerComponent->SetStopOrder();
 	}
 	else
@@ -798,6 +798,10 @@ void ABaseUnit::ConfigureUnit_Implementation(const FMeshCreatorPrefabStruct& Uni
 void ABaseUnit::ConfigureWeapon_Implementation(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum)
 {
 	WeaponArray[(uint8)SocketEnum] = Weapon;
+	if (ActiveWeaponActor == nullptr)
+	{
+		ActiveWeaponActor = Weapon;
+	}
 	if (Weapon)
 	{
 		SocketWeapon(Weapon, SocketEnum);

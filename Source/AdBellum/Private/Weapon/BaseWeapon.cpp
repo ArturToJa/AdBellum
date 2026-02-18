@@ -363,12 +363,14 @@ bool ABaseWeapon::GainMagazine()
 	return bCanGainMagazine;
 }
 
+void ABaseWeapon::ResetAim_Implementation()
+{
+	EBarrel->SetRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));
+}
+
 void ABaseWeapon::SetupAim_Implementation(UObject* TargetObject)
 {
-	if (TargetObject == nullptr) {
-		EBarrel->SetRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));
-	}
-	else if(TargetObject){
+	if(TargetObject){
 		FVector TargetLocation = IITargetable::Execute_GetChestLocation(TargetObject);
 		FVector TargetVelocity = Cast<AActor>(TargetObject)->GetVelocity();
 		TSubclassOf<class AEBBullet> BulletClass = EBarrel->Ammo[0];

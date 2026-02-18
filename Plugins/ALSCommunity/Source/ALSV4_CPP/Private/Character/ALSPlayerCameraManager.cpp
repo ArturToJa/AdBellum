@@ -283,7 +283,8 @@ bool AALSPlayerCameraManager::CustomCameraBehavior(float DeltaTime, FVector& Loc
 		}
 		else 
 		{
-			FOV = FMath::Lerp(TPFOV, FPFOV, GetCameraBehaviorParam(NAME_Weight_FirstPerson));
+			FOV = ControlledCharacter->GetCameraPOV();
+			//FOV = FMath::Lerp(TPFOV, FPFOV, GetCameraBehaviorParam(NAME_Weight_FirstPerson));
 		}
 	}
 	else {

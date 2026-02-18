@@ -186,6 +186,7 @@ public:
 	virtual FTransform GetHandIKTransform_Implementation(ERelativeTransformSpace TransformSpace) override;
 	virtual int GetCurrentAmmo_Implementation() override;
 	virtual int GetRemainingAmmo_Implementation() override;
+	virtual void ResetAim_Implementation() override;
 	virtual void SetupAim_Implementation(UObject* TargetObject) override;
 	virtual void SetFireMode_Implementation(EFireMode NewFireMode) override;
 	virtual void SetWeaponSpread_Implementation(float Spread) override;

@@ -84,10 +84,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ALS|Aim")
 	void SetUsingADS(bool Value);
 
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Damage")
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite, Category = "Damage")
 	float HP = 5000.0f;
 
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Damage")
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite, Category = "Damage")
 	float MaxHP = 5000.0f;
 
 	float GetHP();
