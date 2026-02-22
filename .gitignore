@@ -80,3 +80,9 @@ Content/Added_content/*
 Content/__ExternalActors__/*
 
 Content/__ExternalObjects__/*
+
+Plugins/*
+!Plugins/ALSCommunity/
+!Plugins/ALSCommunity/**
+!Plugins/VehicleSystemPlugin/
+!Plugins/VehicleSystemPlugin/**
