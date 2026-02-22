@@ -74,6 +74,12 @@ public:
 		bool ShouldAttackEnemies();
 	UFUNCTION(BlueprintCallable)
 		void NotifyCurrentOrderCompleted();
+	UFUNCTION(BlueprintCallable)
+		void NotifyMainOrderCompleted();
+	UFUNCTION(BlueprintCallable)
+		bool IsCurrentOrderOfType(OrderEnum Type);
+	UFUNCTION(BlueprintCallable)
+		bool IsOrderOfType(OrderEnum Type);
 		void PerformOrder(TUniquePtr<BaseOrder> OrderToPerform);
 		void AddOrder(TUniquePtr<BaseOrder> OrderToPerform, bool bIsQueued);
 	UFUNCTION(BlueprintCallable)
@@ -88,6 +94,8 @@ public:
 		void HideBehindCover(FVector TargetPosition);
 	UFUNCTION(BlueprintCallable)
 		OrderEnum GetOrderType();
+	UFUNCTION(BlueprintCallable)
+		OrderEnum GetCurrentOrderType();
 	UFUNCTION(BlueprintCallable)
 		void BP_AddOrder(OrderEnum OrderType, bool bIsQueued, AActor* TargetObject, FVector TargetPosition);
 	void SetAsNonAggressiveOrder();

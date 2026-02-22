@@ -26,6 +26,14 @@ public:
 	void SetTarget(AActor* TargetUnit); //setting focus and notify aim for unit
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnDamageReceived(float Damage, AActor* DamagingActor);
+	UFUNCTION(BlueprintCallable)
+	void DecodeStrengthAndFlags(float EncodedValue);
+
+	float GetSightStrength() const { return strengthSight; }
+	uint8 GetSightFlags() const { return flagsSight; }
 
 	//virtual void UpdateControlRotation(float DeltaTime, bool bUpdatePawn) override;
+private:
+	float strengthSight;
+	uint8 flagsSight;
 };

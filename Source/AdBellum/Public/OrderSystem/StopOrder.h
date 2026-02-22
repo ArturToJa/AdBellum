@@ -34,7 +34,7 @@ public:
 
 	virtual OrderEnum GetOrderType() const override
 	{
-		return HasSubOrders() ? subOrder->GetOrderType() : OrderEnum::Stop;
+		return OrderEnum::Stop;
 	}
 };
 

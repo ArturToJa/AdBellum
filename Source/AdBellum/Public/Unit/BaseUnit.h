@@ -18,6 +18,7 @@
 #include "Library/Weapon/WeaponPrefabStruct.h"
 #include "RecoilAnimationComponent.h"
 #include "UnitAIController.h"
+#include "Perception/AISightTargetInterface.h"
 #include "BaseUnit.generated.h"
 
 /**
@@ -30,8 +31,19 @@ class ABaseWeapon;
 class UNetworkComponent;
 class ABaseFormation;
 
+UENUM(BlueprintType)
+enum class ETargetBodyPart : uint8
+{
+	HEAD,
+	CHEST,
+	LEFT_ARM,
+	RIGHT_ARM,
+	LEFT_LEG,
+	RIGHT_LEG
+};
+
 UCLASS()
-class ADBELLUM_API ABaseUnit : public AALSCharacter, public IFormable, public IOrderable, public IITargetable, public ICustomizable
+class ADBELLUM_API ABaseUnit : public AALSCharacter, public IFormable, public IOrderable, public IITargetable, public ICustomizable, public IAISightTargetInterface
 {
 	GENERATED_BODY()
 
@@ -254,6 +266,10 @@ public:
 	//ITargetable
 	virtual FVector GetHeadLocation_Implementation() override;
 	virtual FVector GetChestLocation_Implementation() override;
+	virtual FVector GetLeftArmLocation_Implementation() override;
+	virtual FVector GetRightArmLocation_Implementation() override;
+	virtual FVector GetLeftLegLocation_Implementation() override;
+	virtual FVector GetRightLegLocation_Implementation() override;
 	virtual FVector GetWeaponLocation_Implementation() override;
 	virtual TArray<AActor*> IsTargetedBy_Implementation() override;
 	virtual void SetIsTargetedBy_Implementation(AActor* Actor, bool IsTargeted) override;
@@ -268,6 +284,11 @@ public:
 	virtual void SetFormation_Implementation(ABaseFormation* Formation) override;
 	virtual ABaseFormation* GetFormation_Implementation() override;
 	virtual void RespawnUnit_Implementation(FTransform RespawnTransform) override;
+
+	//AISightTargetInterface
+	virtual UAISense_Sight::EVisibilityResult CanBeSeenFrom(const FCanBeSeenFromContext& Context,
+		FVector& OutSeenLocation, int32& OutNumberOfLoSChecksPerformed, int32& OutNumberOfAsyncLosCheckRequested,
+		float& OutSightStrength, int32* UserData = nullptr, const FOnPendingVisibilityQueryProcessedDelegate* Delegate = nullptr) override;
 	
 	//montages
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Components")

@@ -55,9 +55,14 @@ public:
 			}
 		}
 	}
+	virtual OrderEnum GetSubOrderType() const
+	{
+		return HasSubOrders() ? subOrder->GetSubOrderType() : GetOrderType();
+	}
+
 	virtual OrderEnum GetOrderType() const
 	{
-		return HasSubOrders() ? subOrder->GetOrderType() : OrderEnum::Stop;
+		return OrderEnum::Stop;
 	}
 
 	virtual bool IsFinished() const

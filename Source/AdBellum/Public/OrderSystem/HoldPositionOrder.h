@@ -29,7 +29,7 @@ public:
 
 	virtual OrderEnum GetOrderType() const override
 	{
-		return HasSubOrders() ? subOrder->GetOrderType() : OrderEnum::HoldPosition;
+		return OrderEnum::HoldPosition;
 	}
 };
 

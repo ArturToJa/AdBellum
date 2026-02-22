@@ -88,10 +88,24 @@ void UOrdersManager::NotifyCurrentOrderCompleted()
 	}
 	else
 	{
-		CurrentOrder->Finalize();
-		SetStopOrder();
-		ProcessNextOrder();
+		NotifyMainOrderCompleted();
 	}
+}
+
+void UOrdersManager::NotifyMainOrderCompleted()
+{
+	CurrentOrder->Finalize();
+	SetStopOrder();
+	ProcessNextOrder();
+}
+
+bool UOrdersManager::IsCurrentOrderOfType(OrderEnum Type)
+{
+	return CurrentOrder->GetSubOrderType() == Type;
+}
+bool UOrdersManager::IsOrderOfType(OrderEnum Type)
+{
+	return CurrentOrder->GetOrderType() == Type;
 }
 
 void UOrdersManager::PerformOrder(TUniquePtr<BaseOrder> OrderToPerform)
@@ -191,6 +205,11 @@ void UOrdersManager::SetAsNonAggressiveOrderInQueue()
 OrderEnum UOrdersManager::GetOrderType()
 {
 	return CurrentOrder->GetOrderType();
+}
+
+OrderEnum UOrdersManager::GetCurrentOrderType()
+{
+	return CurrentOrder->GetSubOrderType();
 }
 
 void UOrdersManager::BP_AddOrder(OrderEnum OrderType, bool bIsQueued, AActor* TargetObject, FVector TargetPosition)

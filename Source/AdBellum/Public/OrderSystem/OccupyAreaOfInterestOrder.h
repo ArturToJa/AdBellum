@@ -67,7 +67,7 @@ public:
 
 	virtual OrderEnum GetOrderType() const override
 	{
-		return HasSubOrders() ? subOrder->GetOrderType() : OrderEnum::OccupyAOI;
+		return OrderEnum::OccupyAOI;
 	}
 
 	virtual void Cleanup() override

@@ -31,6 +31,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
 		FVector GetChestLocation();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
+		FVector GetLeftArmLocation();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
+		FVector GetRightArmLocation();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
+		FVector GetLeftLegLocation();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
+		FVector GetRightLegLocation();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
 		FVector GetWeaponLocation();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
 		TArray<AActor*> IsTargetedBy();
