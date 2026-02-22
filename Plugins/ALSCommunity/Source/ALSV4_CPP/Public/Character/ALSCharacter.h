@@ -72,9 +72,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Component")
 	TObjectPtr<UStaticMeshComponent> StaticMesh = nullptr;
 
-	//UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "ALS|Component")
-	//AActor* ActiveWeaponActor = nullptr;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Aim")
 	bool UsingADS = false;
 
