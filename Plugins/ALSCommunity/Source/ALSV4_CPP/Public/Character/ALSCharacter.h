@@ -72,9 +72,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Component")
 	TObjectPtr<UStaticMeshComponent> StaticMesh = nullptr;
 
-	//UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "ALS|Component")
-	//AActor* ActiveWeaponActor = nullptr;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Aim")
 	bool UsingADS = false;
 
@@ -84,10 +81,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ALS|Aim")
 	void SetUsingADS(bool Value);
 
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Damage")
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite, Category = "Damage")
 	float HP = 5000.0f;
 
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Damage")
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite, Category = "Damage")
 	float MaxHP = 5000.0f;
 
 	float GetHP();

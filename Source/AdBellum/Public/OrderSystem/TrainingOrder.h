@@ -12,6 +12,7 @@
 class ADBELLUM_API TrainingOrder : public BaseOrder
 {
 public:
+	//inTargetUnit is in this case ShootingRange
 	TrainingOrder(UObject* inTargetUnit, FVector inTargetPosition) : BaseOrder(inTargetUnit, FVector::ZeroVector) {}
 
 	virtual ~TrainingOrder() {}

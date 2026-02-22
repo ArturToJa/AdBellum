@@ -84,6 +84,8 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		void SetupAim(UObject* TargetObject);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		void ResetAim();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		void SetFireMode(EFireMode NewFireMode);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		void SetWeaponSpread(float Spread);

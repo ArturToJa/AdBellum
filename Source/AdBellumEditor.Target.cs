@@ -7,7 +7,7 @@ public class AdBellumEditorTarget : TargetRules
 {
 	public AdBellumEditorTarget(TargetInfo Target) : base(Target)
 	{
-        DefaultBuildSettings = BuildSettingsVersion.Latest;
+        DefaultBuildSettings = BuildSettingsVersion.V6;
 
         Type = TargetType.Editor;
         ExtraModuleNames.AddRange(new string[] { "AdBellum" });

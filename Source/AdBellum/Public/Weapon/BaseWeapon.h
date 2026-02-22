@@ -109,7 +109,7 @@ public:
 	float WeaponAimSensivity = 0.3f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
-	FRecoilAnimData RecoilData;
+	TObjectPtr<URecoilData> RecoilData;
 
 	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
 	//float RecoilVerticalValue = 0.075f;
@@ -186,6 +186,7 @@ public:
 	virtual FTransform GetHandIKTransform_Implementation(ERelativeTransformSpace TransformSpace) override;
 	virtual int GetCurrentAmmo_Implementation() override;
 	virtual int GetRemainingAmmo_Implementation() override;
+	virtual void ResetAim_Implementation() override;
 	virtual void SetupAim_Implementation(UObject* TargetObject) override;
 	virtual void SetFireMode_Implementation(EFireMode NewFireMode) override;
 	virtual void SetWeaponSpread_Implementation(float Spread) override;

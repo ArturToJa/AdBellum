@@ -105,7 +105,7 @@ void ABaseUnit::PossessedBy(AController* NewController)
 	{
 		SetViewMode(EALSViewMode::FirstPerson);
 		RecoilAnimationComponent->Activate();
-		IIWeapon::Execute_SetupAim(ActiveWeaponActor, nullptr);
+		IIWeapon::Execute_ResetAim(ActiveWeaponActor);
 		OrdersManagerComponent->SetStopOrder();
 	}
 	else
@@ -798,6 +798,10 @@ void ABaseUnit::ConfigureUnit_Implementation(const FMeshCreatorPrefabStruct& Uni
 void ABaseUnit::ConfigureWeapon_Implementation(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum)
 {
 	WeaponArray[(uint8)SocketEnum] = Weapon;
+	if (ActiveWeaponActor == nullptr)
+	{
+		ActiveWeaponActor = Weapon;
+	}
 	if (Weapon)
 	{
 		SocketWeapon(Weapon, SocketEnum);
@@ -1032,47 +1036,13 @@ void ABaseUnit::MoveOrder_Implementation(FVector TargetPosition)
 	GetController<AAIController>()->MoveToLocation(TargetPosition, 7.5f, true, true, true);
  }
 void ABaseUnit::AttackTarget_Implementation(UObject* TargetObject) {
-	UKismetSystemLibrary::PrintString(GetWorld(), "ORDER: Attack Target", true, true);
 	
-	
-	/*float Distance = FVector::DistSquared(GetActorLocation(),
-		IITargetable::Execute_GetChestLocation(Cast<AActor>(TargetObject)));*/
-
-	/*UKismetSystemLibrary::DrawDebugArrow(GetWorld(), GetActorLocation(), GetActorLocation() + UKismetMathLibrary::FindLookAtRotation(GetActorLocation(),
-		IITargetable::Execute_GetChestLocation(TargetObject)).Vector() * 5000.0f, 10.0f, FColor::Blue, 5.0f, 2.0f);*/
-
-	/*GetController<AAIController>()->SetControlRotation(
-		UKismetMathLibrary::FindLookAtRotation(GetActorLocation(),
-			IITargetable::Execute_GetChestLocation(TargetObject)));*/
-	
-
-	IIWeapon::Execute_SetupAim(ActiveWeaponActor,TargetObject);
+	IIWeapon::Execute_SetupAim(ActiveWeaponActor, TargetObject);
 
 	WeaponTriggerAction();
-	//get range fire mode data
-	//IWeapon - set firemode 
-
-
-	//REMEBER THAT DISTANCE IS SQUARED
-
-	// INPUT Distance = TargetObject -> IITargetable::Execute__GetBodyLocation()
-	//calculations: INPUT distance, target velocity, OUTPUT EBarrel &Vector AimDirection
-	
-	//make rotation from XVector AimDirection
-	//IWeapon - set aim direction
-
-
-	//get unit experience
-	//IWeapon - set weapon spread
-
-
-
-	//character reset weapon AimDirection
-	//on death, on possessed
-	//remember to invoke calculation when reseted
-
 }
-void ABaseUnit::WeaponTriggerAction() 
+
+void ABaseUnit::WeaponTriggerAction()
 {
 	if (ActiveWeaponActor)
 	{
@@ -1082,20 +1052,27 @@ void ABaseUnit::WeaponTriggerAction()
 	}
 }
 
-
 void ABaseUnit::AttackLocation_Implementation(FVector TargetPosition) 
 {
-	if (ActiveWeaponActor)
-	{
-		IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
-		GetWorldTimerManager().SetTimer(AIAttackTimer, this,
-			&ABaseUnit::StopTriggerTimer, FMath::FRandRange(0.2f,0.75f), false);
-	}
+    if (!ActiveWeaponActor) return;
+    if (!bTriggerActive)
+    {
+        bTriggerActive = true;
+        IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
+        if (GetWorld())
+        {
+            GetWorldTimerManager().ClearTimer(AIAttackTimer);
+            GetWorldTimerManager().SetTimer(AIAttackTimer, this, &ABaseUnit::StopTriggerTimer, FMath::FRandRange(0.2f,0.75f), false);
+        }
+    }
 }
 
 void ABaseUnit::StopTriggerTimer()
 {
-	IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+    if (!ActiveWeaponActor) return;
+
+    IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+    bTriggerActive = false;
 }
 
 void ABaseUnit::DoCrouch_Implementation() 
@@ -1136,6 +1113,13 @@ void ABaseUnit::DoCrouch_Implementation()
 		 }
 	 }
  }
+
+
+bool ABaseUnit::IsReloading_Implementation()
+{
+	return IIWeapon::Execute_IsReloading(ActiveWeaponActor);
+}
+
 //END ORDERABLE INTERFACE
 
 //ITARGETABBLE INTERAFACE
@@ -1209,4 +1193,4 @@ void ABaseUnit::DoCrouch_Implementation()
 		  SeenByFormation.Remove(Formation);
 	  }
   }
- //END ITARGETABBLE INTERAFACE
+ //END ITARGETABBLE INTERAFCE

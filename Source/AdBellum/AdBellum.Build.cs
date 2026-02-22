@@ -9,16 +9,18 @@ public class AdBellum : ModuleRules
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
        // PrivatePCHHeaderFile = "Private/WindowsMixedRealityPrecompiled.h";
 
-        PublicDependencyModuleNames.AddRange(new string[] { "Core","PhysicsCore", "CoreUObject", "Engine", "InputCore", "AdvancedSessions", "VRExpansionPlugin", 
-			"AIModule", "ALSV4_CPP", "EnhancedInput", "NavigationSystem", "Chaos","ChaosVehicles", "DragonIKPlugin", "EasyBallistics",
-			"Niagara", "NetCore", "Networking", "VehicleSystemPlugin", "NPC_Optimizator","RecoilAnimation"});
+        PublicDependencyModuleNames.AddRange(new string[] { "Core","PhysicsCore", "CoreUObject", "Engine", "InputCore","AdvancedSessions",
+
+            "AIModule", "ALSV4_CPP", "EnhancedInput", "NavigationSystem", "Chaos","ChaosVehicles", "DragonIKPlugin", "EasyBallistics",
+			"Niagara", "NetCore", "Networking", "VehicleSystemPlugin", "RecoilAnimation","WorldDirectorPRO", "UMG", "UBSplineStructureCreator"});
 
 		if (Target.Type == TargetRules.TargetType.Editor)
 		{
-			PrivateDependencyModuleNames.AddRange(new string[] {"RecentAssetsMenu", "LiveBlueprintDebugger", "Pjc", "AutoSizeComments"});
-		}
+			PrivateDependencyModuleNames.AddRange(new string[] {"Pjc", "AutoSizeComments"});
+            //removed "LiveBlueprintDebugger" "RecentAssetsMenu"
+        }
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "GameplayTasks", "OnlineSubsystem", "OnlineSubsystemNull", "OnlineSubsystemSteam" });
+        PrivateDependencyModuleNames.AddRange(new string[] { "GameplayTasks", "OnlineSubsystem", "OnlineSubsystemNull", "OnlineSubsystemSteam", "Slate", "SlateCore" });
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

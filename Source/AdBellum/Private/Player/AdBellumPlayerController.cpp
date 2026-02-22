@@ -549,6 +549,19 @@ void AAdBellumPlayerController::Client_SetUnitPrefab_Implementation(const TArray
 
 void AAdBellumPlayerController::Client_OnWeaponCreated_Implementation(const TArray<AActor*>& Weapons, const TArray<FUnitWeaponDataStruct>& WeaponPrefabs)
 {
+	if (Weapons.IsEmpty()) return;
+	switch (WeaponPrefabs[0].Weapon.WeaponSocketType)
+	{
+	case EWeaponSocketEnum::PRIMARY:
+		Cast<AALSBaseCharacter>(WeaponPrefabs[0].OwningUnit)->Server_SetOverlayState(EALSOverlayState::Rifle, false);
+		break;
+	case EWeaponSocketEnum::SECONDARY:
+		Cast<AALSBaseCharacter>(WeaponPrefabs[0].OwningUnit)->Server_SetOverlayState(EALSOverlayState::PistolTwoHanded, false);
+		break;
+	case EWeaponSocketEnum::SPECIAL:
+		Cast<AALSBaseCharacter>(WeaponPrefabs[0].OwningUnit)->Server_SetOverlayState(EALSOverlayState::RPG, false);
+		break;
+	}
 	for (int i = 0; i < Weapons.Num(); ++i)
 	{
 		ICustomizable::Execute_ConfigureWeapon(WeaponPrefabs[i].OwningUnit, Cast<ABaseWeapon>(Weapons[i]), WeaponPrefabs[i].Weapon.WeaponSocketType);

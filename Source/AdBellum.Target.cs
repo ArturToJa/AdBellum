@@ -8,7 +8,7 @@ public class AdBellumTarget : TargetRules
 	public AdBellumTarget(TargetInfo Target) : base(Target)
 	{
 
-        DefaultBuildSettings = BuildSettingsVersion.V5;
+        DefaultBuildSettings = BuildSettingsVersion.V6;
 
         //bUseLoggingInShipping = true;
         Type = TargetType.Game;

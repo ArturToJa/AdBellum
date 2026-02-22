@@ -101,6 +101,7 @@ public:
 		if (HasSubOrders())
 		{
 			// If an existing sub-order is present, assign the new sub-order to the existing one
+			UE_LOG(LogTemp, Verbose, TEXT("BaseOrder::RunSubOrder: Delegating to existing suborder. Owner=%s"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"));
 			subOrder->RunSubOrder(MoveTemp(inSubOrder));
 		}
 		else
@@ -108,6 +109,7 @@ public:
 			// If no existing sub-order is present, assign the new sub-order directly
 			subOrder = MoveTemp(inSubOrder);
 			subOrder->SetOwner(owningUnit);
+			UE_LOG(LogTemp, Verbose, TEXT("BaseOrder::RunSubOrder: Created new suborder for owner=%s Type=%d"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"), (int)subOrder->GetOrderType());
 			subOrder->OnOrderCompleted.BindRaw(this, &BaseOrder::FinishSubOrder);
 			subOrder->Execute(); // Trigger Execute function on sub-order
 		}

@@ -1564,10 +1564,15 @@ void AALSBaseCharacter::SprintAction_Implementation(bool bValue)
 	if (bValue)
 	{
 		SetDesiredGait(EALSGait::Sprinting);
+		if (EALSRotationMode::Aiming == RotationMode) 
+		{
+			CameraPOV = 67.5f;
+		}
 	}
 	else
 	{
 		SetDesiredGait(EALSGait::Running);
+		CameraPOV = 90.0f;
 	}
 }
 

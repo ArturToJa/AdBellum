@@ -17,23 +17,32 @@ public:
 
 	virtual void Execute() override
 	{
+		UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Execute: starting for owner=%s"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"));
 		TScriptInterface<IIWeapon> Weapon = IOrderable::Execute_GetWeapon(owningUnit);
 		WeaponObject = Weapon.GetObject();
 		if (WeaponObject)
 		{
+			UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Execute: Weapon found = %s"), *WeaponObject->GetName());
 			if (IIWeapon::Execute_HasAmmoToReload(WeaponObject))
 			{
+				UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Execute: Weapon has ammo to reload - invoking ReloadAction on owner"));
 				IALSInputInterface::Execute_ReloadAction(owningUnit);
 			}
 			else
 			{
+				UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Execute: Weapon has NO ammo to reload - will attempt ChangeWeapon"));
 				IIWeapon::Execute_ChangeWeapon(WeaponObject);
 			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ReloadOrder::Execute: No weapon returned from owningUnit"));
 		}
 	}
 
 	virtual void Finalize() override
 	{
+		UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Finalize called for owner=%s"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"));
 
 	}
 
@@ -49,6 +58,7 @@ public:
 	
 	virtual void Update() override
 	{
+		UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Update called for owner=%s"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"));
 		BaseOrder::Update();
 	}
 

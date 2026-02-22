@@ -11,6 +11,9 @@
 
 class ADBELLUM_API AttackUnitOrder : public BaseOrder
 {
+private:
+	UObject* WeaponObject;
+	float AttackDelay = 0.5f;
 public:
 	AttackUnitOrder(UObject* inTargetUnit, FVector inTargetPosition) : BaseOrder(inTargetUnit, FVector::ZeroVector) {}
 
@@ -45,7 +48,7 @@ public:
 		}
 		if (WeaponObject)
 		{
-			IIWeapon::Execute_SetupAim(WeaponObject, nullptr);
+			IIWeapon::Execute_ResetAim(WeaponObject);
 		}
 	}
 
@@ -62,7 +65,7 @@ public:
 	virtual void Update() override
 	{
 		BaseOrder::Update();
-		if(IIWeapon::Execute_IsReloading(WeaponObject))
+		if (IIWeapon::Execute_IsReloading(WeaponObject))
 		{
 			UE_LOG(LogTemp, Warning, TEXT("AttackUnitOrder: Weapon is reloading, cannot attack"));
 			return;
@@ -84,9 +87,6 @@ public:
 			RunSubOrder(MakeUnique<ReloadOrder>(nullptr, FVector::ZeroVector));
 		}
 	}
-
-	UObject* WeaponObject;
-	float AttackDelay = 0.5f;
 };
 
 template<>
