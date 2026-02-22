@@ -20,12 +20,7 @@
 	"Plugins": [
 		{
 			"Name": "Bridge",
-			"Enabled": true,
-			"SupportedTargetPlatforms": [
-				"Win64",
-				"Mac",
-				"Linux"
-			]
+			"Enabled": true
 		},
 		{
 			"Name": "OnlineSubsystemSteam",
@@ -67,7 +62,7 @@
 		{
 			"Name": "RecoilAnimation",
 			"Enabled": true,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/76194998d28247018bee7be203f6c948"
+			"MarketplaceURL": "https://www.fab.com/listings/c664053f-900b-4f33-aa26-4bdb46959e4c"
 		},
 		{
 			"Name": "ChaosVehiclesPlugin",
@@ -101,7 +96,8 @@
 		},
 		{
 			"Name": "MinimapPlugin",
-			"Enabled": true
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/ad08325742e24fb0836391bca25c72bb"
 		}
 	],
 	"TargetPlatforms": [

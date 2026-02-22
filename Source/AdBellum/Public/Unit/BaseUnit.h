@@ -216,7 +216,7 @@ public:
 	//UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 	virtual void ThirdSelectionAction_Implementation() override;
 
-	UFUNCTION(BlueprintImplementableEvent, Category = "Weapon")
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Weapon")
 	void HandleWeaponSwitch(EWeaponSocketEnum DesiredWeaponSocket);
 
 	//0 - primary

@@ -1,0 +1,4 @@
+1. For lightning use BP_DynamicVolumetricSky
+2. Setup NavMeshvBoundsVolume
+3. Add BP_SpawnAreas -> 2 for both teams
+4. Setup map collision to WorldStatic to enable move order

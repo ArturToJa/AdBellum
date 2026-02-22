@@ -282,7 +282,7 @@ float ABaseWeapon::GetMaxRange_Implementation()
 }
 void ABaseWeapon::Reload_Implementation()
 {
-
+	bIsReloading = true;
 }
 bool ABaseWeapon::HasAmmo_Implementation()
 {

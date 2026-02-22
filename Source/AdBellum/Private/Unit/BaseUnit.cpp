@@ -947,40 +947,19 @@ void ABaseUnit::MoveOrder_Implementation(FVector TargetPosition)
 	GetController<AAIController>()->MoveToLocation(TargetPosition, 7.5f, true, true, true);
  }
 void ABaseUnit::AttackTarget_Implementation(UObject* TargetObject) {
-	// lightweight early checks
-	if (!ActiveWeaponActor || !TargetObject) return;
+	
+	IIWeapon::Execute_SetupAim(ActiveWeaponActor, TargetObject);
 
-	// Avoid calling SetupAim too frequently
-	UWorld* World = GetWorld();
-	if (!World) return;
-	float CurrentTime = World->GetTimeSeconds();
-	if (!LastAimTarget.IsValid() || LastAimTarget.Get() != TargetObject || (CurrentTime - LastAimSetupTime) > AimSetupCooldown)
-	{
-		LastAimSetupTime = CurrentTime;
-		LastAimTarget = TargetObject;
-		IIWeapon::Execute_SetupAim(ActiveWeaponActor, TargetObject);
-	}
-
-	// Fire only if not already firing to prevent redundant triggers
-	if (!bTriggerActive)
-	{
-		WeaponTriggerAction();
-	}
+	WeaponTriggerAction();
 }
 
-void ABaseUnit::WeaponTriggerAction() 
+void ABaseUnit::WeaponTriggerAction()
 {
-	if (!ActiveWeaponActor) return;
-
-	bTriggerActive = true;
-	IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
-
-	// reuse existing timer handle but ensure it's cleared first
-	if (GetWorld())
+	if (ActiveWeaponActor)
 	{
-		GetWorldTimerManager().ClearTimer(AIAttackTimer);
-		float Delay = FMath::FRandRange(0.1f, 0.2f);
-		GetWorldTimerManager().SetTimer(AIAttackTimer, this, &ABaseUnit::StopTriggerTimer, Delay, false);
+		IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
+		GetWorldTimerManager().SetTimer(AIAttackTimer, this,
+			&ABaseUnit::StopTriggerTimer, FMath::FRandRange(0.1f, 0.1f), false);
 	}
 }
 
@@ -1049,7 +1028,7 @@ void ABaseUnit::DoCrouch_Implementation()
 
 bool ABaseUnit::IsReloading_Implementation()
 {
-	return bIsReloading;
+	return IIWeapon::Execute_IsReloading(ActiveWeaponActor);
 }
 
 //END ORDERABLE INTERFACE
