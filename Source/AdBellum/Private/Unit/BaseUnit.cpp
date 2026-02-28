@@ -801,6 +801,20 @@ void ABaseUnit::ConfigureWeapon_Implementation(ABaseWeapon* Weapon, EWeaponSocke
 	if (ActiveWeaponActor == nullptr)
 	{
 		ActiveWeaponActor = Weapon;
+		EALSOverlayState NewState = EALSOverlayState::Default;
+		switch (SocketEnum)
+		{
+		case EWeaponSocketEnum::PRIMARY:
+			NewState = EALSOverlayState::Rifle;
+			break;
+		case EWeaponSocketEnum::SECONDARY:
+			NewState = EALSOverlayState::PistolTwoHanded;
+			break;
+		case EWeaponSocketEnum::SPECIAL:
+			NewState = EALSOverlayState::RPG;
+			break;
+		}
+		Server_SetOverlayState(NewState, false);
 	}
 	if (Weapon)
 	{
