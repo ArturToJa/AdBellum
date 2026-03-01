@@ -3,7 +3,7 @@
 
 #include "AI/Decorators/IsReloading.h"
 #include "AIController.h"
-#include "OrderSystem/Orderable.h"
+#include "Unit/ArmedUnitInterface.h"
 #include "Weapon/IWeapon.h"
 
 
@@ -13,8 +13,7 @@ bool UIsReloading::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp,
 	{
 		if (APawn* OwningPawn = AIController->GetPawn())
 		{
-			//return false;
-			if (UObject* Weapon = IOrderable::Execute_GetWeapon(OwningPawn).GetObject())
+			if (AActor* Weapon = IArmedUnitInterface::Execute_GetWeapon(OwningPawn))
 			{
 				return IIWeapon::Execute_IsReloading(Weapon);
 			}

@@ -3,7 +3,7 @@
 
 #include "AI/Decorators/HasAmmo.h"
 #include "AIController.h"
-#include "OrderSystem/Orderable.h"
+#include "Unit/ArmedUnitInterface.h"
 #include "Weapon/IWeapon.h"
 
 
@@ -13,8 +13,7 @@ bool UHasAmmo::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uin
 	{
 		if (APawn* OwningPawn = AIController->GetPawn())
 		{
-			//return true;
-			if (UObject* Weapon = IOrderable::Execute_GetWeapon(OwningPawn).GetObject())
+			if (UObject* Weapon = IArmedUnitInterface::Execute_GetWeapon(OwningPawn))
 			{
 				return IIWeapon::Execute_HasAmmo(Weapon);
 			}

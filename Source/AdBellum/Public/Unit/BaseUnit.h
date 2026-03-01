@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Character/ALSCharacter.h"
 #include "Formation/Formable.h"
-#include "OrderSystem/Orderable.h"
+#include "ArmedUnitInterface.h"
 #include "ITargetable.h"
 #include "Customizable.h"
 #include "Weapon/EBDamageType.h"
@@ -43,7 +43,7 @@ enum class ETargetBodyPart : uint8
 };
 
 UCLASS()
-class ADBELLUM_API ABaseUnit : public AALSCharacter, public IFormable, public IOrderable, public IITargetable, public ICustomizable, public IAISightTargetInterface
+class ADBELLUM_API ABaseUnit : public AALSCharacter, public IFormable, public IArmedUnitInterface, public IITargetable, public ICustomizable, public IAISightTargetInterface
 {
 	GENERATED_BODY()
 
@@ -66,9 +66,6 @@ public:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components")
 	TObjectPtr<URecoilAnimationComponent> RecoilAnimationComponent;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<UOrdersManager> OrdersManagerComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UNetworkComponent> NetworkComponent;
@@ -251,15 +248,8 @@ public:
 	virtual FVector GetSelectionCircleLocation_Implementation() override;
 	virtual int GetUnitType_Implementation() override;
 
-	//Orderable
-	virtual void Stop_Implementation(FVector TargetPosition) override;
-	virtual void MoveOrder_Implementation(FVector TargetPosition) override;
-	virtual void AttackTarget_Implementation(UObject* TargetObject) override;
-	virtual void AttackLocation_Implementation(FVector TargetPosition) override;
-	virtual void DoCrouch_Implementation() override;
-	virtual void DoCrawl_Implementation() override;
-	virtual void DoStandUp_Implementation() override;
-	virtual TScriptInterface<IIWeapon> GetWeapon_Implementation() override;
+	//ArmedUnitInterface
+	virtual AActor* GetWeapon_Implementation() override;
 	virtual void OnWeaponUpdated_Implementation(AActor* Weapon) override;
 	virtual bool IsReloading_Implementation() override;
 	
@@ -313,8 +303,6 @@ protected:
 	UPROPERTY(Replicated)
 	AActor* PlayerPtr;
 	int32 SelectionCircleIndex;
-	FTimerHandle AIAttackTimer;
-	void StopTriggerTimer();
 
 	// prevent re-triggering while already firing
 	bool bTriggerActive = false;

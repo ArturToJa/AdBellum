@@ -453,11 +453,6 @@ void AAdBellumPlayerController::PerformOrder(AActor* TargetUnit, FVector TargetP
 	{
 		SelectionFormation->PerformOrder<Type>(TargetUnit, TargetPosition);
 	}
-	/*for (APawn* Unit : SelectedPawns)
-	{
-		TUniquePtr<GeneralOrder<Type>::Type> OrderToPerform = MakeUnique<GeneralOrder<Type>::Type>(TargetUnit, TargetPosition);
-		ISelectable::Execute_GetOrdersManagerComponent(Unit)->AddOrder(MoveTemp(OrderToPerform), false);
-	}*/
 }
 
 FVector AAdBellumPlayerController::GetMousePositionInWorld()

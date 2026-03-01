@@ -7,12 +7,13 @@
 #include "ReloadOrder.h"
 #include "Orderable.h"
 #include "Weapon/IWeapon.h"
+#include "Unit/ArmedUnitInterface.h"
 #include "Unit/UnitAIController.h"
 
 class ADBELLUM_API AttackUnitOrder : public BaseOrder
 {
 private:
-	UObject* WeaponObject;
+	AActor* WeaponObject;
 	float AttackDelay = 0.5f;
 public:
 	AttackUnitOrder(UObject* inTargetUnit, FVector inTargetPosition) : BaseOrder(inTargetUnit, FVector::ZeroVector) {}
@@ -21,30 +22,23 @@ public:
 
 	virtual void Execute() override
 	{
-		TScriptInterface<IIWeapon> Weapon = IOrderable::Execute_GetWeapon(owningUnit);
-		WeaponObject = Weapon.GetObject();
+		WeaponObject = IArmedUnitInterface::Execute_GetWeapon(owningController->GetPawn());
 
 		AttackDelay = 0.5f; // set this delay based on unit and weapon stats
 
-		if (APawn* PawnUnit = Cast<APawn>(owningUnit))
+		AUnitAIController* UnitController = Cast<AUnitAIController>(owningController);
+		if (UnitController)
 		{
-			AUnitAIController* UnitController = Cast<AUnitAIController>(PawnUnit->GetController());
-			if (UnitController)
-			{
-				UnitController->SetTarget(Cast<AActor>(targetUnit));
-			}
+			UnitController->SetTarget(Cast<AActor>(targetUnit));
 		}
 	}
 
 	virtual void Finalize() override
 	{
-		if (APawn* PawnUnit = Cast<APawn>(owningUnit))
+		AUnitAIController* UnitController = Cast<AUnitAIController>(owningController);
+		if (UnitController)
 		{
-			AUnitAIController* UnitController = Cast<AUnitAIController>(PawnUnit->GetController());
-			if (UnitController)
-			{
-				UnitController->ClearTarget();
-			}
+			UnitController->ClearTarget();
 		}
 		if (WeaponObject)
 		{
@@ -73,13 +67,13 @@ public:
 
 		if (AttackDelay > 0.f)
 		{
-			AttackDelay -= owningUnit->GetWorld()->GetDeltaSeconds();
+			AttackDelay -= owningController->GetWorld()->GetDeltaSeconds();
 			return;
 		}
 
 		if (IIWeapon::Execute_HasAmmo(WeaponObject))
 		{
-			IOrderable::Execute_AttackTarget(owningUnit, targetUnit);
+			IOrderable::Execute_AttackTarget(owningController, targetUnit);
 		}
 		else
 		{

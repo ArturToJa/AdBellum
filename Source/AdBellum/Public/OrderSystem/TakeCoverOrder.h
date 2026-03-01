@@ -30,29 +30,24 @@ public:
 			bIsHiding = true;
 			if (!HasSubOrders())
 			{
-				IOrderable::Execute_DoCrouch(owningUnit);
+				IOrderable::Execute_DoCrouch(owningController);
 				if (!bDetectedCoverHeight)
 				{
 					FHitResult Hit;
 
-					APawn* AsPawn = Cast<APawn>(owningUnit);
-					AActor* FocusActor = nullptr;
-					if (AsPawn != nullptr)
-					{
-						FocusActor = Cast<AAIController>(AsPawn->GetController())->GetFocusActor();;
-					}
+					AActor* FocusActor = owningController->GetFocusActor();
 
 					if (FocusActor)
 					{
 						TEnumAsByte<ECollisionChannel> TraceChannelProperty = ECC_Visibility;
 
-						FVector TraceStart = owningUnit->GetActorLocation();
+						FVector TraceStart = owningController->GetPawn()->GetActorLocation();
 						FVector TraceEnd = FocusActor->GetActorLocation();
 
 						// You can use FCollisionQueryParams to further configure the query
 						// Here we add ourselves to the ignored list so we won't block the trace
 						FCollisionQueryParams QueryParams;
-						QueryParams.AddIgnoredActor(owningUnit);
+						QueryParams.AddIgnoredActor(owningController->GetPawn());
 						QueryParams.AddIgnoredActor(FocusActor);
 
 						// To run the query, you need a pointer to the current level, which you can get from an Actor with GetWorld()
@@ -88,7 +83,7 @@ public:
 					{
 						//FTimerDelegate timerDelegate;
 						//timerDelegate.BindRaw(this, &TakeCoverOrder::ToggleHiding);
-						//owningUnit->GetWorldTimerManager().SetTimer(timerHandle, timerDelegate, 3.0f, true);
+						//owningController->GetWorldTimerManager().SetTimer(timerHandle, timerDelegate, 3.0f, true);
 					}
 				}
 			}
@@ -97,9 +92,9 @@ public:
 
 	virtual void Finalize() override
 	{
-		IOrderable::Execute_DoStandUp(owningUnit);
-		owningUnit->GetWorldTimerManager().PauseTimer(timerHandle);
-		owningUnit->GetWorldTimerManager().ClearTimer(timerHandle);
+		IOrderable::Execute_DoStandUp(owningController);
+		owningController->GetWorldTimerManager().PauseTimer(timerHandle);
+		owningController->GetWorldTimerManager().ClearTimer(timerHandle);
 	}
 
 	virtual bool IsFinished() const override
@@ -110,8 +105,8 @@ public:
 		}
 		else
 		{
-			TArray<AActor*> TargetedBy = IITargetable::Execute_IsTargetedBy(owningUnit);
-			return !ISelectable::Execute_IsAlive(owningUnit) || TargetedBy.IsEmpty();
+			TArray<AActor*> TargetedBy = IITargetable::Execute_IsTargetedBy(owningController->GetPawn());
+			return !ISelectable::Execute_IsAlive(owningController->GetPawn()) || TargetedBy.IsEmpty();
 		}
 	}
 
@@ -124,12 +119,12 @@ public:
 	{
 		if (bIsHiding)
 		{
-			IOrderable::Execute_DoStandUp(owningUnit);
+			IOrderable::Execute_DoStandUp(owningController);
 			bIsHiding = false;
 		}
 		else
 		{
-			IOrderable::Execute_DoCrouch(owningUnit);
+			IOrderable::Execute_DoCrouch(owningController);
 			bIsHiding = true;
 		}
 	}

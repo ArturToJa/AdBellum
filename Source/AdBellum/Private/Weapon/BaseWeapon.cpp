@@ -9,7 +9,7 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "Perception/AISense_Hearing.h"
 #include "Net/UnrealNetwork.h"
-#include "OrderSystem/Orderable.h"
+#include "Unit/ArmedUnitInterface.h"
 #include "ITargetable.h"
 
 // Sets default values
@@ -213,7 +213,7 @@ void ABaseWeapon::Client_StopRecoil_Implementation()
 
 void ABaseWeapon::OnWeaponUpdate()
 {
-	IOrderable::Execute_OnWeaponUpdated(GetOwner(), this);
+	IArmedUnitInterface::Execute_OnWeaponUpdated(GetOwner(), this);
 }
 
 FVector ABaseWeapon::getADSTarget_Implementation()
@@ -415,4 +415,9 @@ void ABaseWeapon::ReloadComplete_Implementation()
 		TotalAmmo -= MagazineSize;
 	}
 	OnWeaponUpdate();
+}
+
+bool ABaseWeapon::IsTriggerActive_Implementation()
+{
+	return EBarrel->Shooting;
 }

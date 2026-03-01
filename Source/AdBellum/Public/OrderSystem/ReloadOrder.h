@@ -6,6 +6,7 @@
 #include "OrderSystem/OrderSystem.h"
 #include "Orderable.h"
 #include "Weapon/IWeapon.h"
+#include "Unit/ArmedUnitInterface.h"
 #include "Character/ALSInputInterface.h"
 
 class ADBELLUM_API ReloadOrder : public BaseOrder
@@ -17,20 +18,15 @@ public:
 
 	virtual void Execute() override
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Execute: starting for owner=%s"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"));
-		TScriptInterface<IIWeapon> Weapon = IOrderable::Execute_GetWeapon(owningUnit);
-		WeaponObject = Weapon.GetObject();
+		WeaponObject = IArmedUnitInterface::Execute_GetWeapon(owningController->GetPawn());
 		if (WeaponObject)
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Execute: Weapon found = %s"), *WeaponObject->GetName());
 			if (IIWeapon::Execute_HasAmmoToReload(WeaponObject))
 			{
-				UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Execute: Weapon has ammo to reload - invoking ReloadAction on owner"));
-				IALSInputInterface::Execute_ReloadAction(owningUnit);
+				IALSInputInterface::Execute_ReloadAction(owningController->GetPawn());
 			}
 			else
 			{
-				UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Execute: Weapon has NO ammo to reload - will attempt ChangeWeapon"));
 				IIWeapon::Execute_ChangeWeapon(WeaponObject);
 			}
 		}
@@ -42,7 +38,7 @@ public:
 
 	virtual void Finalize() override
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Finalize called for owner=%s"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"));
+		UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Finalize called for owner=%s"), owningController ? *owningController->GetName() : TEXT("<null>"));
 
 	}
 
@@ -58,11 +54,10 @@ public:
 	
 	virtual void Update() override
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("ReloadOrder::Update called for owner=%s"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"));
 		BaseOrder::Update();
 	}
 
-	UObject* WeaponObject;
+	AActor* WeaponObject;
 };
 
 template<>

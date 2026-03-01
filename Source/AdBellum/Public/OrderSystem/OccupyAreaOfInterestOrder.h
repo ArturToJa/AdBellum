@@ -23,7 +23,7 @@ public:
 		{
 			int32 RandomIndex = FMath::RandRange(0, AOIs.Num() - 1);
 			OccupiedPOI = AOIs[RandomIndex];
-			IIAreaOfInterest::Execute_OccupyPOI(targetUnit, Cast<APawn>(owningUnit), OccupiedPOI);
+			IIAreaOfInterest::Execute_OccupyPOI(targetUnit, owningController->GetPawn(), OccupiedPOI);
 			RunSubOrder(MakeUnique<MoveLocationOrder>(nullptr, OccupiedPOI->GetActorLocation()));
 		}
 		else
@@ -42,13 +42,13 @@ public:
 				FinishSubOrder();
 				int32 RandomIndex = FMath::RandRange(0, AOIs.Num() - 1);
 				OccupiedPOI = AOIs[RandomIndex];
-				IIAreaOfInterest::Execute_OccupyPOI(targetUnit, Cast<APawn>(owningUnit), OccupiedPOI);
+				IIAreaOfInterest::Execute_OccupyPOI(targetUnit, owningController->GetPawn(), OccupiedPOI);
 				RunSubOrder(MakeUnique<MoveLocationOrder>(nullptr, OccupiedPOI->GetActorLocation()));
 			}
 		}
 		else if (!HasSubOrders())
 		{
-			RunSubOrder(MakeUnique<StopOrder>(nullptr, owningUnit->GetActorLocation()));
+			RunSubOrder(MakeUnique<StopOrder>(nullptr, FVector::ZeroVector));
 		}
 	}
 
@@ -56,13 +56,13 @@ public:
 	{
 		if (OccupiedPOI)
 		{
-			IIAreaOfInterest::Execute_UnoccupyPOI(targetUnit, Cast<APawn>(owningUnit), OccupiedPOI);
+			IIAreaOfInterest::Execute_UnoccupyPOI(targetUnit, owningController->GetPawn(), OccupiedPOI);
 		}
 	}
 
 	virtual bool IsFinished() const override
 	{
-		return !ISelectable::Execute_IsAlive(owningUnit) || BaseOrder::IsFinished();
+		return !ISelectable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
 	}
 
 	virtual OrderEnum GetOrderType() const override

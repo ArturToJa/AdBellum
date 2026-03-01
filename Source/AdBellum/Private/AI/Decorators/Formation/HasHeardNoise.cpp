@@ -3,7 +3,7 @@
 
 #include "AI/Decorators/Formation/HasHeardNoise.h"
 #include "AIController.h"
-#include "OrderSystem/Orderable.h"
+#include "Unit/ArmedUnitInterface.h"
 #include "Weapon/IWeapon.h"
 #include "Formation/FormationInterface.h"
 
@@ -14,8 +14,7 @@ bool UHasHeardNoise::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerCom
 	{
 		if (APawn* OwningPawn = AIController->GetPawn())
 		{
-			//return true;
-			if (UObject* Weapon = IOrderable::Execute_GetWeapon(OwningPawn).GetObject())
+			if (UObject* Weapon = IArmedUnitInterface::Execute_GetWeapon(OwningPawn))
 			{
 				return IIWeapon::Execute_HasAmmo(Weapon);
 			}

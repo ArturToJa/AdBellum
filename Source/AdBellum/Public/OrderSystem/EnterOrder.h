@@ -16,7 +16,7 @@ public:
 
 	virtual void Execute() override
 	{
-		UVehicleAccessPoint* accessPoint = IEnterable::Execute_TryBookSeat(targetUnit, Cast<AALSBaseCharacter>(owningUnit));
+		UVehicleAccessPoint* accessPoint = IEnterable::Execute_TryBookSeat(targetUnit, Cast<AALSBaseCharacter>(owningController->GetPawn()));
 		if (accessPoint)
 		{
 			RunSubOrder(MakeUnique<InteractOrder>(accessPoint, FVector::ZeroVector));

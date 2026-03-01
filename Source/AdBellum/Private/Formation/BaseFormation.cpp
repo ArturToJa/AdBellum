@@ -159,11 +159,6 @@ void ABaseFormation::AttackLocation_Implementation(FVector TargetPosition)
 
 }
 
-TScriptInterface<IIWeapon> ABaseFormation::GetWeapon_Implementation()
-{
-	return nullptr;
-}
-
 void ABaseFormation::SetActors(TArray<APawn*> Actors)
 {
 	ClearCurrentSelection();

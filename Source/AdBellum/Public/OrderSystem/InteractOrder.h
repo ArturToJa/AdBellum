@@ -21,12 +21,12 @@ public:
 
 	virtual void Finalize() override
 	{
-		IALSInteractionInterface::Execute_Interact(targetUnit, Cast<AALSBaseCharacter>(owningUnit));
+		IALSInteractionInterface::Execute_Interact(targetUnit, Cast<AALSBaseCharacter>(owningController->GetPawn()));
 	}
 
 	virtual bool IsFinished() const override
 	{
-		FVector OwnerLocation = owningUnit->GetActorLocation();
+		FVector OwnerLocation = owningController->GetPawn()->GetActorLocation();
 		float Distance = FVector::Distance(OwnerLocation, IALSInteractionInterface::Execute_InteractLocation(targetUnit));
 		return BaseOrder::IsFinished() || Distance <= IALSInteractionInterface::Execute_InteractRange(targetUnit);
 	}

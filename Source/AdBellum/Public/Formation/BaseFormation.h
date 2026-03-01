@@ -51,7 +51,6 @@ public:
 	virtual void MoveOrder_Implementation(FVector TargetPosition) override;
 	virtual void AttackTarget_Implementation(UObject* TargetObject) override;
 	virtual void AttackLocation_Implementation(FVector TargetPosition) override;
-	virtual TScriptInterface<IIWeapon> GetWeapon_Implementation() override;
 
 	// IFormationInterface
 	virtual TMap<AActor*, int> GetEnemiesInSight_Implementation() override;

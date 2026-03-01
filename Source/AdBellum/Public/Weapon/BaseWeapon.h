@@ -191,6 +191,7 @@ public:
 	virtual void SetFireMode_Implementation(EFireMode NewFireMode) override;
 	virtual void SetWeaponSpread_Implementation(float Spread) override;
 	virtual void ReloadComplete_Implementation() override;
+	virtual bool IsTriggerActive_Implementation() override;
 
 	virtual void BeginPlay() override;
 	bool bIsReloading = false;

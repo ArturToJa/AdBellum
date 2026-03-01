@@ -37,11 +37,5 @@ public:
 		void DoCrawl();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Orderable")
 		void DoStandUp();
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Orderable")
-		TScriptInterface<IIWeapon> GetWeapon();
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Orderable")
-		void OnWeaponUpdated(AActor* Weapon);
 
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Orderable")
-		bool IsReloading();
 };

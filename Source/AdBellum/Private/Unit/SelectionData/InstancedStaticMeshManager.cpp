@@ -53,7 +53,7 @@ void AInstancedStaticMeshManager::RemoveSelectionInstance_Implementation(int32 I
 			ISelectable::Execute_SetInstanceIndex(SelectionActors[InstanceIndex], -1);
 			SelectionActors.Swap(InstanceIndex, LastIndex);
 			ISelectable::Execute_SetInstanceIndex(SelectionActors[InstanceIndex], InstanceIndex);
-			SelectionActors.Pop(false);
+			SelectionActors.Pop(EAllowShrinking::No);
 		}
 	}
 }

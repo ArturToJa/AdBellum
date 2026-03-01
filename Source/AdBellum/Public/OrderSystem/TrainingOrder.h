@@ -19,7 +19,7 @@ public:
 
 	virtual void Execute() override
 	{
-		PositionIndex = ITrainingHelper::Execute_AssignStartPosition(targetUnit, owningUnit);
+		PositionIndex = ITrainingHelper::Execute_AssignStartPosition(targetUnit, owningController->GetPawn());
 		if (PositionIndex == -1)
 		{
 			return;

@@ -26,37 +26,31 @@ void UOrdersManager::BeginPlay()
 	{
 		UE_LOG(OrdersManager, Log, TEXT("This Actor doesn't implement Orderable interface"));
 	}
-	//SetStopOrder();
+
 	CurrentOrder = MakeUnique<StopOrder>(nullptr, GetOwner()->GetActorLocation());
-	CurrentOrder->SetOwner(GetOwner());
+	CurrentOrder->SetOwner(Cast<AAIController>(GetOwner()));
 	CurrentOrder->OnOrderCompleted.BindUObject(this, &UOrdersManager::NotifyCurrentOrderCompleted);
 	Super::BeginPlay();
 }
 
 void UOrdersManager::RunAILogic()
 {
-	if (APawn* AsPawn = Cast<APawn>(GetOwner()))
+	if (AAIController* AIController = Cast<AAIController>(GetOwner()))
 	{
-		if (AAIController* AIController = Cast<AAIController>(AsPawn->GetController()))
+		if (UBrainComponent* Brain = AIController->GetBrainComponent())
 		{
-			if (UBrainComponent* Brain = AIController->GetBrainComponent())
-			{
-				Brain->StartLogic();
-			}
+			Brain->StartLogic();
 		}
 	}
 }
 
 void UOrdersManager::StopAILogic()
 {
-	if (APawn* AsPawn = Cast<APawn>(GetOwner()))
+	if (AAIController* AIController = Cast<AAIController>(GetOwner()))
 	{
-		if (AAIController* AIController = Cast<AAIController>(AsPawn->GetController()))
+		if (UBrainComponent* Brain = AIController->GetBrainComponent())
 		{
-			if (UBrainComponent* Brain = AIController->GetBrainComponent())
-			{
-				Brain->StopLogic("");
-			}
+			Brain->StopLogic("");
 		}
 	}
 }
@@ -68,10 +62,10 @@ void UOrdersManager::SetStopOrder()
 
 void UOrdersManager::ProcessNextOrder()
 {
-	if (!OrderQueue2.IsEmpty())
+	if (!OrderQueue.IsEmpty())
 	{
-		PerformOrder(MoveTemp(OrderQueue2[0]));
-		OrderQueue2.RemoveAt(0);
+		PerformOrder(MoveTemp(OrderQueue[0]));
+		OrderQueue.RemoveAt(0);
 	}
 }
 
@@ -116,7 +110,7 @@ void UOrdersManager::PerformOrder(TUniquePtr<BaseOrder> OrderToPerform)
 	}
 	CurrentOrder.Reset();
 	CurrentOrder = MoveTemp(OrderToPerform);
-	CurrentOrder->SetOwner(GetOwner());
+	CurrentOrder->SetOwner(Cast<AAIController>(GetOwner()));
 	CurrentOrder->OnOrderCompleted.BindUObject(this, &UOrdersManager::NotifyCurrentOrderCompleted);
 	CurrentOrder->Execute();
 }
@@ -150,23 +144,16 @@ void UOrdersManager::HideBehindCover(FVector TargetPosition)
 
 void UOrdersManager::AddOrder(TUniquePtr<BaseOrder> OrderToPerform, bool bIsQueued)
 {
-	if (APawn* AsPawn = Cast<APawn>(GetOwner()))
-	{
-		if (AsPawn->GetController() && AsPawn->GetController()->IsPlayerController())
-		{
-			return;
-		}
-	}
 	if (bIsQueued)
 	{
-		if (!OrderQueue2.IsEmpty() && OrderQueue2.Last() == OrderToPerform)
+		if (!OrderQueue.IsEmpty() && OrderQueue.Last() == OrderToPerform)
 		{
 			SetAsNonAggressiveOrderInQueue();
 		}
 		else
 		{
-			bool WasEmpty = OrderQueue2.IsEmpty();
-			OrderQueue2.Emplace(MoveTemp(OrderToPerform));
+			bool WasEmpty = OrderQueue.IsEmpty();
+			OrderQueue.Emplace(MoveTemp(OrderToPerform));
 			if (WasEmpty)
 			{
 				ProcessNextOrder();
@@ -181,7 +168,7 @@ void UOrdersManager::AddOrder(TUniquePtr<BaseOrder> OrderToPerform, bool bIsQueu
 		}
 		else
 		{
-			OrderQueue2.Empty();
+			OrderQueue.Empty();
 			PerformOrder(MoveTemp(OrderToPerform));
 		}
 	}
@@ -199,7 +186,7 @@ void UOrdersManager::SetAsNonAggressiveOrder()
 
 void UOrdersManager::SetAsNonAggressiveOrderInQueue()
 {
-	OrderQueue2.Last()->SetNonAggresive();
+	OrderQueue.Last()->SetNonAggresive();
 }
 
 OrderEnum UOrdersManager::GetOrderType()

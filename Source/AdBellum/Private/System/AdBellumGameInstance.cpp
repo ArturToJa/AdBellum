@@ -10,7 +10,7 @@ UAdBellumGameInstance::UAdBellumGameInstance(const FObjectInitializer& ObjectIni
 
 void UAdBellumGameInstance::PopulateTeams(TArray<FPlayerDataStruct> TAlpha, TArray<FPlayerDataStruct> TBeta)
 {
-	Teams.SetNum(2, true);
+	Teams.SetNum(2, EAllowShrinking::Yes);
 	for (FPlayerDataStruct& PlayerData : TAlpha)
 	{
 		if (!PlayerData.IsEmpty || PlayerData.IsAI)

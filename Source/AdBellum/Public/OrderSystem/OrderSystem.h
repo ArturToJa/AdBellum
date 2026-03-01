@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Orderable.h"
+#include "AIController.h"
 #include "OrderSystem/OrderType.h"
 #include "Templates/SharedPointer.h"
 
@@ -18,7 +19,7 @@ public:
 
 	BaseOrder(BaseOrder& other)
 	{
-		owningUnit = other.owningUnit;
+		owningController = other.owningController;
 		targetUnit = other.targetUnit;
 		targetPosition = other.targetPosition;
 		bIsAggresive = other.bIsAggresive;
@@ -27,7 +28,7 @@ public:
 
 	BaseOrder(BaseOrder&& other)
 	{
-		owningUnit = other.owningUnit;
+		owningController = other.owningController;
 		targetUnit = other.targetUnit;
 		targetPosition = other.targetPosition;
 		bIsAggresive = other.bIsAggresive;
@@ -68,12 +69,12 @@ public:
 	virtual bool IsFinished() const
 	{
 		// If there's an active sub-order, check if it's finished
-		return !owningUnit || HasSubOrders() ? subOrder->IsFinished() : false;
+		return !owningController || HasSubOrders() ? subOrder->IsFinished() : false;
 	}
 
-	void SetOwner(AActor* inOwningUnit)
+	void SetOwner(AAIController* inOwningController)
 	{
-		owningUnit = inOwningUnit;
+		owningController = inOwningController;
 	}
 
 	UObject* GetTargetUnit() const
@@ -101,15 +102,15 @@ public:
 		if (HasSubOrders())
 		{
 			// If an existing sub-order is present, assign the new sub-order to the existing one
-			UE_LOG(LogTemp, Verbose, TEXT("BaseOrder::RunSubOrder: Delegating to existing suborder. Owner=%s"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"));
+			UE_LOG(LogTemp, Verbose, TEXT("BaseOrder::RunSubOrder: Delegating to existing suborder. Owner=%s"), owningController ? *owningController->GetName() : TEXT("<null>"));
 			subOrder->RunSubOrder(MoveTemp(inSubOrder));
 		}
 		else
 		{
 			// If no existing sub-order is present, assign the new sub-order directly
 			subOrder = MoveTemp(inSubOrder);
-			subOrder->SetOwner(owningUnit);
-			UE_LOG(LogTemp, Verbose, TEXT("BaseOrder::RunSubOrder: Created new suborder for owner=%s Type=%d"), owningUnit ? *owningUnit->GetName() : TEXT("<null>"), (int)subOrder->GetOrderType());
+			subOrder->SetOwner(owningController);
+			UE_LOG(LogTemp, Verbose, TEXT("BaseOrder::RunSubOrder: Created new suborder for owner=%s Type=%d"), owningController ? *owningController->GetName() : TEXT("<null>"), (int)subOrder->GetOrderType());
 			subOrder->OnOrderCompleted.BindRaw(this, &BaseOrder::FinishSubOrder);
 			subOrder->Execute(); // Trigger Execute function on sub-order
 		}
@@ -155,7 +156,7 @@ public:
 	FSimpleDelegate OnOrderCompleted;
 
 protected:
-	AActor* owningUnit;
+	AAIController* owningController;
 	UObject* targetUnit;
 	FVector targetPosition;
 	bool bIsAggresive = true;

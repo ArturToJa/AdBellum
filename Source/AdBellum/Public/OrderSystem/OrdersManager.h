@@ -60,7 +60,7 @@ protected:
 	virtual void BeginPlay() override;
 
 	TUniquePtr<BaseOrder> CurrentOrder;
-	TArray<TUniquePtr<BaseOrder>> OrderQueue2;
+	TArray<TUniquePtr<BaseOrder>> OrderQueue;
 
 public:	
 	UFUNCTION(BlueprintCallable)

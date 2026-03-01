@@ -91,4 +91,6 @@ public:
 		void SetWeaponSpread(float Spread);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		void ReloadComplete();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		bool IsTriggerActive();
 };

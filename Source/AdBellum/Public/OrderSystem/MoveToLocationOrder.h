@@ -15,18 +15,18 @@ public:
 
 	virtual void Execute() override
 	{
-		IOrderable::Execute_DoStandUp(owningUnit);
-		IOrderable::Execute_MoveOrder(owningUnit, targetPosition);
+		IOrderable::Execute_DoStandUp(owningController);
+		IOrderable::Execute_MoveOrder(owningController, targetPosition);
 	}
 
 	virtual void Finalize() override
 	{
-		IOrderable::Execute_Stop(owningUnit, owningUnit->GetActorLocation());
+		IOrderable::Execute_Stop(owningController, targetPosition);
 	}
 
 	virtual bool IsFinished() const override
 	{
-		return !ISelectable::Execute_IsAlive(owningUnit) || BaseOrder::IsFinished();
+		return !ISelectable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
 	}
 
 	virtual OrderEnum GetOrderType() const override

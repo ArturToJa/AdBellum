@@ -165,11 +165,12 @@ void AAdBellumGameMode::SpawnUnitsForPlayer(AActor* Player, int TeamId, int Play
 {
 	if (!UnitPrefabs.IsEmpty())
 	{
+		const int UnitMultiplier = 1;
 		if (SpawnArea == nullptr)
 		{
 			SpawnArea = SpawnAreas[TeamId][0];
 		}
-		SpawnArea->GenerateTransforms(UnitPrefabs.Num());
+		SpawnArea->GenerateTransforms(UnitPrefabs.Num() * UnitMultiplier);
 
 		int TotalCost = 0;
 

@@ -16,7 +16,7 @@ public:
 	virtual void Execute() override
 	{
 		RunSubOrder(MakeUnique<MoveLocationOrder>(nullptr, targetPosition));
-		targetPosition = owningUnit->GetActorLocation();
+		targetPosition = owningController->GetPawn()->GetActorLocation();
 	}
 
 	virtual void Update() override
@@ -24,7 +24,7 @@ public:
 		if (!HasSubOrders())
 		{
 			RunSubOrder(MakeUnique<MoveLocationOrder>(nullptr, targetPosition));
-			targetPosition = owningUnit->GetActorLocation();
+			targetPosition = owningController->GetPawn()->GetActorLocation();
 		}
 	}
 
@@ -35,7 +35,7 @@ public:
 
 	virtual bool IsFinished() const override
 	{
-		return !ISelectable::Execute_IsAlive(owningUnit) || BaseOrder::IsFinished();
+		return !ISelectable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
 	}
 
 	virtual OrderEnum GetOrderType() const override

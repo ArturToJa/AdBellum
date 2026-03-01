@@ -30,7 +30,7 @@ ABaseUnit::ABaseUnit(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	RecoilAnimationComponent = CreateDefaultSubobject<URecoilAnimationComponent>(TEXT("Recoil Animation Component"));
-	OrdersManagerComponent = CreateDefaultSubobject<UOrdersManager>(TEXT("Order Manager Component"));
+	
 	NetworkComponent = CreateDefaultSubobject<UNetworkComponent>(TEXT("Network Component"));
 	AIPerception = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("AIPerception"));
 	AIPerception->SetIsReplicated(true);
@@ -106,7 +106,7 @@ void ABaseUnit::PossessedBy(AController* NewController)
 		SetViewMode(EALSViewMode::FirstPerson);
 		RecoilAnimationComponent->Activate();
 		IIWeapon::Execute_ResetAim(ActiveWeaponActor);
-		OrdersManagerComponent->SetStopOrder();
+		BackupAIController->OrdersManagerComponent->SetStopOrder();
 	}
 	else
 	{
@@ -737,7 +737,7 @@ void ABaseUnit::NotifyDeath_Implementation()
 	//RecoilAnimationComponent->Stop();
 	//StopRecoil_Implementation();
 	IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
-	OrdersManagerComponent->SetStopOrder();
+	BackupAIController->OrdersManagerComponent->SetStopOrder();
 
 	//RecoilComponent->Deactivate();
 
@@ -980,7 +980,7 @@ void ABaseUnit::SetSelectionCircle_Implementation(bool Visible)
 
 class UOrdersManager* ABaseUnit::GetOrdersManagerComponent_Implementation()
 {
-	return OrdersManagerComponent;
+	return BackupAIController->OrdersManagerComponent;
 }
 
 bool ABaseUnit::IsAlive_Implementation()
@@ -1036,97 +1036,24 @@ int ABaseUnit::GetUnitType_Implementation()
 }
 //END SELECTABLE INTERFACE
 
-//ORDERABLE INTERFACE
-void ABaseUnit::Stop_Implementation(FVector TargetPosition) 
+//ARMED UNIT INTERFACE
+AActor* ABaseUnit::GetWeapon_Implementation()
 {
-	if (AAIController* AIController = GetController<AAIController>())
+	return ActiveWeaponActor;
+}
+
+void ABaseUnit::OnWeaponUpdated_Implementation(AActor* Weapon)
+{
+	if (GetController() != nullptr && IsPlayerControlled())
 	{
-		AIController->StopMovement();
+		if (ActiveWeaponActor == Weapon)
+		{
+			FNotifyHUDData NotifyData;
+			NotifyData.NotifyType = ENotifyHudType::WeaponShot;
+			IIPlayer::Execute_NotifyCharacterHUD(GetController(), NotifyData);
+		}
 	}
 }
-
-void ABaseUnit::MoveOrder_Implementation(FVector TargetPosition)
- {
-	GetController<AAIController>()->MoveToLocation(TargetPosition, 7.5f, true, true, true);
- }
-void ABaseUnit::AttackTarget_Implementation(UObject* TargetObject) {
-	
-	IIWeapon::Execute_SetupAim(ActiveWeaponActor, TargetObject);
-
-	WeaponTriggerAction();
-}
-
-void ABaseUnit::WeaponTriggerAction()
-{
-	if (ActiveWeaponActor)
-	{
-		IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
-		GetWorldTimerManager().SetTimer(AIAttackTimer, this,
-			&ABaseUnit::StopTriggerTimer, FMath::FRandRange(0.1f, 0.1f), false);
-	}
-}
-
-void ABaseUnit::AttackLocation_Implementation(FVector TargetPosition) 
-{
-    if (!ActiveWeaponActor) return;
-    if (!bTriggerActive)
-    {
-        bTriggerActive = true;
-        IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
-        if (GetWorld())
-        {
-            GetWorldTimerManager().ClearTimer(AIAttackTimer);
-            GetWorldTimerManager().SetTimer(AIAttackTimer, this, &ABaseUnit::StopTriggerTimer, FMath::FRandRange(0.2f,0.75f), false);
-        }
-    }
-}
-
-void ABaseUnit::StopTriggerTimer()
-{
-    if (!ActiveWeaponActor) return;
-
-    IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
-    bTriggerActive = false;
-}
-
-void ABaseUnit::DoCrouch_Implementation() 
-{
-	if (!bIsCrouched) 
-	{
-		Crouch();
-	}
-}
-
-
- void ABaseUnit::DoCrawl_Implementation() 
- {
- 
- }
- void ABaseUnit::DoStandUp_Implementation() 
- {
-	 if (bIsCrouched)
-	 {
-		 UnCrouch();
-	 }
- }
-
- TScriptInterface<IIWeapon> ABaseUnit::GetWeapon_Implementation()
- {
-	 return ActiveWeaponActor;
- }
-
- void ABaseUnit::OnWeaponUpdated_Implementation(AActor* Weapon)
- {
-	 if (GetController() != nullptr && IsPlayerControlled())
-	 {
-		 if (ActiveWeaponActor == Weapon)
-		 {
-			 FNotifyHUDData NotifyData;
-			 NotifyData.NotifyType = ENotifyHudType::WeaponShot;
-			 IIPlayer::Execute_NotifyCharacterHUD(GetController(), NotifyData);
-		 }
-	 }
- }
 
 
 bool ABaseUnit::IsReloading_Implementation()
@@ -1134,7 +1061,7 @@ bool ABaseUnit::IsReloading_Implementation()
 	return IIWeapon::Execute_IsReloading(ActiveWeaponActor);
 }
 
-//END ORDERABLE INTERFACE
+//END ARMED UNIT INTERFACE
 
 //ITARGETABBLE INTERAFACE
  FVector ABaseUnit::GetHeadLocation_Implementation() 

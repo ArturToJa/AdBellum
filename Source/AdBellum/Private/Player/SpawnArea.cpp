@@ -52,7 +52,7 @@ void ASpawnArea::GenerateTransforms(int NumberOfUnits)
 
 	UserTransformsCounter = 0;
 	SpawnTransforms.Empty();
-	SpawnTransforms.SetNum(NumberOfUnits, true);
+	SpawnTransforms.SetNum(NumberOfUnits, EAllowShrinking::Yes);
 	int TransformGeneratedCounter = 0;
 
 	FQuat SpawnRotation = GetTransform().GetRotation();

@@ -14,7 +14,7 @@ public:
 
 	virtual void Execute() override
 	{
-		IOrderable::Execute_Stop(owningUnit, targetPosition);
+		IOrderable::Execute_Stop(owningController, targetPosition);
 	}
 
 	virtual void Update() override
