@@ -421,3 +421,8 @@ bool ABaseWeapon::IsTriggerActive_Implementation()
 {
 	return EBarrel->Shooting;
 }
+
+void ABaseWeapon::GetWeaponCombatData_Implementation(FWeaponCombatDataStruct& OutWeaponCombatData)
+{
+	OutWeaponCombatData = WeaponCombatData;
+}

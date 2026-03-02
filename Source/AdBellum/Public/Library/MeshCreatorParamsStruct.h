@@ -6,6 +6,7 @@
 #include "Library/AdBellumEnumLibrary.h"
 #include "Library/Weapon/WeaponPrefabStruct.h"
 #include "Engine/DataTable.h"
+#include "UnitCombatData.h"
 #include "MeshCreatorParamsStruct.generated.h"
 
 USTRUCT(BlueprintType)
@@ -47,6 +48,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization")
 	TArray<FWeaponPrefabDataStruct> WeaponPrefabData;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization")
+	FUnitCombatDataStruct UnitCombatData;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cost")
 	int TicketCost = 1;

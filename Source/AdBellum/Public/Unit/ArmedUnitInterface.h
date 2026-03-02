@@ -29,4 +29,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ArmedUnitInterface")
 	bool IsReloading();
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ArmedUnitInterface")
+	void GetUnitCombatDataStruct(FUnitCombatDataStruct& OutCombatData);
 };

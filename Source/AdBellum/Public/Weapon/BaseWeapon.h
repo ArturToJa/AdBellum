@@ -11,7 +11,9 @@
 #include "Library/NetworkComponent.h"
 #include "EBBullet.h"
 #include "RecoilAnimationComponent.h"
+#include "Library/WeaponCombatData.h"
 #include "BaseWeapon.generated.h"
+
 
 
 class UEBBarrel;
@@ -192,6 +194,7 @@ public:
 	virtual void SetWeaponSpread_Implementation(float Spread) override;
 	virtual void ReloadComplete_Implementation() override;
 	virtual bool IsTriggerActive_Implementation() override;
+	virtual void GetWeaponCombatData_Implementation(FWeaponCombatDataStruct& OutWeaponCombatData) override;
 
 	virtual void BeginPlay() override;
 	bool bIsReloading = false;
@@ -200,4 +203,6 @@ public:
 	bool GainMagazine();
 protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
+
+	FWeaponCombatDataStruct WeaponCombatData;
 };

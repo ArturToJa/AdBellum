@@ -252,7 +252,8 @@ public:
 	virtual AActor* GetWeapon_Implementation() override;
 	virtual void OnWeaponUpdated_Implementation(AActor* Weapon) override;
 	virtual bool IsReloading_Implementation() override;
-	
+	virtual void GetUnitCombatDataStruct_Implementation(FUnitCombatDataStruct& CombatData) override;
+
 	//ITargetable
 	virtual FVector GetHeadLocation_Implementation() override;
 	virtual FVector GetChestLocation_Implementation() override;
@@ -306,6 +307,8 @@ protected:
 
 	// prevent re-triggering while already firing
 	bool bTriggerActive = false;
+
+	FUnitCombatDataStruct UnitCombatData;
 
 	// weapon trigger handling
 	void WeaponTriggerAction();

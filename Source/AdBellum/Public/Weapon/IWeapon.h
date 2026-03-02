@@ -93,4 +93,7 @@ public:
 		void ReloadComplete();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		bool IsTriggerActive();
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		void GetWeaponCombatData(FWeaponCombatDataStruct& OutWeaponCombatData);
 };

@@ -76,15 +76,18 @@ void ABaseAmmo::PlayEffects(EPhysicalSurface HitSurfaceEnum, FVector Location, F
 
 void ABaseAmmo::DealDamage(AActor* DamagedActor, FHitResult HitResult, FVector IncomingVelocity)
 {
-	if (DamagedActor->IsA<ABaseUnit>())
+	if (DamagedActor) 
 	{
-		//UKismetSystemLibrary::PrintString(GetWorld(), HitResult.BoneName.ToString(), true, true);
-		DealHumanDamage(IncomingVelocity, FindBodyPart(HitResult.BoneName), DamagedActor);
-	}
-	else 
-	{
-		float Damage = CalculateEnergy(IncomingVelocity);
-		UGameplayStatics::ApplyDamage(DamagedActor, Damage, GetInstigatorController(), GetOwner()->GetOwner(), UEBDamageType::StaticClass());
+		if (DamagedActor->IsA<ABaseUnit>())
+		{
+			//UKismetSystemLibrary::PrintString(GetWorld(), HitResult.BoneName.ToString(), true, true);
+			DealHumanDamage(IncomingVelocity, FindBodyPart(HitResult.BoneName), DamagedActor);
+		}
+		else
+		{
+			float Damage = CalculateEnergy(IncomingVelocity);
+			UGameplayStatics::ApplyDamage(DamagedActor, Damage, GetInstigatorController(), GetOwner()->GetOwner(), UEBDamageType::StaticClass());
+		}
 	}
 }
 

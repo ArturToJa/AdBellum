@@ -14,5 +14,5 @@ struct FUnitCombatDataStruct
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float BaseDelay;
+	float InitialDelay;
 };

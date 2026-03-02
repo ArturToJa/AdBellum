@@ -793,6 +793,7 @@ void ABaseUnit::ConfigureUnit_Implementation(const FMeshCreatorPrefabStruct& Uni
 {
 	SetupBodyMesh(UnitPrefab);
 	SetupHeadMesh(UnitPrefab);
+	UnitCombatData = UnitPrefab.UnitCombatData;
 }
 
 void ABaseUnit::ConfigureWeapon_Implementation(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum)
@@ -1059,6 +1060,10 @@ void ABaseUnit::OnWeaponUpdated_Implementation(AActor* Weapon)
 bool ABaseUnit::IsReloading_Implementation()
 {
 	return IIWeapon::Execute_IsReloading(ActiveWeaponActor);
+}
+void ABaseUnit::GetUnitCombatDataStruct_Implementation(FUnitCombatDataStruct& CombatData)
+{
+	CombatData = UnitCombatData;
 }
 
 //END ARMED UNIT INTERFACE
