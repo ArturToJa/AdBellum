@@ -10,7 +10,7 @@
 #include "System/AdBellumPlayerState.h"
 #include "Player/IPlayer.h"
 #include "Player/BaseSpawnArea.h"
-#include "Unit/ITargetable.h"
+#include "Interfaces/ITargetable.h"
 #include "DrawDebugHelpers.h"
 
 template void ABaseFormation::PerformOrder<OrderEnum::Attack>(AActor*, FVector);
@@ -78,7 +78,7 @@ void ABaseFormation::SetCurrentSelection()
 }
 
 //Selectable
-void ABaseFormation::SetSelectionCircle_Implementation(bool Visible)
+void ABaseFormation::SetSelection_Implementation(bool Visible)
 {
 	AAdBellumGameState* GameState = GetWorld()->GetGameState<AAdBellumGameState>();
 	for (APawn* Actor : ActorsInFormation)
@@ -90,19 +90,6 @@ void ABaseFormation::SetSelectionCircle_Implementation(bool Visible)
 class UOrdersManager* ABaseFormation::GetOrdersManagerComponent_Implementation()
 {
 	return OrdersManagerComponent;
-}
-
-
-bool ABaseFormation::IsAlive_Implementation()
-{
-	for (APawn* Actor : ActorsInFormation)
-	{
-		if (ISelectable::Execute_IsAlive(Actor))
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 AActor* ABaseFormation::GetOwningPlayer_Implementation()
@@ -131,7 +118,7 @@ void ABaseFormation::Stop_Implementation(FVector TargetPosition)
 	for (APawn* Actor : ActorsInFormation)
 	{
 		TUniquePtr<GeneralOrder<OrderEnum::Stop>::OrderType> OrderToPerform = MakeUnique<GeneralOrder<OrderEnum::Stop>::OrderType>(nullptr, TargetPosition);
-		ISelectable::Execute_GetOrdersManagerComponent(Actor)->AddOrder(MoveTemp(OrderToPerform), false);
+		IOrderable::Execute_GetOrdersManagerComponent(Actor->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 	}
 }
 
@@ -140,7 +127,7 @@ void ABaseFormation::MoveOrder_Implementation(FVector TargetPosition)
 	for (APawn* Actor : ActorsInFormation)
 	{
 		TUniquePtr<GeneralOrder<OrderEnum::Move>::OrderType> OrderToPerform = MakeUnique<GeneralOrder<OrderEnum::Move>::OrderType>(nullptr, TargetPosition);
-		ISelectable::Execute_GetOrdersManagerComponent(Actor)->AddOrder(MoveTemp(OrderToPerform), false);
+		IOrderable::Execute_GetOrdersManagerComponent(Actor->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 	}
 }
 
@@ -149,7 +136,7 @@ void ABaseFormation::AttackTarget_Implementation(UObject* TargetObject)
 	for (APawn* Actor : ActorsInFormation)
 	{
 		TUniquePtr<GeneralOrder<OrderEnum::Attack>::OrderType> OrderToPerform = MakeUnique<GeneralOrder<OrderEnum::Attack>::OrderType>(TargetObject, FVector::ZeroVector);
-		ISelectable::Execute_GetOrdersManagerComponent(Actor)->AddOrder(MoveTemp(OrderToPerform), false);
+		IOrderable::Execute_GetOrdersManagerComponent(Actor->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 	}
 }
 
@@ -187,94 +174,94 @@ void ABaseFormation::PerformOrder(AActor* TargetUnit, FVector TargetPosition)
 }
 
 template<OrderEnum T>
-void ABaseFormation::PerformOrder(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<GeneralOrder<T>::OrderType> OrderToPerform = MakeUnique<GeneralOrder<T>::OrderType>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Attack>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Attack>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<AttackUnitOrder> OrderToPerform = MakeUnique<AttackUnitOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Move>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Move>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<MoveLocationOrder> OrderToPerform = MakeUnique<MoveLocationOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Enter>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Enter>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<EnterOrder> OrderToPerform = MakeUnique<EnterOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Follow>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Follow>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<FollowUnitOrder> OrderToPerform = MakeUnique<FollowUnitOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::HoldPosition>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::HoldPosition>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<HoldPositionOrder> OrderToPerform = MakeUnique<HoldPositionOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Interact>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Interact>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<InteractOrder> OrderToPerform = MakeUnique<InteractOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::OccupyAOI>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::OccupyAOI>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<OccupyAOIOrder> OrderToPerform = MakeUnique<OccupyAOIOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Patrol>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Patrol>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<PatrolOrder> OrderToPerform = MakeUnique<PatrolOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Stop>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Stop>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<StopOrder> OrderToPerform = MakeUnique<StopOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::TakeCover>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::TakeCover>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<TakeCoverOrder> OrderToPerform = MakeUnique<TakeCoverOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Training>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Training>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<TrainingOrder> OrderToPerform = MakeUnique<TrainingOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 template<>
-void ABaseFormation::PerformOrder<OrderEnum::Reload>(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::PerformOrder<OrderEnum::Reload>(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition)
 {
 	TUniquePtr<ReloadOrder> OrderToPerform = MakeUnique<ReloadOrder>(TargetUnit, TargetPosition);
-	ISelectable::Execute_GetOrdersManagerComponent(UnitToOrder)->AddOrder(MoveTemp(OrderToPerform), false);
+	IOrderable::Execute_GetOrdersManagerComponent(UnitToOrder->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 }
 
 void ABaseFormation::OrderUnits(OrderEnum OrderType, AActor* TargetUnit, FVector TargetPosition)
@@ -314,7 +301,7 @@ void ABaseFormation::OrderUnits(OrderEnum OrderType, AActor* TargetUnit, FVector
 	}
 }
 
-void ABaseFormation::OrderUnit(AActor* UnitToOrder, OrderEnum OrderType, AActor* TargetUnit, FVector TargetPosition)
+void ABaseFormation::OrderUnit(APawn* UnitToOrder, OrderEnum OrderType, AActor* TargetUnit, FVector TargetPosition)
 {
 	switch (OrderType)
 	{

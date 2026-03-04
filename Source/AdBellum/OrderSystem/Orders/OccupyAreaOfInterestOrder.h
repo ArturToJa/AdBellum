@@ -6,6 +6,7 @@
 #include "OrderSystem/OrderSystem.h"
 #include "Player/IAreaOfInterest.h"
 #include "MoveToLocationOrder.h"
+#include "Interfaces/ITargetable.h"
 #include "StopOrder.h"
 #include "Math/UnrealMathUtility.h"
 
@@ -62,7 +63,7 @@ public:
 
 	virtual bool IsFinished() const override
 	{
-		return !ISelectable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
+		return !ITargetable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
 	}
 
 	virtual OrderEnum GetOrderType() const override

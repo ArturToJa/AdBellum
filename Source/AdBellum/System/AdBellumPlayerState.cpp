@@ -3,7 +3,7 @@
 
 #include "AdBellumPlayerState.h"
 #include "Net/UnrealNetwork.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/OwnershipInterface.h"
 #include "AdBellumGameMode.h"
 #include "Formation/FormationInterface.h"
 
@@ -50,7 +50,7 @@ void AAdBellumPlayerState::OnRep_AvailableTickets()
 
 void AAdBellumPlayerState::RespawnFormation_Implementation(AActor* Formation)
 {
-	int32 TeamIndex = ISelectable::Execute_GetTeamIndex(Formation);
+	int32 TeamIndex = IOwnershipInterface::Execute_GetTeamIndex(Formation);
 	// This condition should be modified, what if player still has other formations alive but no more tickets?
 	// What if player has some tickets but not enough to respawn formation?
 	if (TryConsumeTickets_Implementation(IFormationInterface::Execute_GetFormationCost(Formation)))

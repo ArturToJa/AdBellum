@@ -6,8 +6,7 @@
 #include "OrderSystem/OrderSystem.h"
 #include "MoveToLocationOrder.h"
 #include "OrderSystem/Orderable.h"
-#include "Unit/Selectable.h"
-#include "Unit/ITargetable.h"
+#include "Interfaces/ITargetable.h"
 #include "AIController.h"
 
 class ADBELLUM_API TakeCoverOrder : public BaseOrder
@@ -106,7 +105,7 @@ public:
 		else
 		{
 			TArray<AActor*> TargetedBy = IITargetable::Execute_IsTargetedBy(owningController->GetPawn());
-			return !ISelectable::Execute_IsAlive(owningController->GetPawn()) || TargetedBy.IsEmpty();
+			return !ITargetable::Execute_IsAlive(owningController->GetPawn()) || TargetedBy.IsEmpty();
 		}
 	}
 

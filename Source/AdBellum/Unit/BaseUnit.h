@@ -6,8 +6,9 @@
 #include "Character/ALSCharacter.h"
 #include "Formation/Formable.h"
 #include "ArmedUnitInterface.h"
-#include "ITargetable.h"
-#include "Customizable.h"
+#include "Interfaces/ITargetable.h"
+#include "Interfaces/Customizable.h"
+#include "Interfaces/Selectable.h"
 #include "Weapon/EBDamageType.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "Engine/NetSerialization.h"
@@ -43,7 +44,7 @@ enum class ETargetBodyPart : uint8
 };
 
 UCLASS()
-class ADBELLUM_API ABaseUnit : public AALSCharacter, public IFormable, public IArmedUnitInterface, public IITargetable, public ICustomizable, public IAISightTargetInterface
+class ADBELLUM_API ABaseUnit : public AALSCharacter, public IFormable, public ISelectable, public IArmedUnitInterface, public IITargetable, public ICustomizable, public IAISightTargetInterface
 {
 	GENERATED_BODY()
 
@@ -236,7 +237,6 @@ public:
 
 	//Selectable 
 	virtual void SetSelectionCircle_Implementation(bool Visible) override;
-	virtual class UOrdersManager* GetOrdersManagerComponent_Implementation() override;
 	virtual bool IsAlive_Implementation();
 	virtual void SetOwningPlayer_Implementation(AActor* Player) override;
 	virtual AActor* GetOwningPlayer_Implementation() override;

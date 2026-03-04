@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/Selectable.h"
 #include "OrderSystem/Orderable.h"
 #include "Formation/Formable.h"
 #include "Formation/FormationInterface.h"
@@ -38,9 +38,8 @@ public:
 
 
 	// Selectable
-	virtual void SetSelectionCircle_Implementation(bool Visible) override;
 	virtual class UOrdersManager* GetOrdersManagerComponent_Implementation() override;
-	virtual bool IsAlive_Implementation();
+	virtual void SetSelection_Implementation(bool bIsSelected) override;
 	virtual AActor* GetOwningPlayer_Implementation() override;
 	virtual int32 GetTeamIndex_Implementation() override;
 	virtual void SetOwningPlayer_Implementation(AActor* Player) override;
@@ -69,12 +68,12 @@ public:
 	template<OrderEnum T>
 	void PerformOrder(AActor* TargetUnit, FVector TargetPosition);
 	template<OrderEnum T>
-	void PerformOrder(AActor* UnitToOrder, AActor* TargetUnit, FVector TargetPosition);
+	void PerformOrder(APawn* UnitToOrder, AActor* TargetUnit, FVector TargetPosition);
 
 	UFUNCTION(BlueprintCallable)
 	void OrderUnits(OrderEnum OrderType, AActor* TargetUnit, FVector TargetPosition);
 	UFUNCTION(BlueprintCallable)
-	void OrderUnit(AActor* UnitToOrder, OrderEnum OrderType, AActor* TargetUnit, FVector TargetPosition);
+	void OrderUnit(APawn* UnitToOrder, OrderEnum OrderType, AActor* TargetUnit, FVector TargetPosition);
 
 	UFUNCTION(BlueprintCallable)
 	void OnNoiseTimeout(AActor* NoiseSource);

@@ -4,7 +4,7 @@
 #include "AdBellumPlayerController.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/Selectable.h"
 #include "OrderSystem/OrdersManager.h"
 #include "RTSPlayer.h"
 #include "GameFramework/HUD.h"
@@ -170,6 +170,7 @@ void AAdBellumPlayerController::Client_AcknowledgePossession_Implementation(APaw
 		MyHUD = CharacterHUD;
 		CharacterHUD->HUDOpen(NewPawn);
 		SetShowMouseCursor(false);
+		IsSelectingOrder = false;
 	}
 	else
 	{
@@ -221,7 +222,7 @@ void AAdBellumPlayerController::ClientClearSelection_Implementation()
 	AAdBellumGameState* GameState = GetWorld()->GetGameState<AAdBellumGameState>();
 	if (SelectionFormation)
 	{
-		ISelectable::Execute_SetSelectionCircle(SelectionFormation, false);
+		IFormationInterface::Execute_SetSelection(SelectionFormation, false);
 	}
 }
 
@@ -580,5 +581,5 @@ void AAdBellumPlayerController::PerformSmartOrder(AActor* TargetUnit)
 
 bool AAdBellumPlayerController::IsEnemyUnit(AActor* TargetUnit)
 {
-	return TeamIndex != ISelectable::Execute_GetTeamIndex(TargetUnit);
+	return TeamIndex != IOwnershipInterface::Execute_GetTeamIndex(TargetUnit);
 }

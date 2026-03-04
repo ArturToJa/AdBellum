@@ -5,7 +5,7 @@
 #include "GenericPlatform/GenericPlatformMath.h"
 #include "IPlayer.h"
 #include "Unit/BaseUnit.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/Selectable.h"
 #include "Kismet/KismetMathLibrary.h"
 
 // Sets default values
@@ -50,9 +50,9 @@ int ARandomSpawnArea::GetPriority(int TeamIndex)
 
 		for (AActor* Actor : OverlappingActors)
 		{
-			if (Actor->GetClass()->ImplementsInterface(USelectable::StaticClass()))
+			if (Actor->GetClass()->ImplementsInterface(UOwnershipInterface::StaticClass()))
 			{
-				int TeamId = ISelectable::Execute_GetTeamIndex(Actor);
+				int TeamId = IOwnershipInterface::Execute_GetTeamIndex(Actor);
 				if (TeamId == TeamIndex)
 				{
 					Priority++;

@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "BaseWeapon.h"
-#include "Unit/Customizable.h"
+#include "Interfaces/Customizable.h"
 #include "WeaponSpawner.generated.h"
 
 UCLASS()

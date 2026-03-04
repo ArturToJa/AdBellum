@@ -4,7 +4,7 @@
 #include "ShouldTakeCover.h"
 #include "AIController.h"
 #include "OrderSystem/Orderable.h"
-#include "Unit/ITargetable.h"
+#include "Interfaces/ITargetable.h"
 
 
 bool UShouldTakeCover::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const

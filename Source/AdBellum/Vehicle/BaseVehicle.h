@@ -5,9 +5,9 @@
 #include "CoreMinimal.h"
 #include "Enterable.h"
 #include "OrderSystem/Orderable.h"
-#include "Unit/Customizable.h"
+#include "Interfaces/Customizable.h"
 #include "Vehicle/Vehicle.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/Selectable.h"
 #include "VehicleSystemBase.h"
 #include "VehicleSeatComponent.h"
 #include "Library/ALSADSInterface.h"
@@ -19,7 +19,7 @@ class UNetworkComponent;
 class ABaseWeapon;
 
 UCLASS()
-class ADBELLUM_API ABaseVehicle : public AVehicleSystemBase, public IEnterable, public IFormable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface
+class ADBELLUM_API ABaseVehicle : public AVehicleSystemBase, public IEnterable, public IFormable, public ISelectable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface
 {
 	GENERATED_BODY()
 public:
@@ -88,7 +88,7 @@ public:
 	// ISelectable interface
 	virtual void SetSelectionCircle_Implementation(bool Visible) override;
 	virtual class UOrdersManager* GetOrdersManagerComponent_Implementation() override;
-	virtual bool IsAlive_Implementation() override;
+	virtual bool IsAlive_Implementation();
 	virtual void SetOwningPlayer_Implementation(AActor* Player) override;
 	virtual AActor* GetOwningPlayer_Implementation() override;
 	virtual void SetTeamIndex_Implementation(int32 Index) override;

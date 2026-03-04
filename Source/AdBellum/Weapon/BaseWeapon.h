@@ -113,15 +113,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
 	TObjectPtr<URecoilData> RecoilData;
 
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
-	//float RecoilVerticalValue = 0.075f;
-
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
-	//float RecoilHorizontalValue = 0.033f;
-
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
-	//TSubclassOf<class UCameraShakeBase> ShakeClass = nullptr;
-
 	float CalculateFlightTime(TSubclassOf<AEBBullet> BulletClass);
 
 	void CalibrateSight();
@@ -165,6 +156,9 @@ public:
 
 	void OnWeaponUpdate();
 
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "AI")
+	FWeaponCombatDataStruct WeaponCombatData;
+
 	//END SHOOTING LOGIC
 	//IIWeapon
 	float Range = 500.0f;
@@ -194,6 +188,7 @@ public:
 	virtual void SetWeaponSpread_Implementation(float Spread) override;
 	virtual void ReloadComplete_Implementation() override;
 	virtual bool IsTriggerActive_Implementation() override;
+	virtual bool IsShooting_Implementation() override;
 	virtual void GetWeaponCombatData_Implementation(FWeaponCombatDataStruct& OutWeaponCombatData) override;
 
 	virtual void BeginPlay() override;
@@ -203,6 +198,4 @@ public:
 	bool GainMagazine();
 protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
-
-	FWeaponCombatDataStruct WeaponCombatData;
 };

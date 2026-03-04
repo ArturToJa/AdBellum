@@ -96,6 +96,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "GameMode")
 	int InitialTickets = 5;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GameMode")
+	int UnitSpawnMultiplier = 1;
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Formation")
 	TSubclassOf<ABaseFormation> DefaultFormationClass;

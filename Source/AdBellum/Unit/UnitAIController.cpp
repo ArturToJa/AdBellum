@@ -4,6 +4,11 @@
 #include "UnitAIController.h"
 #include "ArmedUnitInterface.h"
 #include "OrderSystem/OrdersManager.h"
+#include "Library/UnitCombatData.h"
+#include "Library/WeaponCombatData.h"
+#include "Weapon/IWeapon.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 AUnitAIController::AUnitAIController()
 {
@@ -41,6 +46,11 @@ void AUnitAIController::DecodeStrengthAndFlags(float EncodedValue)
 }
 
 //ORDERABLE INTERFACE
+class UOrdersManager* AUnitAIController::GetOrdersManagerComponent_Implementation()
+{
+	return OrdersManagerComponent;
+}
+
 void AUnitAIController::Stop_Implementation(FVector TargetPosition)
 {
 	StopMovement();
@@ -55,18 +65,71 @@ void AUnitAIController::AttackTarget_Implementation(UObject* TargetObject) {
 	AActor* ActiveWeaponActor = IArmedUnitInterface::Execute_GetWeapon(GetPawn());
 	IIWeapon::Execute_SetupAim(ActiveWeaponActor, TargetObject);
 
-	WeaponTriggerAction();
+	float TriggerDuration = ComputeTriggerDuration(ActiveWeaponActor, TargetObject);
+
+	UKismetSystemLibrary::PrintString(GetWorld(), FString::Printf(TEXT("TriggerDuration = %f"), TriggerDuration), true, true);
+	WeaponTriggerAction(TriggerDuration);
 }
 
-void AUnitAIController::WeaponTriggerAction()
+float AUnitAIController::ComputeTriggerDuration(AActor* WeaponActor, UObject* TargetObject) const
+{
+	if (!WeaponActor || !GetPawn())
+	{
+		return 0.01f;
+	}
+
+	FWeaponCombatDataStruct WeaponData;
+	IIWeapon::Execute_GetWeaponCombatData(WeaponActor, WeaponData);
+
+	FUnitCombatDataStruct UnitData;
+	IArmedUnitInterface::Execute_GetUnitCombatDataStruct(GetPawn(), UnitData);
+
+	float Distance = 0.0f;
+	AActor* TargetActor = Cast<AActor>(TargetObject);
+	if (TargetActor)
+	{
+		Distance = FVector::Dist(GetPawn()->GetActorLocation(), TargetActor->GetActorLocation())/100;
+	}
+
+	float PerceivedDistance = Distance * UnitData.DistanceMultiplier;
+
+	float BaseDuration = WeaponData.BurstDurationSlope * PerceivedDistance + WeaponData.BurstDurationIntercept;
+	if (BaseDuration < 0.0f)
+	{
+		return WeaponData.MinBurstDuration;
+	}
+
+	float ClampedDuration = FMath::Clamp(BaseDuration, WeaponData.MinBurstDuration, WeaponData.MaxBurstDuration);
+
+	float TriggerDuration = ClampedDuration * UnitData.BurstDurationMultiplier;
+
+	if (TriggerDuration <= 0.0f)
+	{
+		TriggerDuration = WeaponData.MinBurstDuration;
+	}
+	return TriggerDuration;
+}
+
+void AUnitAIController::WeaponTriggerAction(float TriggerDuration)
 {
 	AActor* ActiveWeaponActor = IArmedUnitInterface::Execute_GetWeapon(GetPawn());
 	if (ActiveWeaponActor)
 	{
 		IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
-		GetWorldTimerManager().SetTimer(AIAttackTimer, this,
-			&AUnitAIController::StopTriggerTimer, FMath::FRandRange(0.1f, 0.1f), false);
+		if (GetWorld())
+		{
+			GetWorldTimerManager().ClearTimer(AIAttackTimer);
+			GetWorldTimerManager().SetTimer(AIAttackTimer, this, &AUnitAIController::StopTriggerTimer, TriggerDuration, false);
+		}
 	}
+}
+
+void AUnitAIController::StopTriggerTimer()
+{
+	AActor* ActiveWeaponActor = IArmedUnitInterface::Execute_GetWeapon(GetPawn());
+	if (!ActiveWeaponActor) return;
+
+	IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
 }
 
 void AUnitAIController::AttackLocation_Implementation(FVector TargetPosition)
@@ -83,14 +146,6 @@ void AUnitAIController::AttackLocation_Implementation(FVector TargetPosition)
 			GetWorldTimerManager().SetTimer(AIAttackTimer, this, &AUnitAIController::StopTriggerTimer, FMath::FRandRange(0.2f, 0.75f), false);
 		}
 	}
-}
-
-void AUnitAIController::StopTriggerTimer()
-{
-	AActor* ActiveWeaponActor = IArmedUnitInterface::Execute_GetWeapon(GetPawn());
-	if (!ActiveWeaponActor) return;
-
-	IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
 }
 
 void AUnitAIController::DoCrouch_Implementation()

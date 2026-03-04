@@ -7,7 +7,7 @@
 #include "AdBellumGameState.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/OwnershipInterface.h"
 #include "Formation/BaseFormation.h"
 #include "AdBellumPlayerState.h"
 #include "Player/IPlayer.h"
@@ -156,8 +156,8 @@ void AAdBellumGameMode::SpawnFormationForPlayer(AActor* Player, int TeamId, int 
 	Formation->SetOwner(Player);
 	Formation->FinishSpawning(FTransform());
 	AllActorsMap.Add(Formation, InitializePlayerIsReplicatedMap());
-	ISelectable::Execute_SetOwningPlayer(Formation, Player);
-	ISelectable::Execute_SetTeamIndex(Formation, TeamId);
+	IOwnershipInterface::Execute_SetOwningPlayer(Formation, Player);
+	IOwnershipInterface::Execute_SetTeamIndex(Formation, TeamId);
 	SpawnUnitsForPlayer(Player, TeamId, PlayerId, Formation, UnitPrefabs, SpawnArea, bIsDefault);
 }
 
@@ -169,42 +169,49 @@ void AAdBellumGameMode::SpawnUnitsForPlayer(AActor* Player, int TeamId, int Play
 		{
 			SpawnArea = SpawnAreas[TeamId][0];
 		}
-		SpawnArea->GenerateTransforms(UnitPrefabs.Num());
+
+		SpawnArea->GenerateTransforms(UnitPrefabs.Num() * UnitSpawnMultiplier);
 
 		int TotalCost = 0;
-
-		for (const FMeshCreatorPrefabStruct& UnitData : UnitPrefabs)
-		{
-			TotalCost += UnitData.TicketCost;
-		}
-		if (IPlayerStateInterface::Execute_TryConsumeTickets(IIPlayer::Execute_GetPlayerStateActor(Player), TotalCost))
+		for (int i = 0; i < UnitSpawnMultiplier; ++i)
 		{
 			for (const FMeshCreatorPrefabStruct& UnitData : UnitPrefabs)
 			{
-				TSubclassOf<APawn> Class = UnitData.UnitClass.LoadSynchronous();
-				FTransform SpawnTransform = SpawnArea->GetNextTransform();
-				APawn* SpawnedUnit = GetWorld()->SpawnActorDeferred<APawn>(Class, SpawnTransform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
-				if (SpawnedUnit)
+				TotalCost += UnitData.TicketCost;
+			}
+		}
+		
+		if (IPlayerStateInterface::Execute_TryConsumeTickets(IIPlayer::Execute_GetPlayerStateActor(Player), TotalCost))
+		{
+			for (int i = 0; i < UnitSpawnMultiplier; ++i)
+			{
+				for (const FMeshCreatorPrefabStruct& UnitData : UnitPrefabs)
 				{
-					SpawnedUnit->SetOwner(Player);
-					SpawnedUnit->FinishSpawning(SpawnTransform);
-					AddUnitForPlayer(SpawnedUnit, Player, UnitData);
-					SpawnWeaponsForUnit(SpawnedUnit, UnitData.WeaponPrefabData, bIsDefault);
-					if (bIsDefault)
+					TSubclassOf<APawn> Class = UnitData.UnitClass.LoadSynchronous();
+					FTransform SpawnTransform = SpawnArea->GetNextTransform();
+					APawn* SpawnedUnit = GetWorld()->SpawnActorDeferred<APawn>(Class, SpawnTransform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+					if (SpawnedUnit)
 					{
-						AllUnits.Add(SpawnedUnit);
-						AllUnitsPrefabs.Add(UnitData);
+						SpawnedUnit->SetOwner(Player);
+						SpawnedUnit->FinishSpawning(SpawnTransform);
+						AddUnitForPlayer(SpawnedUnit, Player, UnitData);
+						SpawnWeaponsForUnit(SpawnedUnit, UnitData.WeaponPrefabData, bIsDefault);
+						if (bIsDefault)
+						{
+							AllUnits.Add(SpawnedUnit);
+							AllUnitsPrefabs.Add(UnitData);
+						}
+						else
+						{
+							AllUnitsReady.Add(SpawnedUnit);
+							AllUnitsPrefabsReady.Add(UnitData);
+							ScheduleSpawnTimer();
+						}
+						IFormationInterface::Execute_AddUnitToFormation(Formation, SpawnedUnit);
+						AllActorsMap.Add(SpawnedUnit, InitializePlayerIsReplicatedMap());
 					}
-					else
-					{
-						AllUnitsReady.Add(SpawnedUnit);
-						AllUnitsPrefabsReady.Add(UnitData);
-						ScheduleSpawnTimer();
-					}
-					IFormationInterface::Execute_AddUnitToFormation(Formation, SpawnedUnit);
-					AllActorsMap.Add(SpawnedUnit, InitializePlayerIsReplicatedMap());
-				}
 
+				}
 			}
 		}
 		Formation->SetFormationCost(TotalCost);
@@ -477,8 +484,8 @@ void AAdBellumGameMode::AddUnitForPlayer(AActor* Unit, AActor* Player, FMeshCrea
 	UnitData.ownedUnit = Unit;
 	UnitData.UnitPrefab = UnitPrefab;
 	PlayersData[TeamIndex][PlayerIndex].ownedUnits.Add(UnitData);
-	ISelectable::Execute_SetOwningPlayer(Unit, Player);
-	ISelectable::Execute_SetTeamIndex(Unit, TeamIndex);
+	IOwnershipInterface::Execute_SetOwningPlayer(Unit, Player);
+	IOwnershipInterface::Execute_SetTeamIndex(Unit, TeamIndex);
 }
 
 void AAdBellumGameMode::RemoveUnitForPlayer(AActor* Unit, AActor* Player)
@@ -487,7 +494,7 @@ void AAdBellumGameMode::RemoveUnitForPlayer(AActor* Unit, AActor* Player)
 	int32 TeamIndex = IIPlayer::Execute_GetTeamIndex(Player);
 	//FUnitDataStruct* FoundUnitData = PlayersData[TeamIndex][PlayerIndex].ownedUnits.FindByPredicate([Unit](const FUnitDataStruct& UnitData) { return UnitData.ownedUnit == Unit; });
 	PlayersData[TeamIndex][PlayerIndex].ownedUnits.Remove({ FMeshCreatorPrefabStruct(), Unit});
-	ISelectable::Execute_SetOwningPlayer(Unit, nullptr);
+	IOwnershipInterface::Execute_SetOwningPlayer(Unit, nullptr);
 }
 
 ABaseSpawnArea* AAdBellumGameMode::GetDefaultSpawnArea(int32 TeamIndex)
@@ -511,9 +518,9 @@ ABaseSpawnArea* AAdBellumGameMode::GetDefaultSpawnArea(int32 TeamIndex)
 
 bool AAdBellumGameMode::IsEnemyUnit_Implementation(AActor* Unit, AActor* Player)
 {
-	if (Unit->GetClass()->ImplementsInterface(USelectable::StaticClass()))
+	if (Unit->GetClass()->ImplementsInterface(UOwnershipInterface::StaticClass()))
 	{
-		AActor* OwningPlayer = ISelectable::Execute_GetOwningPlayer(Unit);
+		AActor* OwningPlayer = IOwnershipInterface::Execute_GetOwningPlayer(Unit);
 		int32 PlayerTeamIndex = IIPlayer::Execute_GetTeamIndex(OwningPlayer);
 		int32 EnemyTeamIndex = IIPlayer::Execute_GetTeamIndex(Player);
 		return PlayerTeamIndex != EnemyTeamIndex;

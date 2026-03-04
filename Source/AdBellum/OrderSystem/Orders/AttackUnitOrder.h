@@ -6,9 +6,11 @@
 #include "OrderSystem/OrderSystem.h"
 #include "ReloadOrder.h"
 #include "OrderSystem/Orderable.h"
+#include "Interfaces/ITargetable.h"
 #include "Weapon/IWeapon.h"
 #include "Unit/ArmedUnitInterface.h"
 #include "Unit/UnitAIController.h"
+#include "Library/UnitCombatData.h"
 
 class ADBELLUM_API AttackUnitOrder : public BaseOrder
 {
@@ -24,7 +26,13 @@ public:
 	{
 		WeaponObject = IArmedUnitInterface::Execute_GetWeapon(owningController->GetPawn());
 
-		AttackDelay = 0.5f; // set this delay based on unit and weapon stats
+		// Try to obtain initial delay from owning unit's combat data
+		FUnitCombatDataStruct UnitData;
+		if (owningController->GetPawn())
+		{
+			IArmedUnitInterface::Execute_GetUnitCombatDataStruct(owningController->GetPawn(), UnitData);
+			AttackDelay = UnitData.InitialDelay;
+		}
 
 		AUnitAIController* UnitController = Cast<AUnitAIController>(owningController);
 		if (UnitController)
@@ -48,7 +56,7 @@ public:
 
 	virtual bool IsFinished() const override
 	{
-		return BaseOrder::IsFinished() || (!ISelectable::Execute_IsAlive(targetUnit) || WeaponObject == nullptr);
+		return BaseOrder::IsFinished() || (!ITargetable::Execute_IsAlive(targetUnit) || WeaponObject == nullptr);
 	}
 
 	virtual OrderEnum GetOrderType() const override
@@ -59,9 +67,15 @@ public:
 	virtual void Update() override
 	{
 		BaseOrder::Update();
-		if (IIWeapon::Execute_IsReloading(WeaponObject))
+		if (!WeaponObject)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("AttackUnitOrder: Weapon is reloading, cannot attack"));
+			UE_LOG(LogTemp, Warning, TEXT("AttackUnitOrder: No weapon available"));
+			return;
+		}
+
+		if (IIWeapon::Execute_IsReloading(WeaponObject) || IIWeapon::Execute_IsShooting(WeaponObject))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("AttackUnitOrder: Weapon is reloading or already shooting, cannot attack"));
 			return;
 		}
 
@@ -74,6 +88,18 @@ public:
 		if (IIWeapon::Execute_HasAmmo(WeaponObject))
 		{
 			IOrderable::Execute_AttackTarget(owningController, targetUnit);
+
+			// After initiating an attack, set delay between bursts from unit combat data
+			if (owningController && owningController->GetPawn())
+			{
+				FUnitCombatDataStruct UnitData;
+				IArmedUnitInterface::Execute_GetUnitCombatDataStruct(owningController->GetPawn(), UnitData);
+				AttackDelay = UnitData.DelayBetweenBursts > 0.f ? UnitData.DelayBetweenBursts : 0.5f;
+			}
+			else
+			{
+				AttackDelay = 0.5f;
+			}
 		}
 		else
 		{

@@ -979,11 +979,6 @@ void ABaseUnit::SetSelectionCircle_Implementation(bool Visible)
 {
 }
 
-class UOrdersManager* ABaseUnit::GetOrdersManagerComponent_Implementation()
-{
-	return BackupAIController->OrdersManagerComponent;
-}
-
 bool ABaseUnit::IsAlive_Implementation()
 {
 	return HP > 0;

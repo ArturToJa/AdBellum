@@ -4,13 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
+#include "OwnershipInterface.h"
 #include "Selectable.generated.h"
 
 class UOrdersManager;
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
-class USelectable : public UInterface
+class USelectable : public UOwnershipInterface
 {
 	GENERATED_BODY()
 };
@@ -18,7 +19,7 @@ class USelectable : public UInterface
 /**
  * 
  */
-class ADBELLUM_API ISelectable
+class ADBELLUM_API ISelectable : public IOwnershipInterface
 {
 	GENERATED_BODY()
 
@@ -26,18 +27,6 @@ class ADBELLUM_API ISelectable
 public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")
 		void SetSelectionCircle(bool Visible);
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")
-		class UOrdersManager* GetOrdersManagerComponent();
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")
-		bool IsAlive();
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")
-		void SetOwningPlayer(AActor* Player);
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")
-		AActor* GetOwningPlayer();
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")
-		void SetTeamIndex(int32 Index);
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")
-		int32 GetTeamIndex();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")
 		void SetInstanceIndex(int32 Index);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Selectable")

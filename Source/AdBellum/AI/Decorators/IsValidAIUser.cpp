@@ -3,7 +3,7 @@
 
 #include "IsValidAIUser.h"
 #include "AIController.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/ITargetable.h"
 
 bool UIsValidAIUser::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const
 {
@@ -11,7 +11,7 @@ bool UIsValidAIUser::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerCom
 	{
 		if (APawn* OwningPawn = AIController->GetPawn())
 		{
-			return ISelectable::Execute_IsAlive(OwningPawn) && !AIController->IsPlayerController();
+			return IITargetable::Execute_IsAlive(OwningPawn) && !AIController->IsPlayerController();
 		}
 	}
 	return false;

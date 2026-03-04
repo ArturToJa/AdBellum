@@ -17,7 +17,7 @@ class UITargetable : public UInterface
 };
 
 /**
- * 
+ * Compatibility alias: some code refers to 'ITargetable' - keep that name for backward compatibility
  */
 class ADBELLUM_API IITargetable
 {
@@ -50,4 +50,10 @@ public:
 		float GetArmourParamValueForBodyPart(EBodyPart BodyPart);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
 		void ClearTarget();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ITargetable")
+		bool IsAlive();
 };
+
+// Backward compatibility: provide old names
+using ITargetable = IITargetable;
+using UTargetable = UITargetable;

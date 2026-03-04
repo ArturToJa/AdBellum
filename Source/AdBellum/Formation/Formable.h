@@ -4,14 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/OwnershipInterface.h"
 #include "Formable.generated.h"
 
 class ABaseFormation;
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
-class UFormable : public USelectable//, public UInterface
+class UFormable : public UOwnershipInterface//, public UInterface
 {
 	GENERATED_BODY()
 };
@@ -19,7 +19,7 @@ class UFormable : public USelectable//, public UInterface
 /**
  * 
  */
-class ADBELLUM_API IFormable : public ISelectable
+class ADBELLUM_API IFormable : public IOwnershipInterface
 {
 	GENERATED_BODY()
 
@@ -31,4 +31,5 @@ public:
 	ABaseFormation* GetFormation();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Formable")
 	void RespawnUnit(FTransform RespawnTransform);
+	
 };

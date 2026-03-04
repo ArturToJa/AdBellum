@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "OrderSystem/OrderSystem.h"
+#include "Interfaces/ITargetable.h"
 #include "MoveToLocationOrder.h"
 
 class ADBELLUM_API PatrolOrder : public BaseOrder
@@ -35,7 +36,7 @@ public:
 
 	virtual bool IsFinished() const override
 	{
-		return !ISelectable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
+		return !ITargetable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
 	}
 
 	virtual OrderEnum GetOrderType() const override

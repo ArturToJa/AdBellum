@@ -10,7 +10,7 @@
 #include "Perception/AISense_Hearing.h"
 #include "Net/UnrealNetwork.h"
 #include "Unit/ArmedUnitInterface.h"
-#include "Unit/ITargetable.h"
+#include "Interfaces/ITargetable.h"
 
 // Sets default values
 ABaseWeapon::ABaseWeapon()
@@ -384,7 +384,6 @@ void ABaseWeapon::SetupAim_Implementation(UObject* TargetObject)
 		float Step = 0.1f;
 		float MaxTime = 10.0f;
 		int NumIterations = 4;
-
 		EBarrel->CalculateAimDirectionFromLocation(BulletClass, StartLocation, TargetLocation, TargetVelocity, TargetAimDirection, PredictedTargetLocation, PredictedIntersectionLocation, PredictedFlightTime, Error, MaxTime, Step, NumIterations);
 		EBarrel->SetWorldRotation(TargetAimDirection.Rotation());
 		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), StartLocation, StartLocation + TargetAimDirection * 500000.0f, 10.0f, FColor::Blue, 0.5f, 2.0f);
@@ -420,6 +419,11 @@ void ABaseWeapon::ReloadComplete_Implementation()
 bool ABaseWeapon::IsTriggerActive_Implementation()
 {
 	return EBarrel->Shooting;
+}
+
+bool ABaseWeapon::IsShooting_Implementation()
+{
+	return EBarrel ? EBarrel->Shooting : false;
 }
 
 void ABaseWeapon::GetWeaponCombatData_Implementation(FWeaponCombatDataStruct& OutWeaponCombatData)

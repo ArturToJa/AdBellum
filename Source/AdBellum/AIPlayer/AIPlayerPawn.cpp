@@ -4,7 +4,7 @@
 #include "AIPlayerPawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "OrderSystem/Orderable.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/Selectable.h"
 #include "OrderSystem/Orders/OccupyAreaOfInterestOrder.h"
 #include "Player/TestSpawnerComponent.h"
 #include "System/AdBellumGameMode.h"

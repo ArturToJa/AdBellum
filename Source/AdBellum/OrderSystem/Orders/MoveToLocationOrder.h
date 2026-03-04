@@ -3,8 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Unit/Selectable.h"
-#include "OrderSystem/OrderSystem.h"
+#include "Interfaces/Selectable.h"
+#include "Interfaces/ITargetable.h"
 
 class ADBELLUM_API MoveLocationOrder : public BaseOrder
 {
@@ -26,7 +26,7 @@ public:
 
 	virtual bool IsFinished() const override
 	{
-		return !ISelectable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
+		return !ITargetable::Execute_IsAlive(owningController->GetPawn()) || BaseOrder::IsFinished();
 	}
 
 	virtual OrderEnum GetOrderType() const override

@@ -10,7 +10,7 @@
 #include "NiagaraFunctionLibrary.h"
 #include "Engine/EngineTypes.h"
 #include "Unit/BaseUnit.h"
-#include "Unit/ITargetable.h"
+#include "Interfaces/ITargetable.h"
 #include "Engine/DecalActor.h"
 #include "Components/DecalComponent.h"
 #include "Perception/AISense_Damage.h"

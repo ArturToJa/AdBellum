@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameState.h"
 #include "Unit/SelectionData/InstancedStaticMeshManager.h"
-#include "Unit/Customizable.h"
+#include "Interfaces/Customizable.h"
 #include "AdBellumGameState.generated.h"
 
 USTRUCT(BlueprintType)

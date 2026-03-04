@@ -35,6 +35,7 @@ public:
 	uint8 GetSightFlags() const { return flagsSight; }
 
 	//Orderable
+	virtual class UOrdersManager* GetOrdersManagerComponent_Implementation() override;
 	virtual void Stop_Implementation(FVector TargetPosition) override;
 	virtual void MoveOrder_Implementation(FVector TargetPosition) override;
 	virtual void AttackTarget_Implementation(UObject* TargetObject) override;
@@ -55,5 +56,8 @@ private:
 	uint8 flagsSight;
 	FTimerHandle AIAttackTimer;
 	void StopTriggerTimer();
-	void WeaponTriggerAction();
+	void WeaponTriggerAction(float TriggerDuration = 0.1f);
+	// Compute burst/trigger duration (seconds) from weapon and target using weapon/unit combat data
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "AI|Combat")
+	float ComputeTriggerDuration(AActor* WeaponActor, UObject* TargetObject) const;
 };

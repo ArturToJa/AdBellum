@@ -5,7 +5,7 @@
 #include "IPlayer.h"
 #include "AdBellumPlayerController.h"
 #include "System/AdBellumGameState.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/Selectable.h"
 #include "Formation/BaseFormation.h"
 
 void ARTS_HUD::DrawHUD()
@@ -44,7 +44,7 @@ void ARTS_HUD::SetCurrentSelection_Implementation(bool Visible)
 	AAdBellumGameState* GameState = GetWorld()->GetGameState<AAdBellumGameState>();
 	for (ABaseFormation* Actor : SelectedFormations)
 	{
-		ISelectable::Execute_SetSelectionCircle(Actor, Visible);
+		IFormationInterface::Execute_SetSelection(Actor, Visible);
 	}
 }
 
@@ -58,9 +58,9 @@ void ARTS_HUD::CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsA
 	{
 		if (Actor->GetClass()->ImplementsInterface(USelectable::StaticClass()))
 		{
-			if (ISelectable::Execute_GetOwningPlayer(Actor) == GetOwner()) // zmienić warunek na !IsEnemyUnit z AdBellumGameInstance
+			if (IOwnershipInterface::Execute_GetOwningPlayer(Actor) == GetOwner()) // zmienić warunek na !IsEnemyUnit z AdBellumGameInstance
 			{
-				if (ISelectable::Execute_IsAlive(Actor))
+				if (ITargetable::Execute_IsAlive(Actor))
 				{
 					SelectedFormations.AddUnique(IFormable::Execute_GetFormation(Actor));
 					GameState->SetSelectionCircle(true, Actor);

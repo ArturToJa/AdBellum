@@ -42,4 +42,6 @@ public:
 	void RespawnFormation(ABaseSpawnArea* SpawnArea);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "FormationInterface")
 	AActor* GetFirstActorOfInterest();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "FormationInterface")
+	void SetSelection(bool bIsSelected);
 };

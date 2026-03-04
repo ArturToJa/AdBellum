@@ -3,7 +3,7 @@
 
 #include "IsTargetAlive.h"
 #include "AIController.h"
-#include "Unit/Selectable.h"
+#include "Interfaces/ITargetable.h"
 
 bool UIsTargetAlive::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const
 {
@@ -11,7 +11,7 @@ bool UIsTargetAlive::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerCom
 	{
 		if (AActor* TargetActor = AIController->GetFocusActor())
 		{
-			return ISelectable::Execute_IsAlive(TargetActor);
+			return IITargetable::Execute_IsAlive(TargetActor);
 		}
 	}
 	return false;
