@@ -3,6 +3,7 @@
 
 #include "MainMenuGameState.h"
 #include "System/AdBellumGameInstance.h"
+#include "SaveSystem/SaveSubsystem.h"
 #include "Net/UnrealNetwork.h"
 
 AMainMenuGameState::AMainMenuGameState(const FObjectInitializer& ObjectInitializer)
@@ -237,25 +238,32 @@ void AMainMenuGameState::SetTicketsIndex(int _TicketsIndex)
 	NotifyNewTicketsIndex(_TicketsIndex);
 }
 
-void AMainMenuGameState::ServerSetPlayerSquad_Implementation(const FString& SquadName, FMeshCreatorPrefabStruct PrefabStruct, int Team, int Slot)
+void AMainMenuGameState::ServerSetPlayerSquad_Implementation(const FString& SquadName, const TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, int Team, int Slot)
 {
 	switch (Team)
 	{
 	case 0:
-		TeamAlpha[Slot].PlayerSquad.UnitPrefabDataArray.Empty();
-		TeamAlpha[Slot].PlayerSquad.UnitPrefabDataArray.Add(PrefabStruct);
+		TeamAlpha[Slot].PlayerSquad.UnitPrefabDataArray = UnitPrefabs;
 		break;
 	case 1:
-		TeamBeta[Slot].PlayerSquad.UnitPrefabDataArray.Empty();
-		TeamBeta[Slot].PlayerSquad.UnitPrefabDataArray.Add(PrefabStruct);
+		TeamBeta[Slot].PlayerSquad.UnitPrefabDataArray = UnitPrefabs;
 		break;
 	}
 	SetPlayerSquadName(SquadName, Team, Slot);
 }
 
-void AMainMenuGameState::SetPlayerSquad(const FString& SquadName, FMeshCreatorPrefabStruct PrefabStruct, int Team, int Slot)
+void AMainMenuGameState::SetPlayerSquad(const FString& SquadName, int Team, int Slot)
 {
-	ServerSetPlayerSquad(SquadName, PrefabStruct, Team, Slot);
+	USaveSystem* SaveSystem = GetGameInstance()->GetSubsystem<USaveSystem>();
+	check(SaveSystem);
+	TArray<FMeshCreatorPrefabStruct> SquadUnits;
+	FUnitSaveData& UnitSaveData = SaveSystem->GetSquadPrefab(SquadName);
+	for (const FString& UnitName : UnitSaveData.UnitPrefabNames)
+	{
+		SquadUnits.Add(SaveSystem->GetUnitPrefab(UnitName));
+	}
+	
+	ServerSetPlayerSquad(SquadName, SquadUnits, Team, Slot);
 }
 
 void AMainMenuGameState::SetMultiplayerData(int GameModeIndex, int TicketsIndex)

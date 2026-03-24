@@ -49,6 +49,9 @@ public:
 	UFUNCTION(BlueprintCallable)
 	TMap<FString, FUnitSaveData>& GetDefaultSquadPrefabs() const;
 
+	UFUNCTION(BlueprintCallable)
+	FUnitSaveData& GetSquadPrefab(const FString& SquadName) const;
+
 	// Unit related functions
 	UFUNCTION(BlueprintCallable)
 	void SaveUnits();
@@ -67,6 +70,9 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	TMap<FString, FMeshCreatorPrefabStruct> GetDefaultUnitPrefabs() const;
+
+	UFUNCTION(BlueprintCallable)
+	FMeshCreatorPrefabStruct& GetUnitPrefab(const FString& UnitName) const;
 private:
 	void LoadOrCreateSquadSave();
 	void LoadOrCreateUnitSave();
