@@ -95,10 +95,10 @@ public:
 	void NotifyNewTicketsIndex(int NewTicketsIndex);
 
 	UFUNCTION(Server, Reliable)
-	void ServerSetPlayerSquad(const FString& SquadName, FMeshCreatorPrefabStruct PrefabStruct, int Team, int Slot);
+	void ServerSetPlayerSquad(const FString& SquadName, const TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, int Team, int Slot);
 
 	UFUNCTION(BlueprintCallable)
-	void SetPlayerSquad(const FString& SquadName, FMeshCreatorPrefabStruct PrefabStruct, int Team, int Slot);
+	void SetPlayerSquad(const FString& SquadName, int Team, int Slot);
 
 	void SetMultiplayerData(int GameModeIndex, int TicketsIndex);
 };
