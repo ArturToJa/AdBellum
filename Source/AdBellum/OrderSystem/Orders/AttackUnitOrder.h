@@ -11,12 +11,15 @@
 #include "Unit/ArmedUnitInterface.h"
 #include "Unit/UnitAIController.h"
 #include "Library/UnitCombatData.h"
+#include "Library/WeaponCombatData.h"
 
 class ADBELLUM_API AttackUnitOrder : public BaseOrder
 {
 private:
 	AActor* WeaponObject;
 	float AttackDelay = 0.5f;
+	FUnitCombatDataStruct UnitCombatData;
+	FWeaponCombatDataStruct WeaponCombatData;
 public:
 	AttackUnitOrder(UObject* inTargetUnit, FVector inTargetPosition) : BaseOrder(inTargetUnit, FVector::ZeroVector) {}
 
@@ -26,12 +29,19 @@ public:
 	{
 		WeaponObject = IArmedUnitInterface::Execute_GetWeapon(owningController->GetPawn());
 
-		// Try to obtain initial delay from owning unit's combat data
-		FUnitCombatDataStruct UnitData;
-		if (owningController->GetPawn())
+		// Initialize combat data structures for unit and weapon
+	
+		IArmedUnitInterface::Execute_GetUnitCombatDataStruct(owningController->GetPawn(), UnitCombatData);
+
+		if (WeaponObject)
 		{
-			IArmedUnitInterface::Execute_GetUnitCombatDataStruct(owningController->GetPawn(), UnitData);
-			AttackDelay = UnitData.InitialDelay;
+			IIWeapon::Execute_GetWeaponCombatData(WeaponObject, WeaponCombatData);
+		}
+
+		// Try to obtain initial delay from owning unit's combat data
+		if (owningController && owningController->GetPawn())
+		{
+			AttackDelay = UnitCombatData.InitialDelay;
 		}
 
 		AUnitAIController* UnitController = Cast<AUnitAIController>(owningController);
@@ -89,16 +99,15 @@ public:
 		{
 			IOrderable::Execute_AttackTarget(owningController, targetUnit);
 
-			// After initiating an attack, set delay between bursts from unit combat data
+			// After initiating an attack, set delay between bursts from weapon/unit combat data
 			if (owningController && owningController->GetPawn())
 			{
-				FUnitCombatDataStruct UnitData;
-				IArmedUnitInterface::Execute_GetUnitCombatDataStruct(owningController->GetPawn(), UnitData);
-				AttackDelay = UnitData.DelayBetweenBursts > 0.f ? UnitData.DelayBetweenBursts : 0.5f;
+				AActor* TargetActor = Cast<AActor>(targetUnit);
+				AttackDelay = CalculateBurstDelay(TargetActor);
 			}
 			else
 			{
-				AttackDelay = 0.5f;
+				AttackDelay = WeaponCombatData.MinBurstDelay;
 			}
 		}
 		else
@@ -106,6 +115,47 @@ public:
 			UE_LOG(LogTemp, Warning, TEXT("AttackUnitOrder: No ammo, reloading"));
 			RunSubOrder(MakeUnique<ReloadOrder>(nullptr, FVector::ZeroVector));
 		}
+	}
+
+	// Calculate burst delay (seconds) using linear model from weapon data and unit multipliers
+	float CalculateBurstDelay(AActor* TargetActor) const
+	{
+		// Fallbacks
+		if (!WeaponObject) return 0.5f;
+		// Use previously-initialized combat data; if absent, try to compute basic defaults
+		float Distance = 0.0f;
+		
+		Distance = FVector::Dist(owningController->GetPawn()->GetActorLocation(), TargetActor->GetActorLocation()) / 100.0f; // match UnitAIController logic
+	
+		float PerceivedDistance = Distance * UnitCombatData.DistanceMultiplier;
+
+		// Quadratic distance model: BurstDelay = a * (PerceivedDistance)^2 + b
+		float DistanceSquared = PerceivedDistance * PerceivedDistance;
+		float BaseDelay = WeaponCombatData.BurstDelaySlope * DistanceSquared + WeaponCombatData.BurstDelayIntercept;
+
+		if (BaseDelay < 0.0f)
+		{
+			BaseDelay = WeaponCombatData.MinBurstDelay;
+		}
+		float Clamped = FMath::Clamp(BaseDelay, WeaponCombatData.MinBurstDelay, WeaponCombatData.MaxBurstDelay);
+
+		float Result = Clamped * UnitCombatData.DelayBetweenBurstsMultiplier;
+
+		if (Result <= 0.0f)
+		{
+			Result = WeaponCombatData.MinBurstDelay;
+		}
+
+		if (Result > WeaponCombatData.MaxBurstDelay)
+		{
+			Result = WeaponCombatData.MaxBurstDelay;
+		}
+
+		// Apply slight random variation to avoid perfectly uniform timing
+		const float RandMultiplier = FMath::FRandRange(0.85f, 1.15f);
+		Result *= RandMultiplier;
+
+		return Result;
 	}
 };
 

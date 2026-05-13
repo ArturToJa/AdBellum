@@ -86,7 +86,7 @@ void ABaseAmmo::DealDamage(AActor* DamagedActor, FHitResult HitResult, FVector I
 		else
 		{
 			float Damage = CalculateEnergy(IncomingVelocity);
-			UGameplayStatics::ApplyDamage(DamagedActor, Damage, GetInstigatorController(), GetOwner()->GetOwner(), UEBDamageType::StaticClass());
+			UGameplayStatics::ApplyDamage(DamagedActor, Damage, GetInstigatorController(), nullptr, UEBDamageType::StaticClass());
 		}
 	}
 }

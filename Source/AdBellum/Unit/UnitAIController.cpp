@@ -107,6 +107,9 @@ float AUnitAIController::ComputeTriggerDuration(AActor* WeaponActor, UObject* Ta
 	{
 		TriggerDuration = WeaponData.MinBurstDuration;
 	}
+
+	const float RandMultiplier = FMath::FRandRange(0.85f, 1.15f);
+	TriggerDuration *= RandMultiplier;
 	return TriggerDuration;
 }
 

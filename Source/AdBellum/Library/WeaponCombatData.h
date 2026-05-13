@@ -36,4 +36,20 @@ struct FWeaponCombatDataStruct
 	// Clamp maximum burst duration (seconds)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ToolTip="Maximum burst duration in seconds"))
 	float MaxBurstDuration = 10.0f;
+
+	// Linear model for delay between bursts duration by distance: BurstDuration = a * Distance + b
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ToolTip = "Linear slope 'a' for BurstDelay = a*Distance + b"))
+	float BurstDelaySlope = 0.0f;
+
+	// Linear intercept 'b' for burst delay duration
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ToolTip = "Intercept 'b' for BurstDelay = a*Distance + b"))
+	float BurstDelayIntercept = 0.0f;
+
+	// Clamp minimum burst delay duration (seconds)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ToolTip = "Minimum burst delay in seconds"))
+	float MinBurstDelay = 0.5f;
+
+	// Clamp maximum burst delay duration (seconds)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ToolTip = "Maximum burst delay in seconds"))
+	float MaxBurstDelay = 5.0f;
 };
