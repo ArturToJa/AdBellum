@@ -6,6 +6,7 @@
 
 void USaveSystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+	UE_LOG(LogTemp, Warning, TEXT("SaveSystem initialized."));
 	LoadOrCreateSquadSave();
 	LoadOrCreateUnitSave();
 	ValidateSquadPrefabData();
@@ -14,6 +15,15 @@ void USaveSystem::Initialize(FSubsystemCollectionBase& Collection)
 void USaveSystem::Deinitialize()
 {
 
+}
+
+bool USaveSystem::ShouldCreateSubsystem(UObject* Outer) const
+{
+	if(this->GetClass()->IsInBlueprint() && Super::ShouldCreateSubsystem(Outer))
+	{
+		return true;
+	}
+	return false;
 }
 
 void USaveSystem::SaveSquadDataAsset(const FString& SquadName, const FUnitSaveData& PrefabDataArray, bool bOverwrite)
@@ -243,12 +253,12 @@ bool USaveSystem::DoesUnitPrefabExist(const FString& UnitName) const
 	return bExistsInSave && bExistsInDataAsset;
 }
 
-TMap<FString, FMeshCreatorPrefabStruct> USaveSystem::GetSaveUnitPrefabs() const
+TMap<FString, FMeshCreatorPrefabStruct>& USaveSystem::GetSaveUnitPrefabs() const
 {
 	return UnitSaveGame->UnitPrefabs;
 }
 
-TMap<FString, FMeshCreatorPrefabStruct> USaveSystem::GetDefaultUnitPrefabs() const
+TMap<FString, FMeshCreatorPrefabStruct>& USaveSystem::GetDefaultUnitPrefabs() const
 {
 	return DefaultSquadsDataAsset->DefaultUnits;
 }

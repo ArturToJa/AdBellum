@@ -23,6 +23,7 @@ private:
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 
 	UFUNCTION(BlueprintCallable)
 	void SaveSquadDataAsset(const FString& SquadName, const FUnitSaveData& PrefabDataArray, bool bOverwrite = false);
@@ -66,10 +67,10 @@ public:
 	bool DoesUnitPrefabExist(const FString& UnitName) const;
 
 	UFUNCTION(BlueprintCallable)
-	TMap<FString, FMeshCreatorPrefabStruct> GetSaveUnitPrefabs() const;
+	TMap<FString, FMeshCreatorPrefabStruct>& GetSaveUnitPrefabs() const;
 
 	UFUNCTION(BlueprintCallable)
-	TMap<FString, FMeshCreatorPrefabStruct> GetDefaultUnitPrefabs() const;
+	TMap<FString, FMeshCreatorPrefabStruct>& GetDefaultUnitPrefabs() const;
 
 	UFUNCTION(BlueprintCallable)
 	FMeshCreatorPrefabStruct& GetUnitPrefab(const FString& UnitName) const;
