@@ -51,6 +51,8 @@ public:
 	virtual void OrderMoveAction_Implementation(bool Value) override;
 	virtual void OrderHoldPositionAction_Implementation(bool Value) override;
 	virtual void OrderAttackAction_Implementation(bool Value) override;
+	virtual void ScrollAction_Implementation(bool bScrollUp) override;
+	virtual void CameraMouseRotateAction_Implementation(bool bScrollUp) override;
 
 	void RightMouseButtonPressed();
 	void TeleportAboveUnit(AActor* TargetUnit);
@@ -63,9 +65,63 @@ public:
 private:
 	FVector2D GetMouseDeltas(FVector2D MousePosition, FVector2D ViewportScaled);
 	bool bCameraRotationEnabled;
+	bool bCameraMouseRotationEnabled;
 
 	static float BorderSize;
 	static float CameraMoveSpeed;
+	// movement multiplier used by WSAD/axis camera movement (replaces magic 150.0f)
+	// Base speed; runtime calculated multiplier will be derived from this and camera height
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+    float BaseSpeedMultiplier = 150.0f;
+
+	// Calculated runtime speed multiplier (based on height)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float CalculatedSpeedMultiplier = 150.0f;
+
+	// Reference height used to scale speed; calculated scale = Height / SpeedScaleReferenceHeight
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float SpeedScaleReferenceHeight = 300.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float MinSpeedScale = 0.5f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float MaxSpeedScale = 3.0f;
+
+	// Min / Max camera height (world Z). Camera will be clamped to these limits.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float MinCameraHeight = 200.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float MaxCameraHeight = 3000.0f;
+
+	// Scroll step scale used when processing scroll actions
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	float ScrollStep = 0.2f;
+
 	UPROPERTY(EditDefaultsOnly ,meta = (AllowPrivateAccess = "true"))
 	bool UseBorderCameraMovement;
+
+    float CurrentHeightAboveLandscape = -1.0f;
+
+    // Smooth scroll state
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+    bool bEnableSmoothScroll = true;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+    bool bIsScrolling = false;
+
+    // Target location for smooth scrolling
+    FVector ScrollTargetLocation;
+
+	FVector MousePositionInWorld;
+	FVector MouseDirectionInWorld;
+
+    // Interp speed (units per second) used when smoothing
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+    float ScrollInterpSpeed = 1200.0f;
+
+    void CalculateHeightAboveLandscape();
+
+	void CalculateSpeedMultiplier();
 };

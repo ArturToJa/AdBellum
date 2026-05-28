@@ -5,6 +5,9 @@
 #include "RTS_HUD.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "AdBellumPlayerController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
+#include "DrawDebugHelpers.h"
 
 float ARTSPlayer::BorderSize = 10.0f;
 float ARTSPlayer::CameraMoveSpeed = 160.0f;
@@ -24,12 +27,50 @@ void ARTSPlayer::BeginPlay()
 	{
 		PC->PlayerCameraManager = Cast<AALSPlayerCameraManager>(UGameplayStatics::GetPlayerCameraManager(GetWorld(), PC->PlayerIndex));
 	}
+
+	CalculateHeightAboveLandscape();
+	CalculateSpeedMultiplier();
 }
 
 void ARTSPlayer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (IsLocallyControlled() && UseBorderCameraMovement)
+    // If smooth scrolling is active, interpolate toward target
+    if (bIsScrolling && bEnableSmoothScroll)
+    {
+        FVector CurrentLocation = GetActorLocation();
+        FVector NewLocation = FMath::VInterpConstantTo(CurrentLocation, ScrollTargetLocation, DeltaTime, ScrollInterpSpeed * CalculatedSpeedMultiplier);
+
+        float HeightDifference = NewLocation.Z - CurrentLocation.Z;
+        CurrentHeightAboveLandscape += HeightDifference;
+		CalculateSpeedMultiplier();
+        // clamp height
+        NewLocation.Z = FMath::Clamp(NewLocation.Z, MinCameraHeight, MaxCameraHeight);
+
+        // If we're very close to the target, snap and finish
+        const float StopDistSq = FMath::Square(4.0f);
+        if (FVector::DistSquared(NewLocation, ScrollTargetLocation) <= StopDistSq)
+        {
+            SetActorLocation(ScrollTargetLocation);
+            // ensure height and multiplier are correct at final location
+            CalculateHeightAboveLandscape();
+            CalculateSpeedMultiplier();
+            bIsScrolling = false;
+        }
+        else
+        {
+            SetActorLocation(NewLocation);
+        }
+
+
+        // stop scrolling if reached height limits
+        if (NewLocation.Z <= MinCameraHeight || NewLocation.Z >= MaxCameraHeight)
+        {
+            bIsScrolling = false;
+        }
+    }
+
+    if (IsLocallyControlled() && UseBorderCameraMovement)
 	{
 		APlayerController* PlayerController = GetController<APlayerController>();
 
@@ -50,10 +91,14 @@ void ARTSPlayer::Tick(float DeltaTime)
 		CameraRight.Z = 0;
 		CameraForward.Normalize();
 		CameraRight.Normalize();
+
+		// MovementDirection uses calculated multiplier and delta time to be framerate independent
 		FVector MovementDirection = CameraForward * MouseDelta.X + CameraRight * MouseDelta.Y;
-		FVector NormalizedDirection = MovementDirection;
-		NormalizedDirection.Normalize();
-		AddActorWorldOffset(MovementDirection);
+		if (!MovementDirection.IsNearlyZero())
+		{
+			MovementDirection = MovementDirection.GetSafeNormal() * CalculatedSpeedMultiplier * CalculatedSpeedMultiplier * DeltaTime * MovementDirection.Size();
+			AddActorWorldOffset(MovementDirection, true);
+		}
 
 		if (bCameraRotationEnabled)
 		{
@@ -86,8 +131,13 @@ void ARTSPlayer::ForwardMovementAction_Implementation(float Value)
 {
 	if (IsLocallyControlled())
 	{
-		FVector RotationForwardVector = UKismetMathLibrary::GetForwardVector(GetControlRotation());
-		AddMovementInput(RotationForwardVector, Value * 150.0f);
+		// Move actor only on the XY plane; keep Z unchanged
+		FVector Forward = UKismetMathLibrary::GetForwardVector(GetControlRotation());
+		Forward.Z = 0.0f;
+		Forward.Normalize();
+
+		// Use CalculatedSpeedMultiplier instead of magic constant, include DeltaTime by using AddMovementInput
+		AddMovementInput(Forward, Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
 	}
 }
 
@@ -95,8 +145,12 @@ void ARTSPlayer::RightMovementAction_Implementation(float Value)
 {
 	if (IsLocallyControlled())
 	{
-		FVector RotationRightVector = UKismetMathLibrary::GetRightVector(GetControlRotation());
-		AddMovementInput(RotationRightVector, Value * 150.0f);
+		// Move actor only on the XY plane; keep Z unchanged
+		FVector Right = UKismetMathLibrary::GetRightVector(GetControlRotation());
+		Right.Z = 0.0f;
+		Right.Normalize();
+
+		AddMovementInput(Right, Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
 	}
 }
 
@@ -118,6 +172,53 @@ void ARTSPlayer::CameraRightAction_Implementation(float Value)
 		if (bCameraRotationEnabled)
 		{
 			AddControllerYawInput(Value * 3.0f);
+		}
+		if (bCameraMouseRotationEnabled)
+		{
+			FHitResult Hit;
+			FCollisionQueryParams Params;
+			Params.AddIgnoredActor(this);
+			FVector TraceEnd = MousePositionInWorld + MouseDirectionInWorld * 100000.0f;
+			if (GetWorld()->LineTraceSingleByChannel(Hit, MousePositionInWorld, TraceEnd, ECC_Visibility, Params))
+			{
+				FVector Pivot = Hit.ImpactPoint;
+
+				FVector CamLoc = GetActorLocation();
+				FRotator CamRot = GetControlRotation();
+
+				FVector Offset = CamLoc - Pivot;
+
+				float YawDelta = Value * 3.0f;
+
+				FRotator OrbitRot(0.f, YawDelta, 0.f);
+
+				// nowa pozycja
+				FVector RotatedOffset =
+					OrbitRot.RotateVector(Offset);
+
+				FVector NewLoc =
+					Pivot + RotatedOffset;
+
+				SetActorLocation(NewLoc);
+
+				// obróæ obecn¹ rotacjê
+				FQuat DeltaQuat =
+					OrbitRot.Quaternion();
+
+				FQuat DesiredQuat =
+					DeltaQuat * CamRot.Quaternion();
+
+				FRotator DesiredRot =
+					DesiredQuat.Rotator();
+
+				// ró¿nica wzglêdem aktualnej
+				FRotator DeltaRot =
+					(DesiredRot - CamRot).GetNormalized();
+
+				//AddControllerYawInput(DeltaRot.Yaw);
+				//AddControllerPitchInput(DeltaRot.Pitch);
+				GetController()->SetControlRotation(DesiredRot);
+			}
 		}
 	}
 }
@@ -237,4 +338,121 @@ void ARTSPlayer::TeleportAboveUnit(AActor* TargetUnit)
 	NewRotation.Yaw = LookAtRotation.Yaw;
 	NewRotation.Roll = 0.0f;
 	SetActorRotation(NewRotation);
+}
+
+void ARTSPlayer::CalculateHeightAboveLandscape()
+{
+	// Trace directly downwards from camera to find landscape height below
+	FVector Start = GetActorLocation();
+
+    FVector End = Start - FVector(0.0f, 0.0f, MaxCameraHeight);
+
+    FHitResult Hit;
+    FCollisionQueryParams Params;
+    Params.AddIgnoredActor(this);
+    if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
+    {
+        CurrentHeightAboveLandscape = Start.Z - Hit.ImpactPoint.Z;
+    }
+    else
+    {
+        // no hit
+        CurrentHeightAboveLandscape = FLT_MAX;
+    }
+}
+
+void ARTSPlayer::ScrollAction_Implementation(bool bScrollUp)
+{
+	// Scroll moves camera toward point under mouse on landscape
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("ScrollAction: %s"), bScrollUp ? TEXT("Up") : TEXT("Down")));
+
+	APlayerController* PC = GetController<APlayerController>();
+	if (!PC) return;
+
+    // Prevent scrolling beyond world Z limits
+    float CameraZ = GetActorLocation().Z;
+    if (CameraZ >= MaxCameraHeight && !bScrollUp) return;
+    if (CameraZ <= MinCameraHeight && bScrollUp) return;
+
+	float MouseX, MouseY;
+	PC->GetMousePosition(MouseX, MouseY);
+
+	FVector WorldOrigin, WorldDir;
+	PC->DeprojectScreenPositionToWorld(MouseX, MouseY, WorldOrigin, WorldDir);
+
+	FVector TraceStart = WorldOrigin;
+	FVector TraceEnd = WorldOrigin + WorldDir * 100000.0f;
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params))
+	{
+		return;
+	}
+
+	FVector TargetPoint = Hit.ImpactPoint;
+	FVector CameraLocation = GetActorLocation();
+
+	// compute direction on XY plane toward target point
+    // compute full 3D direction toward target point (allow vertical movement)
+    FVector Dir = TargetPoint - CameraLocation;
+    float Dist = Dir.Size();
+    if (Dist < KINDA_SMALL_NUMBER) return;
+    Dir.Normalize();
+
+	// choose direction sign based on scroll
+	float ScrollSign = bScrollUp ? 1.0f : -1.0f;
+
+	FVector DesiredLocation = CameraLocation + Dir * ScrollStep * ScrollSign * CalculatedSpeedMultiplier;
+
+    // clamp new height between min/max
+    DesiredLocation.Z = FMath::Clamp(DesiredLocation.Z, MinCameraHeight, MaxCameraHeight);
+
+    // If smooth scrolling enabled, set scroll target and let Tick() interpolate
+    if (bEnableSmoothScroll)
+    {
+        ScrollTargetLocation = DesiredLocation;
+        bIsScrolling = true;
+    }
+    else
+    {
+        SetActorLocation(DesiredLocation);
+        // Recalculate current height above landscape and speed multiplier
+        CalculateHeightAboveLandscape();
+        CalculateSpeedMultiplier();
+    }
+}
+
+void ARTSPlayer::CameraMouseRotateAction_Implementation(bool bScrollUp)
+{
+	if (bScrollUp)
+	{
+		bCameraMouseRotationEnabled = true;
+		APlayerController* PlayerController = GetController<APlayerController>();
+		PlayerController->SetShowMouseCursor(false);
+		float MouseX, MouseY;
+		if (PlayerController->GetMousePosition(MouseX, MouseY))
+		{
+			PlayerController->DeprojectScreenPositionToWorld(MouseX, MouseY, MousePositionInWorld, MouseDirectionInWorld);
+		}
+	}
+	else
+	{
+		bCameraMouseRotationEnabled = false;
+		APlayerController* PlayerController = GetController<APlayerController>();
+		PlayerController->SetShowMouseCursor(true);
+	}
+}
+
+void ARTSPlayer::CalculateSpeedMultiplier() {
+	float SpeedLimitDifference = MaxSpeedScale - MinSpeedScale;
+	float HeightLimitDifference = MaxCameraHeight - MinCameraHeight;
+	float NewScale = MinSpeedScale;
+	if (HeightLimitDifference > KINDA_SMALL_NUMBER)
+	{
+		NewScale = MinSpeedScale + ((CurrentHeightAboveLandscape - MinCameraHeight) / HeightLimitDifference) * SpeedLimitDifference;
+	}
+	NewScale = FMath::Clamp(NewScale, MinSpeedScale, MaxSpeedScale);
+	CalculatedSpeedMultiplier = NewScale;
 }

@@ -111,6 +111,9 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 		void ReloadAction();
 
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
+		void CameraMouseRotateAction(bool bValue);
+
 	//RECOIL
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 		void AddRecoil();

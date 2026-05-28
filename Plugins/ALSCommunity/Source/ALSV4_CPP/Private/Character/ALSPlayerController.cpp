@@ -316,6 +316,19 @@ void AALSPlayerController::ReloadAction(const FInputActionValue& Value)
 	}
 }
 
+void AALSPlayerController::CameraMouseRotateAction(const FInputActionValue& Value)
+{
+	if (CurrentState != EALSState::None)
+	{
+		return;
+	}
+	if (PossessedCharacter)
+	{
+		IALSInputInterface::Execute_CameraMouseRotateAction(PossessedCharacter, Value.Get<bool>());
+		//PossessedCharacter->LookingDirectionAction();
+	}
+}
+
 void AALSPlayerController::DebugToggleHudAction(const FInputActionValue& Value)
 {
 	if (PossessedCharacter && Value.Get<bool>())

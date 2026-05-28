@@ -79,6 +79,9 @@ protected:
 	UFUNCTION()
 	void ReloadAction(const FInputActionValue& Value);
 
+	UFUNCTION()
+	void CameraMouseRotateAction(const FInputActionValue& Value);
+
 	// Debug actions
 	UFUNCTION()
 	void DebugToggleHudAction(const FInputActionValue& Value);
