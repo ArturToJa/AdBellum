@@ -113,9 +113,10 @@ private:
 
     // Target location for smooth scrolling
     FVector ScrollTargetLocation;
+	float MouseRotationX;
+	float MouseRotationY;
 
-	FVector MousePositionInWorld;
-	FVector MouseDirectionInWorld;
+	FVector MousePivotPoint;
 
     // Interp speed (units per second) used when smoothing
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
@@ -124,4 +125,6 @@ private:
     void CalculateHeightAboveLandscape();
 
 	void CalculateSpeedMultiplier();
+
+	static FVector2D ConvertToPlatformPixels(float MouseX, float MouseY);
 };

@@ -100,11 +100,9 @@ void ARTSPlayer::Tick(float DeltaTime)
 			AddActorWorldOffset(MovementDirection, true);
 		}
 
-		if (bCameraRotationEnabled)
+		if (bCameraRotationEnabled || bCameraMouseRotationEnabled)
 		{
-			int32 CenterX = ViewportScaled.X / 2;
-			int32 CenterY = ViewportScaled.Y / 2;
-			PlayerController->SetMouseLocation(CenterX, CenterY);
+			PlayerController->SetMouseLocation(MouseRotationX, MouseRotationY);
 		}
 	}
 }
@@ -175,50 +173,38 @@ void ARTSPlayer::CameraRightAction_Implementation(float Value)
 		}
 		if (bCameraMouseRotationEnabled)
 		{
-			FHitResult Hit;
-			FCollisionQueryParams Params;
-			Params.AddIgnoredActor(this);
-			FVector TraceEnd = MousePositionInWorld + MouseDirectionInWorld * 100000.0f;
-			if (GetWorld()->LineTraceSingleByChannel(Hit, MousePositionInWorld, TraceEnd, ECC_Visibility, Params))
-			{
-				FVector Pivot = Hit.ImpactPoint;
+			FVector Pivot = MousePivotPoint;
 
-				FVector CamLoc = GetActorLocation();
-				FRotator CamRot = GetControlRotation();
+			FVector CamLoc = GetActorLocation();
+			FRotator CamRot = GetControlRotation();
 
-				FVector Offset = CamLoc - Pivot;
+			FVector Offset = CamLoc - Pivot;
 
-				float YawDelta = Value * 3.0f;
+			float YawDelta = Value * 3.0f;
 
-				FRotator OrbitRot(0.f, YawDelta, 0.f);
+			FRotator OrbitRot(0.f, YawDelta, 0.f);
 
-				// nowa pozycja
-				FVector RotatedOffset =
-					OrbitRot.RotateVector(Offset);
+			FVector RotatedOffset =
+				OrbitRot.RotateVector(Offset);
 
-				FVector NewLoc =
-					Pivot + RotatedOffset;
+			FVector NewLoc =
+				Pivot + RotatedOffset;
 
-				SetActorLocation(NewLoc);
+			SetActorLocation(NewLoc);
 
-				// obróæ obecn¹ rotacjê
-				FQuat DeltaQuat =
-					OrbitRot.Quaternion();
+			FQuat DeltaQuat =
+				OrbitRot.Quaternion();
 
-				FQuat DesiredQuat =
-					DeltaQuat * CamRot.Quaternion();
+			FQuat DesiredQuat =
+				DeltaQuat * CamRot.Quaternion();
 
-				FRotator DesiredRot =
-					DesiredQuat.Rotator();
+			FRotator DesiredRot =
+				DesiredQuat.Rotator();
 
-				// ró¿nica wzglêdem aktualnej
-				FRotator DeltaRot =
-					(DesiredRot - CamRot).GetNormalized();
+			FRotator DeltaRot =
+				(DesiredRot - CamRot).GetNormalized();
 
-				//AddControllerYawInput(DeltaRot.Yaw);
-				//AddControllerPitchInput(DeltaRot.Pitch);
-				GetController()->SetControlRotation(DesiredRot);
-			}
+			GetController()->SetControlRotation(DesiredRot);
 		}
 	}
 }
@@ -227,6 +213,12 @@ void ARTSPlayer::CameraRotateAction_Implementation(bool Value)
 {
 	if (IsLocallyControlled())
 	{
+		FVector2D ViewportSize;
+		GEngine->GameViewport->GetViewportSize(ViewportSize);
+		float ViewportScale = GEngine->GameViewport->GetDPIScale();
+		FVector2D ViewportScaled = ViewportSize / ViewportScale;
+		MouseRotationX = ViewportScaled.X / 2;
+		MouseRotationY = ViewportScaled.Y / 2;
 		bCameraRotationEnabled = Value;
 		APlayerController* PlayerController = GetController<APlayerController>();
 		PlayerController->SetShowMouseCursor(!Value);
@@ -431,10 +423,25 @@ void ARTSPlayer::CameraMouseRotateAction_Implementation(bool bScrollUp)
 		bCameraMouseRotationEnabled = true;
 		APlayerController* PlayerController = GetController<APlayerController>();
 		PlayerController->SetShowMouseCursor(false);
-		float MouseX, MouseY;
-		if (PlayerController->GetMousePosition(MouseX, MouseY))
+		if (PlayerController->GetMousePosition(MouseRotationX, MouseRotationY))
 		{
-			PlayerController->DeprojectScreenPositionToWorld(MouseX, MouseY, MousePositionInWorld, MouseDirectionInWorld);
+			FVector MousePositionInWorld;
+			FVector MouseDirectionInWorld;
+
+			PlayerController->DeprojectScreenPositionToWorld(MouseRotationX, MouseRotationY, MousePositionInWorld, MouseDirectionInWorld);
+
+			FVector2D ScaledMouseRotation = ConvertToPlatformPixels(MouseRotationX, MouseRotationY);
+			MouseRotationX = ScaledMouseRotation.X;
+			MouseRotationY = ScaledMouseRotation.Y;
+
+			FHitResult Hit;
+			FCollisionQueryParams Params;
+			Params.AddIgnoredActor(this);
+			FVector TraceEnd = MousePositionInWorld + MouseDirectionInWorld * 100000.0f;
+			if (GetWorld()->LineTraceSingleByChannel(Hit, MousePositionInWorld, TraceEnd, ECC_Visibility, Params))
+			{
+				MousePivotPoint = Hit.ImpactPoint;
+			}
 		}
 	}
 	else
@@ -455,4 +462,15 @@ void ARTSPlayer::CalculateSpeedMultiplier() {
 	}
 	NewScale = FMath::Clamp(NewScale, MinSpeedScale, MaxSpeedScale);
 	CalculatedSpeedMultiplier = NewScale;
+}
+
+FVector2D ARTSPlayer::ConvertToPlatformPixels(float MouseX, float MouseY)
+{
+	if (!GEngine || !GEngine->GameViewport)
+	{
+		return FVector2D(MouseX, MouseY);
+	}
+	float DPIScale = GEngine->GameViewport->GetDPIScale();
+	// UI coords * DPI -> platform (native) pixels
+	return FVector2D(MouseX * DPIScale, MouseY * DPIScale);
 }
