@@ -42,7 +42,7 @@ public:
 	virtual void RightMovementAction_Implementation(float Value) override;
 	virtual void CameraUpAction_Implementation(float Value) override;
 	virtual void CameraRightAction_Implementation(float Value) override;
-	virtual void CameraRotateAction_Implementation(bool Value) override;
+	virtual void CameraFreeRotateAction_Implementation(bool Value) override;
 	virtual void TriggerAction_Implementation(bool Value) override;
 	virtual void AimAction_Implementation(bool Value) override;
 	virtual void InteractionAction_Implementation() override;
@@ -52,7 +52,7 @@ public:
 	virtual void OrderHoldPositionAction_Implementation(bool Value) override;
 	virtual void OrderAttackAction_Implementation(bool Value) override;
 	virtual void ScrollAction_Implementation(bool bScrollUp) override;
-	virtual void CameraMouseRotateAction_Implementation(bool bScrollUp) override;
+	virtual void CameraMouseRotateAction_Implementation(bool Value) override;
 
 	void RightMouseButtonPressed();
 	void TeleportAboveUnit(AActor* TargetUnit);
@@ -64,8 +64,9 @@ public:
 
 private:
 	FVector2D GetMouseDeltas(FVector2D MousePosition, FVector2D ViewportScaled);
-	bool bCameraRotationEnabled;
+	bool bFreeCameraRotationEnabled;
 	bool bCameraMouseRotationEnabled;
+	bool bDirectionalInputEnabled;
 
 	static float BorderSize;
 	static float CameraMoveSpeed;
@@ -125,6 +126,8 @@ private:
     void CalculateHeightAboveLandscape();
 
 	void CalculateSpeedMultiplier();
+
+	void CheckCursorVisibility();
 
 	static FVector2D ConvertToPlatformPixels(float MouseX, float MouseY);
 };

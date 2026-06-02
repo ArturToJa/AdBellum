@@ -2,6 +2,7 @@
 
 
 #include "BaseUnit.h"
+#include "OptimizationComponent.h"
 #include "Character/RecoilComponent.h"
 #include "OrderSystem/OrdersManager.h"
 #include "Math/UnrealMathUtility.h"
@@ -30,8 +31,8 @@ ABaseUnit::ABaseUnit(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	RecoilAnimationComponent = CreateDefaultSubobject<URecoilAnimationComponent>(TEXT("Recoil Animation Component"));
-	
 	NetworkComponent = CreateDefaultSubobject<UNetworkComponent>(TEXT("Network Component"));
+	//OptimizationComponent = CreateDefaultSubobject<UOptimizationProxyComponent>(TEXT("Optimization Component"));
 	AIPerception = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("AIPerception"));
 	AIPerception->SetIsReplicated(true);
 	//init empty weapon array

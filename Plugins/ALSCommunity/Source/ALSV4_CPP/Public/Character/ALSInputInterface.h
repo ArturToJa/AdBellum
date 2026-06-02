@@ -94,7 +94,7 @@ public:
 		void InteractionAction();
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
-		void CameraRotateAction(bool bValue);
+		void CameraFreeRotateAction(bool bValue);
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 		void TriggerAction(bool bValue);

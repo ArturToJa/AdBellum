@@ -39,7 +39,7 @@ public:
 	UFUNCTION()
 	void PossessAction(const FInputActionValue& Value);
 	UFUNCTION()
-	void CameraRotateAction(const FInputActionValue& Value);
+	void CameraFreeRotateAction(const FInputActionValue& Value);
 	UFUNCTION()
 	void TriggerAction(const FInputActionValue& Value);
 	UFUNCTION()

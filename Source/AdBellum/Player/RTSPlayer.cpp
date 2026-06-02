@@ -15,7 +15,7 @@ float ARTSPlayer::CameraMoveSpeed = 160.0f;
 ARTSPlayer::ARTSPlayer()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	bCameraRotationEnabled = false;
+	bFreeCameraRotationEnabled = false;
 	SetReplicates(true);
 	SetActorTickEnabled(false);
 }
@@ -100,7 +100,7 @@ void ARTSPlayer::Tick(float DeltaTime)
 			AddActorWorldOffset(MovementDirection, true);
 		}
 
-		if (bCameraRotationEnabled || bCameraMouseRotationEnabled)
+		if (bFreeCameraRotationEnabled || bCameraMouseRotationEnabled)
 		{
 			PlayerController->SetMouseLocation(MouseRotationX, MouseRotationY);
 		}
@@ -121,7 +121,7 @@ void ARTSPlayer::PossessedBy(AController* NewController)
 void ARTSPlayer::UnPossessed()
 {
 	Super::UnPossessed();
-	bCameraRotationEnabled = false;
+	bFreeCameraRotationEnabled = false;
 	SetActorTickEnabled(false);
 }
 
@@ -134,6 +134,7 @@ void ARTSPlayer::ForwardMovementAction_Implementation(float Value)
 		Forward.Z = 0.0f;
 		Forward.Normalize();
 
+		bIsScrolling = false;
 		// Use CalculatedSpeedMultiplier instead of magic constant, include DeltaTime by using AddMovementInput
 		AddMovementInput(Forward, Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
 	}
@@ -148,6 +149,7 @@ void ARTSPlayer::RightMovementAction_Implementation(float Value)
 		Right.Z = 0.0f;
 		Right.Normalize();
 
+		bIsScrolling = false;
 		AddMovementInput(Right, Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
 	}
 }
@@ -156,7 +158,7 @@ void ARTSPlayer::CameraUpAction_Implementation(float Value)
 {
 	if (IsLocallyControlled())
 	{
-		if (bCameraRotationEnabled)
+		if (bFreeCameraRotationEnabled)
 		{
 			AddControllerPitchInput(Value * 3.0f);
 		}
@@ -167,12 +169,13 @@ void ARTSPlayer::CameraRightAction_Implementation(float Value)
 {
 	if (IsLocallyControlled())
 	{
-		if (bCameraRotationEnabled)
+		if (bFreeCameraRotationEnabled)
 		{
 			AddControllerYawInput(Value * 3.0f);
 		}
 		if (bCameraMouseRotationEnabled)
 		{
+			bIsScrolling = false;
 			FVector Pivot = MousePivotPoint;
 
 			FVector CamLoc = GetActorLocation();
@@ -209,7 +212,7 @@ void ARTSPlayer::CameraRightAction_Implementation(float Value)
 	}
 }
 
-void ARTSPlayer::CameraRotateAction_Implementation(bool Value)
+void ARTSPlayer::CameraFreeRotateAction_Implementation(bool Value)
 {
 	if (IsLocallyControlled())
 	{
@@ -219,9 +222,11 @@ void ARTSPlayer::CameraRotateAction_Implementation(bool Value)
 		FVector2D ViewportScaled = ViewportSize / ViewportScale;
 		MouseRotationX = ViewportScaled.X / 2;
 		MouseRotationY = ViewportScaled.Y / 2;
-		bCameraRotationEnabled = Value;
+		bFreeCameraRotationEnabled = Value;
+		bCameraMouseRotationEnabled = false;
 		APlayerController* PlayerController = GetController<APlayerController>();
-		PlayerController->SetShowMouseCursor(!Value);
+
+		CheckCursorVisibility();
 	}
 }
 
@@ -361,6 +366,8 @@ void ARTSPlayer::ScrollAction_Implementation(bool bScrollUp)
 	APlayerController* PC = GetController<APlayerController>();
 	if (!PC) return;
 
+	if (bCameraMouseRotationEnabled || GetVelocity().Length() > 0.0f) return;
+	
     // Prevent scrolling beyond world Z limits
     float CameraZ = GetActorLocation().Z;
     if (CameraZ >= MaxCameraHeight && !bScrollUp) return;
@@ -416,11 +423,12 @@ void ARTSPlayer::ScrollAction_Implementation(bool bScrollUp)
     }
 }
 
-void ARTSPlayer::CameraMouseRotateAction_Implementation(bool bScrollUp)
+void ARTSPlayer::CameraMouseRotateAction_Implementation(bool Value)
 {
-	if (bScrollUp)
+	if (Value && !bFreeCameraRotationEnabled)
 	{
 		bCameraMouseRotationEnabled = true;
+		bIsScrolling = false;
 		APlayerController* PlayerController = GetController<APlayerController>();
 		PlayerController->SetShowMouseCursor(false);
 		if (PlayerController->GetMousePosition(MouseRotationX, MouseRotationY))
@@ -448,7 +456,7 @@ void ARTSPlayer::CameraMouseRotateAction_Implementation(bool bScrollUp)
 	{
 		bCameraMouseRotationEnabled = false;
 		APlayerController* PlayerController = GetController<APlayerController>();
-		PlayerController->SetShowMouseCursor(true);
+		CheckCursorVisibility();
 	}
 }
 
@@ -473,4 +481,11 @@ FVector2D ARTSPlayer::ConvertToPlatformPixels(float MouseX, float MouseY)
 	float DPIScale = GEngine->GameViewport->GetDPIScale();
 	// UI coords * DPI -> platform (native) pixels
 	return FVector2D(MouseX * DPIScale, MouseY * DPIScale);
+}
+
+void ARTSPlayer::CheckCursorVisibility()
+{
+	APlayerController* PlayerController = GetController<APlayerController>();
+	bool bShouldShowCursor = !(bFreeCameraRotationEnabled || bCameraMouseRotationEnabled);
+	PlayerController->SetShowMouseCursor(bShouldShowCursor);
 }

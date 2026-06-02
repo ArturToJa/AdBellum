@@ -226,11 +226,11 @@ void AAdBellumPlayerController::ClientClearSelection_Implementation()
 	}
 }
 
-void AAdBellumPlayerController::CameraRotateAction(const FInputActionValue& Value)
+void AAdBellumPlayerController::CameraFreeRotateAction(const FInputActionValue& Value)
 {
 	if (PossessedCharacter)
 	{
-		IALSInputInterface::Execute_CameraRotateAction(PossessedCharacter, Value.Get<bool>());
+		IALSInputInterface::Execute_CameraFreeRotateAction(PossessedCharacter, Value.Get<bool>());
 	}
 }
 

@@ -20,7 +20,10 @@
 #include "RecoilAnimationComponent.h"
 #include "UnitAIController.h"
 #include "Perception/AISightTargetInterface.h"
+#include "OptimizationComponent.h"
 #include "BaseUnit.generated.h"
+
+
 
 /**
  * 
@@ -70,6 +73,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UNetworkComponent> NetworkComponent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UOptimizationProxyComponent* OptimizationComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
 	UAIPerceptionStimuliSourceComponent* AIPerception;
