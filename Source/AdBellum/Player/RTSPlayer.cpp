@@ -8,6 +8,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
+#include "Components/BoxComponent.h"
 
 float ARTSPlayer::BorderSize = 10.0f;
 float ARTSPlayer::CameraMoveSpeed = 160.0f;
@@ -18,6 +19,29 @@ ARTSPlayer::ARTSPlayer()
 	bFreeCameraRotationEnabled = false;
 	SetReplicates(true);
 	SetActorTickEnabled(false);
+	FloatingMovement = CreateDefaultSubobject<UFloatingPawnMovement>(TEXT("Floating Movement"));
+}
+
+void ARTSPlayer::InitializePlayableAreaFromBox()
+{
+    ExpandedPlayableCorners.Empty();
+    if (!PlayableAreaBox) return;
+
+    // get box world transform and extents
+    FVector BoxOrigin = PlayableAreaBox->GetComponentLocation();
+    FRotator BoxRot = PlayableAreaBox->GetComponentRotation();
+	FVector BoxExtent = PlayableAreaBox->GetScaledBoxExtent() * PlayableCornerExpandPercent;
+
+	FVector2D BoxExtendXY = FVector2D(BoxExtent.X, BoxExtent.Y);
+	FVector2D BoxOriginXY = FVector2D(BoxOrigin.X, BoxOrigin.Y);
+	
+	BoxCornerMinMin = BoxOriginXY - BoxExtendXY;
+	BoxCornerMaxMax = BoxOriginXY + BoxExtendXY;
+
+
+    // set playable plane Z and max camera height as box top Z
+    PlayableAreaZ = BoxOrigin.Z - BoxExtent.Z; // bottom plane
+    MaxCameraHeight = BoxOrigin.Z + BoxExtent.Z;
 }
 
 void ARTSPlayer::BeginPlay()
@@ -30,6 +54,22 @@ void ARTSPlayer::BeginPlay()
 
 	CalculateHeightAboveLandscape();
 	CalculateSpeedMultiplier();
+
+	TArray<AActor*> FoundActors;
+
+	UGameplayStatics::GetAllActorsWithTag(
+		GetWorld(),
+		FName("MapConfig.PlayableBoundsArea"),
+		FoundActors);
+
+	if (FoundActors.Num() > 0)
+	{
+		AActor* Area = FoundActors[0];
+		PlayableAreaBox = Area->FindComponentByClass<UBoxComponent>();
+	}
+
+	// initialize playable area from box if assigned
+	InitializePlayableAreaFromBox();
 }
 
 void ARTSPlayer::Tick(float DeltaTime)
@@ -40,7 +80,7 @@ void ARTSPlayer::Tick(float DeltaTime)
     {
         FVector CurrentLocation = GetActorLocation();
         FVector NewLocation = FMath::VInterpConstantTo(CurrentLocation, ScrollTargetLocation, DeltaTime, ScrollInterpSpeed * CalculatedSpeedMultiplier);
-
+		if (!IsPositionInsideArea(FVector2D(NewLocation))) return;
         float HeightDifference = NewLocation.Z - CurrentLocation.Z;
         CurrentHeightAboveLandscape += HeightDifference;
 		CalculateSpeedMultiplier();
@@ -51,7 +91,7 @@ void ARTSPlayer::Tick(float DeltaTime)
         const float StopDistSq = FMath::Square(4.0f);
         if (FVector::DistSquared(NewLocation, ScrollTargetLocation) <= StopDistSq)
         {
-            SetActorLocation(ScrollTargetLocation);
+			SetActorLocation(ScrollTargetLocation);
             // ensure height and multiplier are correct at final location
             CalculateHeightAboveLandscape();
             CalculateSpeedMultiplier();
@@ -59,7 +99,7 @@ void ARTSPlayer::Tick(float DeltaTime)
         }
         else
         {
-            SetActorLocation(NewLocation);
+			SetActorLocation(NewLocation);
         }
 
 
@@ -134,9 +174,22 @@ void ARTSPlayer::ForwardMovementAction_Implementation(float Value)
 		Forward.Z = 0.0f;
 		Forward.Normalize();
 
-		bIsScrolling = false;
-		// Use CalculatedSpeedMultiplier instead of magic constant, include DeltaTime by using AddMovementInput
-		AddMovementInput(Forward, Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
+        bIsScrolling = false;
+        // compute candidate location and restrict movement if it would see outside playable area
+        FVector LinearCandidate = PredictPawnStopLocation_Linear(1.f / 60, Forward * Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
+
+
+        if (IsPositionInsideArea(FVector2D(LinearCandidate)))
+        {
+            AddMovementInput(Forward, Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
+        }
+		//FVector FrictionApprox = PredictPawnStopLocation_FrictionApprox(1.f / 60, FloatingMovement->Velocity.Length() / FloatingMovement->Deceleration);
+		//FVector Simulated = PredictPawnStopLocation_Simulated(1.f / 60, FloatingMovement->Velocity.Length() / FloatingMovement->Deceleration);
+
+		/*GEngine->AddOnScreenDebugMessage(-1, 30.f, FColor::Red, FString::Printf(TEXT("CurrentLocation: %s"), *GetActorLocation().ToString()));
+		GEngine->AddOnScreenDebugMessage(-1, 30.f, FColor::Green, FString::Printf(TEXT("LinearCandidate: %s"), *LinearCandidate.ToString()));
+		GEngine->AddOnScreenDebugMessage(-1, 30.f, FColor::Blue, FString::Printf(TEXT("FrictionApprox: %s"), *FrictionApprox.ToString()));
+		GEngine->AddOnScreenDebugMessage(-1, 30.f, FColor::Yellow, FString::Printf(TEXT("Simulated: %s"), *Simulated.ToString())); */
 	}
 }
 
@@ -149,8 +202,12 @@ void ARTSPlayer::RightMovementAction_Implementation(float Value)
 		Right.Z = 0.0f;
 		Right.Normalize();
 
-		bIsScrolling = false;
-		AddMovementInput(Right, Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
+        bIsScrolling = false;
+		FVector LinearCandidate = PredictPawnStopLocation_Linear(1.f / 60, Right * Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
+        if (IsPositionInsideArea(FVector2D(LinearCandidate)))
+        {
+            AddMovementInput(Right, Value * BaseSpeedMultiplier * CalculatedSpeedMultiplier);
+        }
 	}
 }
 
@@ -372,6 +429,7 @@ void ARTSPlayer::ScrollAction_Implementation(bool bScrollUp)
     float CameraZ = GetActorLocation().Z;
     if (CameraZ >= MaxCameraHeight && !bScrollUp) return;
     if (CameraZ <= MinCameraHeight && bScrollUp) return;
+	
 
 	float MouseX, MouseY;
 	PC->GetMousePosition(MouseX, MouseY);
@@ -404,6 +462,7 @@ void ARTSPlayer::ScrollAction_Implementation(bool bScrollUp)
 	float ScrollSign = bScrollUp ? 1.0f : -1.0f;
 
 	FVector DesiredLocation = CameraLocation + Dir * ScrollStep * ScrollSign * CalculatedSpeedMultiplier;
+	if (!IsPositionInsideArea(FVector2D(DesiredLocation))) return;
 
     // clamp new height between min/max
     DesiredLocation.Z = FMath::Clamp(DesiredLocation.Z, MinCameraHeight, MaxCameraHeight);
@@ -485,7 +544,75 @@ FVector2D ARTSPlayer::ConvertToPlatformPixels(float MouseX, float MouseY)
 
 void ARTSPlayer::CheckCursorVisibility()
 {
-	APlayerController* PlayerController = GetController<APlayerController>();
-	bool bShouldShowCursor = !(bFreeCameraRotationEnabled || bCameraMouseRotationEnabled);
-	PlayerController->SetShowMouseCursor(bShouldShowCursor);
+    APlayerController* PlayerController = GetController<APlayerController>();
+    bool bShouldShowCursor = !(bFreeCameraRotationEnabled || bCameraMouseRotationEnabled);
+    PlayerController->SetShowMouseCursor(bShouldShowCursor);
+}
+
+bool ARTSPlayer::IsPositionInsideArea(const FVector2D& CandidateLocation) const
+{
+
+	//FVector2D BoxCornerMinMin;
+	//FVector2D BoxCornerMaxMax;
+
+		// Player / actor location
+	FVector ActorLocation = GetActorLocation();
+
+	// Screen messages (30 seconds each)
+	if (GEngine)
+	{
+		// Actor location - Cyan
+		//GEngine->AddOnScreenDebugMessage(
+		//	-1, 30.f, FColor::Cyan,
+		//	FString::Printf(TEXT("ActorLocation: %s"), *ActorLocation.ToString()));
+
+		//// Min corner - Green
+		//GEngine->AddOnScreenDebugMessage(
+		//	-1, 30.f, FColor::Green,
+		//	FString::Printf(TEXT("BoxCornerMinMin: %s"), *BoxCornerMinMin.ToString()));
+
+		//// Max corner - Yellow
+		//GEngine->AddOnScreenDebugMessage(
+		//	-1, 30.f, FColor::Red,
+		//	FString::Printf(TEXT("BoxCornerMaxMax: %s"), *BoxCornerMaxMax.ToString()));
+
+		//// Candidate - Magenta
+		//GEngine->AddOnScreenDebugMessage(
+		//	-1, 30.f, FColor::Magenta,
+		//	FString::Printf(TEXT("CandidateLocation: %s"), *CandidateLocation.ToString()));
+	}
+	
+
+	if(CandidateLocation.X < BoxCornerMinMin.X || CandidateLocation.X > BoxCornerMaxMax.X || CandidateLocation.Y < BoxCornerMinMin.Y ||  CandidateLocation.Y > BoxCornerMaxMax.Y)
+	{
+		FVector TargetPoint = PlayableAreaBox->GetComponentLocation();
+
+		/*FVector2D BA(GetActorLocation().X - CandidateLocation.X, GetActorLocation().Y - CandidateLocation.Y);
+		FVector2D BC(TargetPoint.X - CandidateLocation.X, TargetPoint.Y - CandidateLocation.Y);*/
+
+		FVector2D BA(CandidateLocation.X - GetActorLocation().X, CandidateLocation.Y - GetActorLocation().Y);
+		FVector2D BC(CandidateLocation.X - TargetPoint.X, CandidateLocation.Y - TargetPoint.Y);
+
+		BA.Normalize();
+		BC.Normalize();
+
+		float Dot = FVector2D::DotProduct(BA, BC);
+		Dot = FMath::Clamp(Dot, -1.f, 1.f);
+
+		float AngleABC = FMath::Abs(FMath::RadiansToDegrees(FMath::Acos(Dot)));
+		
+		/*GEngine->AddOnScreenDebugMessage(
+			-1, 30.f, FColor::Magenta,
+			FString::Printf(TEXT("AngleABC: %f"), AngleABC));*/
+
+		if (AngleABC >= 90.f) return true;
+
+		
+
+		return false;
+	}
+	//GEngine->AddOnScreenDebugMessage(
+	//	-1, 30.f, FColor::Green,
+	//	TEXT("Candidate INSIDE playable area"));
+	return true;
 }

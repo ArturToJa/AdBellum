@@ -6,7 +6,11 @@
 #include "GameFramework/Pawn.h"
 #include "Character/ALSInputInterface.h"
 #include "OrderSystem/OrderType.h"
+
+#include <GameFramework/FloatingPawnMovement.h>
+
 #include "RTSPlayer.generated.h"
+
 
 DECLARE_DELEGATE_OneParam(FOrderRightActionDelegate, bool)
 DECLARE_DELEGATE_OneParam(FOrderActionDelegate, OrderEnum)
@@ -56,6 +60,9 @@ public:
 
 	void RightMouseButtonPressed();
 	void TeleportAboveUnit(AActor* TargetUnit);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UFloatingPawnMovement* FloatingMovement;
 
 	FOrderRightActionDelegate OrderActionDelegate;
 	FOrderActionDelegate InteractionActionDelegate;
@@ -119,6 +126,31 @@ private:
 
 	FVector MousePivotPoint;
 
+    // Playable area defined by a box component in the level (assign in BP or editor)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|PlayableArea", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<class UBoxComponent> PlayableAreaBox;
+
+    // How much to expand bottom corners outward (120% = 1.2)
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera|PlayableArea", meta = (AllowPrivateAccess = "true"))
+    float PlayableCornerExpandPercent = 1.2f;
+
+    // Cached expanded bottom corners (world space)
+    TArray<FVector> ExpandedPlayableCorners;
+
+    // Recompute corners and max camera height from the box component
+    void InitializePlayableAreaFromBox();
+
+    // Last known transform of the playable area box to detect changes
+    FTransform LastPlayableBoxTransform;
+    // Playable area reference plane Z (bottom of box)
+    float PlayableAreaZ = 0.0f;
+
+    // Returns true if camera at CandidateLocation would see outside the expanded playable corners
+    bool IsPositionInsideArea(const FVector2D& CandidateLocation) const;
+
+	FVector2D BoxCornerMinMin;
+	FVector2D BoxCornerMaxMax;
+
     // Interp speed (units per second) used when smoothing
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (AllowPrivateAccess = "true"))
     float ScrollInterpSpeed = 1200.0f;
@@ -130,4 +162,82 @@ private:
 	void CheckCursorVisibility();
 
 	static FVector2D ConvertToPlatformPixels(float MouseX, float MouseY);
+
+	FVector PredictPawnStopLocation_Linear(float TimeHorizon, FVector ControlAcceleration) const
+	{
+		if (!FloatingMovement) return GetActorLocation();
+
+		FVector Velocity = FloatingMovement->Velocity;
+		/*if (Velocity.Length() <= 0.0f) 
+		{
+			const float NewMaxSpeed = FloatingMovement->GetMaxSpeed();
+			Velocity += ControlAcceleration * FMath::Abs(FloatingMovement->Acceleration) * TimeHorizon;
+			Velocity = Velocity.GetClampedToMaxSize(NewMaxSpeed);
+		}*/
+
+		// simple forward projection
+		return GetActorLocation() + Velocity * TimeHorizon;
+	}
+
+	FVector PredictPawnStopLocation_FrictionApprox(
+		float DeltaTimeStep,
+		float MaxTime) const
+	{
+		if (!FloatingMovement) return GetActorLocation();
+
+		FVector Location = GetActorLocation();
+		FVector Velocity = FloatingMovement->Velocity;
+
+		const float Deceleration = FloatingMovement->Deceleration;
+
+		float Time = 0.f;
+
+		while (Time < MaxTime && Velocity.SizeSquared() > 1.f)
+		{
+			Location += Velocity * DeltaTimeStep;
+
+			// approximate UE damping behavior
+			float Decay = FMath::Clamp(1.f - Deceleration * DeltaTimeStep, 0.f, 1.f);
+			Velocity *= Decay;
+
+			Time += DeltaTimeStep;
+		}
+
+		return Location;
+	}
+
+	FVector PredictPawnStopLocation_Simulated(
+		float DeltaTimeStep,
+		float MaxTime) const
+	{
+		if (!FloatingMovement) return GetActorLocation();
+
+		FVector Location = GetActorLocation();
+		FVector Velocity = FloatingMovement->Velocity;
+
+		const float MaxSpeed = FloatingMovement->MaxSpeed;
+		const float Accel = FloatingMovement->Acceleration;
+		const float Deceleration = FloatingMovement->Deceleration;
+
+		float Time = 0.f;
+
+		while (Time < MaxTime)
+		{
+			if (Velocity.SizeSquared() < 1.f)
+				break;
+
+			// simulate acceleration = none (no input)
+			// apply friction braking
+			float DecelerationFactor = FMath::Clamp(1.f - Deceleration * DeltaTimeStep, 0.f, 1.f);
+			Velocity *= DecelerationFactor;
+
+			// clamp max speed (UE behavior)
+			Velocity = Velocity.GetClampedToMaxSize(MaxSpeed);
+
+			Location += Velocity * DeltaTimeStep;
+			Time += DeltaTimeStep;
+		}
+
+		return Location;
+	}
 };
