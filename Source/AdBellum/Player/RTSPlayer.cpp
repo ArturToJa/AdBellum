@@ -85,7 +85,7 @@ void ARTSPlayer::Tick(float DeltaTime)
         CurrentHeightAboveLandscape += HeightDifference;
 		CalculateSpeedMultiplier();
         // clamp height
-        NewLocation.Z = FMath::Clamp(NewLocation.Z, MinCameraHeight, MaxCameraHeight);
+        //NewLocation.Z = FMath::Clamp(NewLocation.Z, MinCameraHeight, MaxCameraHeight);
 
         // If we're very close to the target, snap and finish
         const float StopDistSq = FMath::Square(4.0f);
@@ -418,7 +418,7 @@ void ARTSPlayer::CalculateHeightAboveLandscape()
 void ARTSPlayer::ScrollAction_Implementation(bool bScrollUp)
 {
 	// Scroll moves camera toward point under mouse on landscape
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("ScrollAction: %s"), bScrollUp ? TEXT("Up") : TEXT("Down")));
+	//GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("ScrollAction: %s"), bScrollUp ? TEXT("Up") : TEXT("Down")));
 
 	APlayerController* PC = GetController<APlayerController>();
 	if (!PC) return;
@@ -465,7 +465,26 @@ void ARTSPlayer::ScrollAction_Implementation(bool bScrollUp)
 	if (!IsPositionInsideArea(FVector2D(DesiredLocation))) return;
 
     // clamp new height between min/max
-    DesiredLocation.Z = FMath::Clamp(DesiredLocation.Z, MinCameraHeight, MaxCameraHeight);
+	float HeightDifference = 0.0f;
+	if (DesiredLocation.Z < MinCameraHeight)
+	{
+		HeightDifference = MinCameraHeight - DesiredLocation.Z;
+	}
+	else if (DesiredLocation.Z > MaxCameraHeight)
+	{
+		HeightDifference = DesiredLocation.Z - MaxCameraHeight;
+	}
+
+	float CameraPitch = GetControlRotation().Pitch - 270.f;
+
+	if (FMath::IsNearlyEqual(CameraPitch, 90.0f))
+	{
+		CameraPitch = 89.9f; // prevent division by zero
+	}
+	
+	float BackStep = HeightDifference / FMath::Cos(FMath::DegreesToRadians(CameraPitch));
+	DesiredLocation -= Dir * ScrollSign * BackStep;
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("ScrollAction HeightDifference: %f, CameraPitch: %f, BackStep: %f"), HeightDifference, CameraPitch, BackStep));
 
     // If smooth scrolling enabled, set scroll target and let Tick() interpolate
     if (bEnableSmoothScroll)
