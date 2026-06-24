@@ -159,6 +159,7 @@ void AAdBellumPlayerController::Client_AcknowledgePossession_Implementation(APaw
 		{
 			CharacterHUD->HUDClose();
 		}
+		RTSHUD->HUDOpen(NewPawn);
 		SetShowMouseCursor(true);
 	}
 	else if (ABaseUnit* ALSPawn = Cast<ABaseUnit>(NewPawn))
@@ -168,6 +169,10 @@ void AAdBellumPlayerController::Client_AcknowledgePossession_Implementation(APaw
 			SpawnCharacterHud();
 		}
 		MyHUD = CharacterHUD;
+		if(RTSHUD)
+		{
+			RTSHUD->HUDClose();
+		}
 		CharacterHUD->HUDOpen(NewPawn);
 		SetShowMouseCursor(false);
 		IsSelectingOrder = false;

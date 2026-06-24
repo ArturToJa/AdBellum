@@ -8,6 +8,17 @@
 #include "Interfaces/Selectable.h"
 #include "Formation/BaseFormation.h"
 
+
+void ARTS_HUD::HUDOpen(AActor* ControlledActor)
+{
+	OnHUDOpen(ControlledActor);
+}
+
+void ARTS_HUD::HUDClose()
+{
+	OnHUDClose();
+}
+
 void ARTS_HUD::DrawHUD()
 {
 	if (SelectionStarted)

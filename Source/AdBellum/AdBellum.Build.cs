@@ -10,11 +10,11 @@ public class AdBellum : ModuleRules
        // PrivatePCHHeaderFile = "Private/WindowsMixedRealityPrecompiled.h";
 
         PublicDependencyModuleNames.AddRange(new string[] { "Core","PhysicsCore", "CoreUObject", "Engine", "InputCore","AdvancedSessions",
-
             "AIModule", "ALSV4_CPP", "EnhancedInput", "NavigationSystem", "Chaos","ChaosVehicles", "DragonIKPlugin", "EasyBallistics",
-			"Niagara", "NetCore", "Networking", "VehicleSystemPlugin", "RecoilAnimation","WorldDirectorPRO", "UMG", "UBSplineStructureCreator", "NPC_Optimizator"});
+            "Niagara", "NetCore", "Networking", "VehicleSystemPlugin", "RecoilAnimation","WorldDirectorPRO", "UMG", "UBSplineStructureCreator",
+            "NPC_Optimizator", "StateTreeModule", "GameplayStateTreeModule", "SmartModularUI_Plugin"});
 
-		if (Target.Type == TargetRules.TargetType.Editor)
+        if (Target.Type == TargetRules.TargetType.Editor)
 		{
 			PrivateDependencyModuleNames.AddRange(new string[] {"Pjc", "AutoSizeComments"});
             //removed "LiveBlueprintDebugger" "RecentAssetsMenu"

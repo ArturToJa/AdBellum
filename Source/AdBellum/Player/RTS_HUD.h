@@ -27,6 +27,16 @@ protected:
 	TArray<ABaseFormation*> SelectedFormations;
 
 public:
+	void HUDOpen(AActor* ControlledActor);
+
+	void HUDClose();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnHUDOpen(AActor* ControlledActor);
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnHUDClose();
+
 	virtual void DrawHUD() override;
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
