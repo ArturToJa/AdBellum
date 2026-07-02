@@ -299,6 +299,9 @@ protected:
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void UnPossessed() override;
 
+	UFUNCTION(BlueprintImplementableEvent, Category = "Possession")
+	void BP_OnPlayerPossessed(bool value);
+
 
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

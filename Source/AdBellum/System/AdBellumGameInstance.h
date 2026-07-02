@@ -7,6 +7,7 @@
 #include "Library/Weapon/WeaponPrefabStruct.h"
 #include "Library/MeshCreatorParamsStruct.h"
 #include "System/GameModes/GameModeTypes.h"
+#include "SaveSystem/DefaultSquadsDataAsset.h"
 #include "AdBellumGameInstance.generated.h"
 
 USTRUCT(BlueprintType)
@@ -108,6 +109,9 @@ public:
 	void RemovePlayerSlotData(FString PlayerNetId);
 	void ClearPlayerSlotData();
 	void SetIsStartingNewMap(bool bIsStarting);
+
+	UPROPERTY(BlueprintReadOnly, EditDefaultsOnly)
+	UDefaultSquadsDataAsset* DefaultSquadsDataAsset;
 
 private:
 	TArray<TArray<FMultiplayerDataStruct>> Teams;

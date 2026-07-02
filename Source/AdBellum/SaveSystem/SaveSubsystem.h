@@ -15,7 +15,6 @@ class ADBELLUM_API USaveSystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(BlueprintReadOnly, EditDefaultsOnly)
 	UDefaultSquadsDataAsset* DefaultSquadsDataAsset;
 private:
 	UUnitSaveGame* UnitSaveGame;
@@ -23,7 +22,6 @@ private:
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
-	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 
 	UFUNCTION(BlueprintCallable)
 	void SaveSquadDataAsset(const FString& SquadName, const FUnitSaveData& PrefabDataArray, bool bOverwrite = false);

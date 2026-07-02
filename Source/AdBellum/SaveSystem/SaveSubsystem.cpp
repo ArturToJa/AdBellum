@@ -3,6 +3,7 @@
 
 #include "SaveSubsystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "System/AdBellumGameInstance.h"
 
 void USaveSystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -10,20 +11,13 @@ void USaveSystem::Initialize(FSubsystemCollectionBase& Collection)
 	LoadOrCreateSquadSave();
 	LoadOrCreateUnitSave();
 	ValidateSquadPrefabData();
+
+	DefaultSquadsDataAsset = Cast<UAdBellumGameInstance>(GetGameInstance())->DefaultSquadsDataAsset;
 }
 
 void USaveSystem::Deinitialize()
 {
 
-}
-
-bool USaveSystem::ShouldCreateSubsystem(UObject* Outer) const
-{
-	if(this->GetClass()->IsInBlueprint() && Super::ShouldCreateSubsystem(Outer))
-	{
-		return true;
-	}
-	return false;
 }
 
 void USaveSystem::SaveSquadDataAsset(const FString& SquadName, const FUnitSaveData& PrefabDataArray, bool bOverwrite)
@@ -138,7 +132,7 @@ bool USaveSystem::DoesSquadPrefabExist(const FString& SquadName) const
 {
 	bool bExistsInSave = SquadSaveGame && SquadSaveGame->SquadPrefabs.Contains(SquadName);
 	bool bExistsInDataAsset = DefaultSquadsDataAsset && DefaultSquadsDataAsset->DefaultSquads.Contains(SquadName);
-	return bExistsInSave && bExistsInDataAsset;
+	return bExistsInSave || bExistsInDataAsset;
 }
 
 TMap<FString, FUnitSaveData>& USaveSystem::GetSaveSquadPrefabs() const
@@ -250,7 +244,7 @@ bool USaveSystem::DoesUnitPrefabExist(const FString& UnitName) const
 {
 	bool bExistsInSave = UnitSaveGame && UnitSaveGame->UnitPrefabs.Contains(UnitName);
 	bool bExistsInDataAsset = DefaultSquadsDataAsset && DefaultSquadsDataAsset->DefaultUnits.Contains(UnitName);
-	return bExistsInSave && bExistsInDataAsset;
+	return bExistsInSave || bExistsInDataAsset;
 }
 
 TMap<FString, FMeshCreatorPrefabStruct>& USaveSystem::GetSaveUnitPrefabs() const

@@ -160,7 +160,14 @@ APawn* ABaseFormation::GetUnitForPossesion()
 	}
 	else
 	{
-		return ActorsInFormation[0];
+		for(APawn* Unit : ActorsInFormation)
+		{
+			if (Unit && IITargetable::Execute_IsAlive(Unit))
+			{
+				return Unit;
+			}
+		}
+		return nullptr;
 	}
 }
 
@@ -397,6 +404,7 @@ int ABaseFormation::GetFormationCost_Implementation()
 void ABaseFormation::RespawnFormation_Implementation(ABaseSpawnArea* SpawnArea)
 {
 	AliveUnits = ActorsInFormation.Num();
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("Respawning formation %s, Units Alive: %d"), *GetName(), AliveUnits));
 	SpawnArea->GenerateTransforms(ActorsInFormation.Num());
 
 	for (APawn* Unit : ActorsInFormation)
@@ -462,6 +470,7 @@ void ABaseFormation::EnemyDies(AActor* DyingEnemy)
 void ABaseFormation::UnitDied(APawn* DyingUnit)
 {
 	AliveUnits--;
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Unit %s died in formation %s, Units Alive: %d"), *DyingUnit->GetName(), *GetName(), AliveUnits));
 	if (AliveUnits == 0)
 	{
 		// tell server to respawn formation if tickets are available
@@ -548,6 +557,7 @@ void ABaseFormation::AddUnitToFormation_Implementation(APawn* UnitToAdd)
 {
 	ActorsInFormation.AddUnique(UnitToAdd);
 	AliveUnits++;
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("Unit %s added to formation %s, Units Alive: %d"), *UnitToAdd->GetName(), *GetName(), AliveUnits));
 	IFormable::Execute_SetFormation(UnitToAdd, this);
 }
 

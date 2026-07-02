@@ -240,6 +240,12 @@ void AMainMenuGameState::SetTicketsIndex(int _TicketsIndex)
 
 void AMainMenuGameState::ServerSetPlayerSquad_Implementation(const FString& SquadName, const TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, int Team, int Slot)
 {
+	GEngine->AddOnScreenDebugMessage(
+		-1,
+		20.0f,
+		FColor::Red,
+		FString::Printf(TEXT("Setting player squad on SERVER!!!!!!!!!!!!!!!!! %s"), *SquadName)
+	);
 	switch (Team)
 	{
 	case 0:
@@ -254,6 +260,12 @@ void AMainMenuGameState::ServerSetPlayerSquad_Implementation(const FString& Squa
 
 void AMainMenuGameState::SetPlayerSquad(const FString& SquadName, int Team, int Slot)
 {
+	GEngine->AddOnScreenDebugMessage(
+		-1,
+		20.0f,
+		FColor::Red,
+		FString::Printf(TEXT("Setting player squad %s"), *SquadName)
+	);
 	USaveSystem* SaveSystem = GetGameInstance()->GetSubsystem<USaveSystem>();
 	check(SaveSystem);
 	TArray<FMeshCreatorPrefabStruct> SquadUnits;

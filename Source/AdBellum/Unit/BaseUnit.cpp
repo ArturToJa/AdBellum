@@ -108,10 +108,12 @@ void ABaseUnit::PossessedBy(AController* NewController)
 		RecoilAnimationComponent->Activate();
 		IIWeapon::Execute_ResetAim(ActiveWeaponActor);
 		BackupAIController->OrdersManagerComponent->SetStopOrder();
+		BP_OnPlayerPossessed(true);
 	}
 	else
 	{
 		RecoilAnimationComponent->Deactivate();
+		BP_OnPlayerPossessed(false);
 	}
 	Super::PossessedBy(NewController);
 }
@@ -128,7 +130,7 @@ void ABaseUnit::UnPossessed()
 
 void ABaseUnit::PossessByAIController() 
 {
-	if (HP > 0.0f) 
+	if (IsAlive_Implementation())
 	{
 		BackupAIController->Possess(this);
 		BackupAIController->Activate();
@@ -583,7 +585,7 @@ void ABaseUnit::SetHipFire(bool Value)
 //DAMAGE
 void ABaseUnit::OnAnyDamageReceived(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser)
 {
-	if (HP > 0)
+	if (IsAlive_Implementation())
 	{
 		ServerUpdateHealth(Damage);
 
@@ -639,7 +641,7 @@ void ABaseUnit::HandleHPRegen()
 	//const float MaxHP = GetMaxHP();
 	float CurrentHP = GetHP();
 
-	if (CurrentHP >= MaxHP)
+	if (CurrentHP >= MaxHP || !IsAlive_Implementation())
 	{
 		StopHPRegen();
 		return;
@@ -695,8 +697,9 @@ void ABaseUnit::ServerUpdateHealth_Implementation(float Value)
 	// Server-side: Update the Health value
 	HP += Value;
 
-	if (HP <= 0)
+	if (!IsAlive_Implementation())
 	{
+		HP = 0;
 		NotifyDeath();
 	}
 
@@ -837,7 +840,7 @@ ABaseFormation* ABaseUnit::GetFormation_Implementation()
 
 void ABaseUnit::RespawnUnit_Implementation(FTransform RespawnTransform)
 {
-	HP = 5000.0f;
+	HP = MaxHP;
 	//GetMesh()->SetCollisionProfileName("Pawn", false);
 	ReplicatedRagdollEnd();
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
