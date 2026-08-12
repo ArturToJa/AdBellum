@@ -12,6 +12,8 @@
 #include "Player/BaseSpawnArea.h"
 #include "Interfaces/ITargetable.h"
 #include "DrawDebugHelpers.h"
+#include "EngineUtils.h"
+#include "Player/RTS_HUD.h"
 
 template void ABaseFormation::PerformOrder<OrderEnum::Attack>(AActor*, FVector);
 template void ABaseFormation::PerformOrder<OrderEnum::Enter>(AActor*, FVector);
@@ -536,6 +538,11 @@ void ABaseFormation::OnCoverQueryFinished(TSharedPtr<FEnvQueryResult> Result)
 				}
 			});
 	}
+}
+
+void ABaseFormation::FinalizeFormation()
+{
+	IIPlayer::Execute_InitializeRTSHUD(OwningPlayer, this);
 }
 
 TMap<AActor*, int> ABaseFormation::GetEnemiesInSight_Implementation()

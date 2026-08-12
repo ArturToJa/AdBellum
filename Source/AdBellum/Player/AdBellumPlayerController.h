@@ -79,6 +79,7 @@ public:
 	virtual void GameEnded_Implementation(MatchResult Result) override;
 	virtual void NotifyCharacterHUD_Implementation(FNotifyHUDData NotifyData) override;
 	virtual void UpdateCameraDamageEffects_Implementation(float HPRatio) override;
+	virtual void InitializeRTSHUD_Implementation(ABaseFormation* Formation) override;
 
 	UFUNCTION(Client, Reliable)
 	void Client_UpdateCameraDamageEffects(float HPRatio);

@@ -7,6 +7,8 @@
 #include "System/AdBellumGameState.h"
 #include "Interfaces/Selectable.h"
 #include "Formation/BaseFormation.h"
+#include "EngineUtils.h"
+#include "UI/RTSFormationUnitTableWidget.h"
 
 
 void ARTS_HUD::HUDOpen(AActor* ControlledActor)
@@ -47,7 +49,30 @@ void ARTS_HUD::SelectionModeStart_Implementation()
 void ARTS_HUD::SelectionModeEnd_Implementation()
 {
 	SelectionStarted = false;
-	Cast<AAdBellumPlayerController>(GetOwningPlayerController())->SetSelectedFormations(SelectedFormations);
+	AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(GetOwningPlayerController());
+	if (PC)
+	{
+		PC->SetSelectedFormations(SelectedFormations);
+		// Set selection of formations in the URTSFormationUnitTableWidget
+        UpdateWidgetSelection(SelectedFormations);
+	}
+}
+
+void ARTS_HUD::InitializeWidget(TArray<ABaseFormation*>& Formations)
+{
+    if (FormationUnitTableWidget)
+    {
+        FormationUnitTableWidget->InitializeWidget(Formations);
+    }
+}
+
+void ARTS_HUD::UpdateWidgetSelection(TArray<ABaseFormation*>& Formations)
+{
+    if (FormationUnitTableWidget)
+    {
+        // Reinitialize widget with updated selection list
+		//FormationUnitTableWidget->Initialize(Formations);
+    }
 }
 
 void ARTS_HUD::SetCurrentSelection_Implementation(bool Visible)

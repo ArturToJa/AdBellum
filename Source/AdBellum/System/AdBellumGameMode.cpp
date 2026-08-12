@@ -159,6 +159,7 @@ void AAdBellumGameMode::SpawnFormationForPlayer(AActor* Player, int TeamId, int 
 	IOwnershipInterface::Execute_SetOwningPlayer(Formation, Player);
 	IOwnershipInterface::Execute_SetTeamIndex(Formation, TeamId);
 	SpawnUnitsForPlayer(Player, TeamId, PlayerId, Formation, UnitPrefabs, SpawnArea, bIsDefault);
+	Formation->FinalizeFormation();
 }
 
 void AAdBellumGameMode::SpawnUnitsForPlayer(AActor* Player, int TeamId, int PlayerId, ABaseFormation* Formation, TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, ABaseSpawnArea* SpawnArea, bool bIsDefault)

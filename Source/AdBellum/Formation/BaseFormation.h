@@ -87,6 +87,8 @@ public:
 
 	void FindCovers(FVector CoverFromLocation);
 	void OnCoverQueryFinished(TSharedPtr<FEnvQueryResult> Result);
+
+	void FinalizeFormation();
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;

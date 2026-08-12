@@ -68,4 +68,6 @@ public:
 		void NotifyCharacterHUD(FNotifyHUDData NotifyData);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IPlayer")
 		void UpdateCameraDamageEffects(float HPRatio);
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IPlayer")
+		void InitializeRTSHUD(ABaseFormation* Formation);
 };

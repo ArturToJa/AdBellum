@@ -423,6 +423,13 @@ void AAdBellumPlayerController::Client_UpdateCameraDamageEffects_Implementation(
 	PlayerCameraManager->UpdateDamageEffect(HPRatio);
 }
 
+void AAdBellumPlayerController::InitializeRTSHUD_Implementation(ABaseFormation* Formation)
+{
+	TArray<ABaseFormation*> Formations;
+	Formations.Add(Formation);
+	RTSHUD->InitializeWidget(Formations);
+}
+
 void AAdBellumPlayerController::Client_OnHUDNotify_Implementation(FNotifyHUDData NotifyData)
 {
 	if (CharacterHUD == MyHUD)

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "Unit/BaseUnit.h"
+#include <UI/RTSFormationUnitTableWidget.h>
 #include "RTS_HUD.generated.h"
 
 class AALSBaseCharacter;
@@ -26,6 +27,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<ABaseFormation*> SelectedFormations;
 
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	URTSFormationUnitTableWidget* FormationUnitTableWidget;
+
 public:
 	void HUDOpen(AActor* ControlledActor);
 
@@ -36,6 +41,11 @@ public:
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnHUDClose();
+
+	UFUNCTION(BlueprintCallable)
+	void InitializeWidget(TArray<ABaseFormation*>& Formations);
+
+	void UpdateWidgetSelection(TArray<ABaseFormation*>& Formations);
 
 	virtual void DrawHUD() override;
 
