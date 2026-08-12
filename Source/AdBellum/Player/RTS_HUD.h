@@ -32,6 +32,9 @@ protected:
 	URTSFormationUnitTableWidget* FormationUnitTableWidget;
 
 public:
+	UFUNCTION(BlueprintImplementableEvent)
+	void BP_InitializeWidget();
+
 	void HUDOpen(AActor* ControlledActor);
 
 	void HUDClose();

@@ -148,12 +148,16 @@ void AAdBellumPlayerController::AcknowledgePossession(APawn* NewPawn)
 
 void AAdBellumPlayerController::Client_AcknowledgePossession_Implementation(APawn* NewPawn)
 {
+	if (RTSHUD == nullptr)
+	{
+		SpawnRTSHud();
+	}
+	if (CharacterHUD == nullptr)
+	{
+		SpawnCharacterHud();
+	}
 	if (NewPawn == RTSCameraPawn)
 	{
-		if (RTSHUD == nullptr)
-		{
-			SpawnRTSHud();
-		}
 		MyHUD = RTSHUD;
 		if (CharacterHUD)
 		{
@@ -164,10 +168,6 @@ void AAdBellumPlayerController::Client_AcknowledgePossession_Implementation(APaw
 	}
 	else if (ABaseUnit* ALSPawn = Cast<ABaseUnit>(NewPawn))
 	{
-		if (CharacterHUD == nullptr)
-		{
-			SpawnCharacterHud();
-		}
 		MyHUD = CharacterHUD;
 		if(RTSHUD)
 		{

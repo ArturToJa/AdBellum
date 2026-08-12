@@ -60,6 +60,7 @@ void ARTS_HUD::SelectionModeEnd_Implementation()
 
 void ARTS_HUD::InitializeWidget(TArray<ABaseFormation*>& Formations)
 {
+	BP_InitializeWidget();
     if (FormationUnitTableWidget)
     {
         FormationUnitTableWidget->InitializeWidget(Formations);
