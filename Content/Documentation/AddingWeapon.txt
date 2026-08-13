@@ -1,0 +1,2 @@
+1. Weapons needs to be facing Y axis.
+2. To calibrate LeftHandIK - in ALS_CharacterBP in Tick add -> GetActiveWeapon->GetHandIKTransform and Set HandIKTransform

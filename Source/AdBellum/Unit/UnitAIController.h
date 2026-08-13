@@ -18,6 +18,8 @@ class ADBELLUM_API AUnitAIController : public AALSAIController, public IOrderabl
 
 public:
 	AUnitAIController();
+    UFUNCTION(BlueprintCallable)
+    void ClearAttackTimer();
 	UFUNCTION(BlueprintImplementableEvent)
 	void Activate();
 	UFUNCTION(BlueprintImplementableEvent)

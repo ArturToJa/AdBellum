@@ -103,7 +103,7 @@ void ABaseVehicle::OnAnyDamageReceived(AActor* DamagedActor, float Damage, const
 void ABaseVehicle::ServerUpdateHealth_Implementation(float Value)
 {
 	// Server-side: Update the Health value
-	HP += Value;
+	HP -= Value;
 
 	if (HP <= 0)
 	{

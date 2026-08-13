@@ -137,9 +137,17 @@ public:
 	virtual float GetArmourParamValueForBodyPart_Implementation(EBodyPart BodyPart) override;
 
 	
-
-	UFUNCTION(BlueprintNativeEvent, Category = "Damage")
 	void NotifyDeath();
+
+	//disable aiming on player char, disable hip fire, disable weapon trigger
+	void HandleWeaponStatesOnPlayerDepossessed();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Damage")
+	void BP_NotifyDeath();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Damage")
+	void BP_RespawnUnit();
+
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerUpdateHealth(float Value);
@@ -298,6 +306,11 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void UnPossessed() override;
+
+	// Helpers for possession transitions
+	void HandleServerPlayerPossessed();
+	void HandleClientPlayerPossessed();
+	void HandleServerAIPossessed();
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Possession")
 	void BP_OnPlayerPossessed(bool value);

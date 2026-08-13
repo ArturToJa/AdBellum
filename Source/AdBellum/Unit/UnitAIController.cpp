@@ -129,10 +129,24 @@ void AUnitAIController::WeaponTriggerAction(float TriggerDuration)
 
 void AUnitAIController::StopTriggerTimer()
 {
-	AActor* ActiveWeaponActor = IArmedUnitInterface::Execute_GetWeapon(GetPawn());
-	if (!ActiveWeaponActor) return;
+    // Defensive: ensure pawn and weapon are valid before toggling trigger
+    APawn* OwnedPawn = GetPawn();
+    if (!OwnedPawn) return;
+    AActor* ActiveWeaponActor = IArmedUnitInterface::Execute_GetWeapon(OwnedPawn);
+    if (!IsValid(ActiveWeaponActor)) return;
 
-	IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+    IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+}
+
+void AUnitAIController::ClearAttackTimer()
+{
+    if (GetWorld())
+    {
+        GetWorldTimerManager().ClearTimer(AIAttackTimer);
+    }
+
+    // Ensure trigger is turned off immediately
+    StopTriggerTimer();
 }
 
 void AUnitAIController::AttackLocation_Implementation(FVector TargetPosition)

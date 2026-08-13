@@ -88,7 +88,7 @@ void ABaseUnit::Server_PlayRecoil_Implementation(bool Active)
 	Multicast_PlayRecoil(Active);
 }
 
-void ABaseUnit::Multicast_PlayRecoil_Implementation(bool Active) 
+void ABaseUnit::Multicast_PlayRecoil_Implementation(bool Active)
 {
 	if (Active)
 	{
@@ -105,35 +105,75 @@ void ABaseUnit::PossessedBy(AController* NewController)
 	if (NewController->IsPlayerController())
 	{
 		SetViewMode(EALSViewMode::FirstPerson);
-		RecoilAnimationComponent->Activate();
-		IIWeapon::Execute_ResetAim(ActiveWeaponActor);
-		BackupAIController->OrdersManagerComponent->SetStopOrder();
+		if (HasAuthority())
+		{
+			UE_LOG(LogTemp, Log, TEXT("ABaseUnit::PossessedBy - server: player possession, clearing AI timers and stopping weapon"));
+			IIWeapon::Execute_ResetAim(ActiveWeaponActor);
+			if (BackupAIController)
+			{
+				BackupAIController->OrdersManagerComponent->SetStopOrder();
+				BackupAIController->ClearAttackTimer();
+			}
+
+			// Ensure AI stops shooting and weapon is safe
+			if (ActiveWeaponActor)
+			{
+				IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+				IIWeapon::Execute_NotifyAim(ActiveWeaponActor, false);
+			}
+
+			// Stop recoil visuals and animation
+			Server_PlayRecoil(false);
+			if (RecoilAnimationComponent->IsActive())
+			{
+				RecoilAnimationComponent->Stop();
+				RecoilAnimationComponent->Deactivate();
+			}
+
+			// Reset unit local firing state (server)
+			TriggerActive = false;
+			HipFire = false;
+			UsingADS = false;
+		}
+
+		// Client-side updates / events
 		BP_OnPlayerPossessed(true);
+		RecoilAnimationComponent->Activate();
 	}
 	else
 	{
-		RecoilAnimationComponent->Deactivate();
+		HandleWeaponStatesOnPlayerDepossessed();
 		BP_OnPlayerPossessed(false);
 	}
 	Super::PossessedBy(NewController);
 }
 
-void ABaseUnit::UnPossessed() 
+void ABaseUnit::UnPossessed()
 {
 	if (!GetController()->IsPlayerController())
 	{
 		BackupAIController->Deactivate();
+		BackupAIController->ClearAttackTimer();
 		RecoilAnimationComponent->Deactivate();
 	}
 	Super::UnPossessed();
 }
 
-void ABaseUnit::PossessByAIController() 
+void ABaseUnit::PossessByAIController()
 {
 	if (IsAlive_Implementation())
 	{
-		BackupAIController->Possess(this);
-		BackupAIController->Activate();
+		if (HasAuthority())
+		{
+			UE_LOG(LogTemp, Log, TEXT("ABaseUnit::PossessByAIController - server: AI taking possession"));
+			BackupAIController->Possess(this);
+			BackupAIController->Activate();
+			// Ensure weapon trigger is off when AI takes control
+			if (ActiveWeaponActor)
+			{
+				IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+			}
+		}
 	}
 }
 
@@ -143,7 +183,7 @@ void ABaseUnit::AimAction_Implementation(bool Value)
 	if (StationaryRole == EALSStationaryRole::None)
 	{
 		// add check timer to disable rotation mode
-		if (Value) 
+		if (Value)
 		{
 			CheckAimCollision();
 			GetWorld()->GetTimerManager().SetTimer(CheckAimCollisionTimer, this, &ABaseUnit::CheckAimCollision, 0.16f, true);
@@ -160,11 +200,11 @@ void ABaseUnit::AimAction_Implementation(bool Value)
 	}
 }
 
-void ABaseUnit::CheckAimCollision() 
+void ABaseUnit::CheckAimCollision()
 {
-	if (LineTraceForObjectType(65.f, EObjectTypeQuery::ObjectTypeQuery1) == nullptr) 
+	if (LineTraceForObjectType(65.f, EObjectTypeQuery::ObjectTypeQuery1) == nullptr)
 	{
-		if (EALSRotationMode::Aiming != GetRotationMode()) 
+		if (EALSRotationMode::Aiming != GetRotationMode())
 		{
 			HandleNonStationaryAimAction(true);
 		}
@@ -176,7 +216,7 @@ void ABaseUnit::CheckAimCollision()
 }
 
 void ABaseUnit::HandleNonStationaryAimAction(bool Value)
-{ 
+{
 	if (Value && TargetWeaponSocket == EWeaponSocketEnum::NONE && ActiveWeaponActor)
 	{
 		HandlePressedADS();
@@ -184,7 +224,7 @@ void ABaseUnit::HandleNonStationaryAimAction(bool Value)
 	}
 	else
 	{
-		if (TriggerActive) 
+		if (TriggerActive)
 		{
 			HipFire = true;
 		}
@@ -207,18 +247,19 @@ void ABaseUnit::HandleStationaryAimAction(bool Value)
 		if (Value)
 		{
 			SetRotationMode(EALSRotationMode::Aiming);
-		} else SetRotationMode(EALSRotationMode::LookingDirection);
+		}
+		else SetRotationMode(EALSRotationMode::LookingDirection);
 
 
 		Server_AimAction(Value);
 	}
 
 	else if (StationaryRole == EALSStationaryRole::Gunner) {
-		if (Value) 
+		if (Value)
 		{
 			CameraPOV = 45.0f;
 		}
-		else 
+		else
 		{
 			CameraPOV = 90.0f;
 		}
@@ -242,26 +283,26 @@ void ABaseUnit::AimActionCompleted_Implementation()
 
 void ABaseUnit::Server_AimActionCompleted_Implementation()
 {
-	if (ControlledInputInterceptor && GetStationaryRole() == EALSStationaryRole::Gunner_Standing) 
+	if (ControlledInputInterceptor && GetStationaryRole() == EALSStationaryRole::Gunner_Standing)
 	{
 		IALSInputInterface::Execute_AimActionCompleted(ControlledInputInterceptor);
 	}
-	if (ControlledInputInterceptor && (StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing)) 
+	if (ControlledInputInterceptor && (StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing))
 	{
 		HandleTriggerAction(false);
 	}
 }
 
-void ABaseUnit::HandlePressedADS() 
+void ABaseUnit::HandlePressedADS()
 {
 	UsingADS = true;
-	if (ActiveWeaponActor) 
+	if (ActiveWeaponActor)
 	{
 		IIWeapon::Execute_NotifyAim(ActiveWeaponActor, true);
 		float CameraMovementRate = IIWeapon::Execute_GetCameraSensitivity(ActiveWeaponActor);
 		LookLeftRightRate = CameraMovementRate;
 		LookUpDownRate = CameraMovementRate;
-		if (HipFire) 
+		if (HipFire)
 		{
 			HipFire = false;
 		}
@@ -276,12 +317,12 @@ void ABaseUnit::HandlePressedADS()
 void ABaseUnit::HandleReleasedADS()
 {
 	UsingADS = false;
-	if (ActiveWeaponActor) 
+	if (ActiveWeaponActor)
 	{
 		IIWeapon::Execute_NotifyAim(ActiveWeaponActor, false);
 	}
 	LookLeftRightRate = 1.25f;
-	LookUpDownRate =  1.25f;
+	LookUpDownRate = 1.25f;
 	if (EALSStationaryRole::None == StationaryRole)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, SoundADSReleased, HeldObjectRoot->GetComponentLocation());
@@ -292,22 +333,22 @@ void ABaseUnit::HandleReleasedADS()
 void ABaseUnit::TriggerAction_Implementation(bool Value)
 {
 	TriggerActive = Value;
-	if (StationaryRole == EALSStationaryRole::None) 
+	if (StationaryRole == EALSStationaryRole::None)
 	{
 		if (TargetWeaponSocket == EWeaponSocketEnum::NONE)
 		{
 			HandleTriggerAction(Value);
 		}
 	}
-	else 
+	else
 	{
 		HandleTriggerAction(Value);
 	}
 }
 
-void ABaseUnit::TriggerActionCompleted_Implementation() 
+void ABaseUnit::TriggerActionCompleted_Implementation()
 {
-	if (StationaryRole == EALSStationaryRole::None) 
+	if (StationaryRole == EALSStationaryRole::None)
 	{
 		if (ActiveWeaponActor)
 		{
@@ -328,18 +369,18 @@ void ABaseUnit::HandleTriggerAction(bool Value)
 	if (ControlledInputInterceptor)
 	{
 		if (StationaryRole == EALSStationaryRole::Gunner_Standing || StationaryRole == EALSStationaryRole::Gunner) {
-			if (ActiveWeaponActor) 
+			if (ActiveWeaponActor)
 			{
 				IIWeapon::Execute_Trigger(ActiveWeaponActor, Value);
 			}
-			else 
+			else
 			{
-				if (GunnerWeaponChangedDelegate.IsBound()) 
+				if (GunnerWeaponChangedDelegate.IsBound())
 				{
 					ActiveWeaponActor = GunnerWeaponChangedDelegate.Execute(0);
-					if (ActiveWeaponActor) 
-					{ 
-						IIWeapon::Execute_Trigger(ActiveWeaponActor, Value); 
+					if (ActiveWeaponActor)
+					{
+						IIWeapon::Execute_Trigger(ActiveWeaponActor, Value);
 					}
 				}
 			}
@@ -347,7 +388,7 @@ void ABaseUnit::HandleTriggerAction(bool Value)
 	}
 	else
 	{
-		if (ActiveWeaponActor) 
+		if (ActiveWeaponActor)
 		{
 			if (!UsingADS)
 			{
@@ -387,7 +428,7 @@ void ABaseUnit::Server_InteractionAction_Implementation()
 
 void ABaseUnit::PrimarySelectionAction_Implementation()
 {
-	if (MovementState == EALSMovementState::Stationary) 
+	if (MovementState == EALSMovementState::Stationary)
 	{
 		HandleStationaryWeaponSwitch(0);
 	}
@@ -397,10 +438,10 @@ void ABaseUnit::PrimarySelectionAction_Implementation()
 		{
 			HandleWeaponSwitch(EWeaponSocketEnum::PRIMARY);
 		}
-		
+
 	}
 }
-void ABaseUnit::SecondarySelectionAction_Implementation() 
+void ABaseUnit::SecondarySelectionAction_Implementation()
 {
 	if (MovementState == EALSMovementState::Stationary)
 	{
@@ -411,10 +452,10 @@ void ABaseUnit::SecondarySelectionAction_Implementation()
 		if (WeaponArray[1] && !IIWeapon::Execute_IsReloading(ActiveWeaponActor))
 		{
 			HandleWeaponSwitch(EWeaponSocketEnum::SECONDARY);
-		}	
+		}
 	}
 }
-void ABaseUnit::ThirdSelectionAction_Implementation() 
+void ABaseUnit::ThirdSelectionAction_Implementation()
 {
 	if (MovementState == EALSMovementState::Stationary)
 	{
@@ -429,7 +470,7 @@ void ABaseUnit::ThirdSelectionAction_Implementation()
 	}
 }
 
-void ABaseUnit::HandleStationaryWeaponSwitch(int WeaponId) 
+void ABaseUnit::HandleStationaryWeaponSwitch(int WeaponId)
 {
 	if (GunnerWeaponChangedDelegate.IsBound() && StationaryRole == EALSStationaryRole::Gunner)
 	{
@@ -437,7 +478,7 @@ void ABaseUnit::HandleStationaryWeaponSwitch(int WeaponId)
 		if (NewActiveWeapon)
 		{
 			ActiveWeaponActor = NewActiveWeapon;
-			if (IIWeapon::Execute_GetWeaponSocket(ActiveWeaponActor) != EWeaponSocketEnum::SPECIAL) 
+			if (IIWeapon::Execute_GetWeaponSocket(ActiveWeaponActor) != EWeaponSocketEnum::SPECIAL)
 			{
 				FVector CalibationVector = IIWeapon::Execute_GetCalibrationVector(ActiveWeaponActor, 500.00f);
 				IVehicle::Execute_CalibrateADS(ControlledInputInterceptor, CalibationVector);
@@ -543,14 +584,14 @@ void ABaseUnit::Multicast_WeaponArrayUpdate_Implementation(ABaseWeapon* Weapon, 
 void ABaseUnit::SocketWeapon(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum)
 {
 	FName SelectedSocketName;
-	switch (SocketEnum) 
+	switch (SocketEnum)
 	{
 	case EWeaponSocketEnum::PRIMARY:
 	{
 		SelectedSocketName = PrimaryWeaponSocketName;
 		break;
-	}	
-	case EWeaponSocketEnum::SECONDARY: 
+	}
+	case EWeaponSocketEnum::SECONDARY:
 	{
 		SelectedSocketName = SecondaryWeaponSocketName;
 		break;
@@ -561,7 +602,7 @@ void ABaseUnit::SocketWeapon(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum)
 		break;
 	}
 	}
-	if (Weapon) 
+	if (Weapon)
 	{
 		Weapon->AttachToComponent(GetMesh(),
 			FAttachmentTransformRules(EAttachmentRule::SnapToTarget, EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, true),
@@ -664,8 +705,8 @@ void ABaseUnit::HandleHPRegen()
 		RegenRatePerSecond = 0.01f; // 1%
 	}
 
-	// Heal amount per tick (0.2 seconds)
-	float RegenAmountPerTick = RegenRatePerSecond * MaxHP * 0.2f;
+	// Heal amount per tick (0.2 seconds) -> -1 because we are "dealing" negative damage
+	float RegenAmountPerTick = -1 * RegenRatePerSecond * MaxHP * 0.2f;
 
 	ServerUpdateHealth(RegenAmountPerTick);
 
@@ -686,7 +727,7 @@ float ABaseUnit::GetArmourParamValueForBodyPart_Implementation(EBodyPart BodyPar
 	{
 		return ArmourMap[BodyPart];
 	}
-	else 
+	else
 	{
 		return 1.0f;
 	}
@@ -695,7 +736,7 @@ float ABaseUnit::GetArmourParamValueForBodyPart_Implementation(EBodyPart BodyPar
 void ABaseUnit::ServerUpdateHealth_Implementation(float Value)
 {
 	// Server-side: Update the Health value
-	HP += Value;
+	HP -= Value;
 
 	if (!IsAlive_Implementation())
 	{
@@ -703,7 +744,7 @@ void ABaseUnit::ServerUpdateHealth_Implementation(float Value)
 		NotifyDeath();
 	}
 
-	if (HP > GetMaxHP()) 
+	if (HP > GetMaxHP())
 	{
 		HP = GetMaxHP();
 	}
@@ -715,7 +756,7 @@ bool ABaseUnit::ServerUpdateHealth_Validate(float Value)
 	return true;
 }
 
-void ABaseUnit::NotifyDeath_Implementation()
+void ABaseUnit::NotifyDeath()
 {
 	//enable ragdoll
 	ReplicatedRagdollStart();
@@ -724,8 +765,8 @@ void ABaseUnit::NotifyDeath_Implementation()
 	GetCharacterMovement()->DisableMovement();
 
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	
-	AimAction_Implementation(false);
+
+	//AimAction_Implementation(false);
 	NotifyClearTargets();
 	for (ABaseFormation* EnemyFormation : SeenByFormation)
 	{
@@ -760,6 +801,21 @@ void ABaseUnit::NotifyDeath_Implementation()
 		}
 	}
 
+	HandleWeaponStatesOnPlayerDepossessed();
+
+	BP_NotifyDeath();
+	GetWorldTimerManager().SetTimer(UnitDiedTimer, this,
+		&ABaseUnit::HideActorOnDeath, 3.0f, false);
+}
+
+
+void ABaseUnit::HandleWeaponStatesOnPlayerDepossessed()
+{
+	RecoilAnimationComponent->Deactivate();
+	HipFire = false;
+	UsingADS = false;
+	TriggerActive = false;
+	SetRotationMode(EALSRotationMode::LookingDirection);
 	for (const auto& KeyValue : WeaponArray)
 	{
 		if (KeyValue)
@@ -767,10 +823,6 @@ void ABaseUnit::NotifyDeath_Implementation()
 			IIWeapon::Execute_Trigger(KeyValue, false);
 		}
 	}
-
-	//destroy weapons and actor
-	GetWorldTimerManager().SetTimer(UnitDiedTimer, this,
-	&ABaseUnit::HideActorOnDeath, 3.0f, false);
 }
 
 void ABaseUnit::MulticastNotifyRagdoll_Implementation(bool bRagdoll)
@@ -853,11 +905,13 @@ void ABaseUnit::RespawnUnit_Implementation(FTransform RespawnTransform)
 			BackupAIController->Activate();
 		}
 	}
-	
+
 	SetActorTransform(RespawnTransform);
-	GetWorldTimerManager().SetTimer(UnitDiedTimer, [this]() 
+	GetWorldTimerManager().SetTimer(UnitDiedTimer, [this]()
 		{
 			SetActorHiddenInGame(false);
+			HeadComponent->CastShadow = true;
+			BP_RespawnUnit();
 			for (ABaseWeapon* Weapon : WeaponArray)
 			{
 				if (Weapon)
@@ -871,7 +925,7 @@ void ABaseUnit::RespawnUnit_Implementation(FTransform RespawnTransform)
 				IIPlayer::Execute_PossessCharacter(PlayerPtr, this);
 			}
 		}, 2.0f, false);
-	
+
 }
 
 UAISense_Sight::EVisibilityResult ABaseUnit::CanBeSeenFrom(const FCanBeSeenFromContext& Context,
@@ -895,7 +949,7 @@ UAISense_Sight::EVisibilityResult ABaseUnit::CanBeSeenFrom(const FCanBeSeenFromC
 	QueryParams.AddIgnoredActor(Context.IgnoreActor);
 	bool bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Context.ObserverLocation, ChestLoc,
 		ECollisionChannel::ECC_Visibility, QueryParams);
-	if(bHit && HitResult.GetActor() == this)
+	if (bHit && HitResult.GetActor() == this)
 	{
 		VisibleBodyParts.Add(ETargetBodyPart::CHEST);
 		Flags6bit |= 1 << 0;
@@ -959,13 +1013,14 @@ UAISense_Sight::EVisibilityResult ABaseUnit::CanBeSeenFrom(const FCanBeSeenFromC
 		OutSightStrength = Result;
 		return UAISense_Sight::EVisibilityResult::Visible;
 	}
-	
+
 	return UAISense_Sight::EVisibilityResult::NotVisible;
 }
 
 void ABaseUnit::HideActorOnDeath()
 {
 	SetActorHiddenInGame(true);
+	HeadComponent->CastShadow = false;
 	for (ABaseWeapon* Weapon : WeaponArray)
 	{
 		if (Weapon)
@@ -979,7 +1034,7 @@ void ABaseUnit::HideActorOnDeath()
 //END DAMAGE
 
 // SELECTABLE INTERFACE
-void ABaseUnit::SetSelectionCircle_Implementation(bool Visible) 
+void ABaseUnit::SetSelectionCircle_Implementation(bool Visible)
 {
 }
 
@@ -988,7 +1043,7 @@ bool ABaseUnit::IsAlive_Implementation()
 	return HP > 0;
 }
 
-void ABaseUnit::SetOwningPlayer_Implementation(AActor* InPlayer) 
+void ABaseUnit::SetOwningPlayer_Implementation(AActor* InPlayer)
 {
 	PlayerPtr = InPlayer;
 }
@@ -1008,7 +1063,7 @@ int32 ABaseUnit::GetTeamIndex_Implementation()
 	return TeamIndex;
 }
 
-void ABaseUnit::SetInstanceIndex_Implementation(int32 Index) 
+void ABaseUnit::SetInstanceIndex_Implementation(int32 Index)
 {
 	SelectionCircleIndex = Index;
 }
@@ -1030,7 +1085,7 @@ FVector ABaseUnit::GetSelectionCircleLocation_Implementation()
 	return TargetLocation;
 }
 
-int ABaseUnit::GetUnitType_Implementation() 
+int ABaseUnit::GetUnitType_Implementation()
 {
 	return 0;
 }
@@ -1068,74 +1123,74 @@ void ABaseUnit::GetUnitCombatDataStruct_Implementation(FUnitCombatDataStruct& Co
 //END ARMED UNIT INTERFACE
 
 //ITARGETABBLE INTERAFACE
- FVector ABaseUnit::GetHeadLocation_Implementation() 
- {
-	 return GetMesh()->GetBoneLocation(FName("head"), EBoneSpaces::WorldSpace);
- }
+FVector ABaseUnit::GetHeadLocation_Implementation()
+{
+	return GetMesh()->GetBoneLocation(FName("head"), EBoneSpaces::WorldSpace);
+}
 
-  FVector ABaseUnit::GetChestLocation_Implementation() 
-  {
-	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
-  }
+FVector ABaseUnit::GetChestLocation_Implementation()
+{
+	return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+}
 
-  FVector ABaseUnit::GetLeftArmLocation_Implementation()
-  {
-	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
-  }
+FVector ABaseUnit::GetLeftArmLocation_Implementation()
+{
+	return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+}
 
-  FVector ABaseUnit::GetRightArmLocation_Implementation()
-  {
-	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
-  }
+FVector ABaseUnit::GetRightArmLocation_Implementation()
+{
+	return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+}
 
-  FVector ABaseUnit::GetLeftLegLocation_Implementation()
-  {
-	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
-  }
+FVector ABaseUnit::GetLeftLegLocation_Implementation()
+{
+	return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+}
 
-  FVector ABaseUnit::GetRightLegLocation_Implementation()
-  {
-	  return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
-  }
+FVector ABaseUnit::GetRightLegLocation_Implementation()
+{
+	return GetMesh()->GetBoneLocation(FName("spine_03"), EBoneSpaces::WorldSpace);
+}
 
-  FVector ABaseUnit::GetWeaponLocation_Implementation() 
-  {
-	  if (ActiveWeaponActor)
-	  {
-		  return ActiveWeaponActor->GetActorLocation();
-	  }
-	  else 
-	  {
-		  return FVector::ZeroVector;
-	  }
-  }
+FVector ABaseUnit::GetWeaponLocation_Implementation()
+{
+	if (ActiveWeaponActor)
+	{
+		return ActiveWeaponActor->GetActorLocation();
+	}
+	else
+	{
+		return FVector::ZeroVector;
+	}
+}
 
-  TArray<AActor*> ABaseUnit::IsTargetedBy_Implementation() 
-  {
-	  return TargetingAtActorArray;
-  }
+TArray<AActor*> ABaseUnit::IsTargetedBy_Implementation()
+{
+	return TargetingAtActorArray;
+}
 
-  void ABaseUnit::SetIsTargetedBy_Implementation(AActor* Actor, bool IsTargeted) 
-  {
-	  if (IsTargeted) 
-	  {
-		  TargetingAtActorArray.AddUnique(Actor);
-	  }
-	  else
-	  {
-		  TargetingAtActorArray.Remove(Actor);
-	  }
-  }
+void ABaseUnit::SetIsTargetedBy_Implementation(AActor* Actor, bool IsTargeted)
+{
+	if (IsTargeted)
+	{
+		TargetingAtActorArray.AddUnique(Actor);
+	}
+	else
+	{
+		TargetingAtActorArray.Remove(Actor);
+	}
+}
 
-  void ABaseUnit::SetIsSeenBy_Implementation(ABaseFormation* Formation, bool IsSeen)
-  {
-	  if (IsSeen)
-	  {
-		  SeenByFormation.AddUnique(Formation);
-	  }
-	  else
-	  {
-		  SeenByFormation.Remove(Formation);
-	  }
-  }
- //END ITARGETABBLE INTERAFCE
+void ABaseUnit::SetIsSeenBy_Implementation(ABaseFormation* Formation, bool IsSeen)
+{
+	if (IsSeen)
+	{
+		SeenByFormation.AddUnique(Formation);
+	}
+	else
+	{
+		SeenByFormation.Remove(Formation);
+	}
+}
+//END ITARGETABBLE INTERAFCE

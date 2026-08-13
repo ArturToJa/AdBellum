@@ -251,7 +251,7 @@ void AAdBellumPlayerController::TriggerAction(const FInputActionValue& Value)
 		{
 			IsSelectingOrder = false;
 			FVector MouseLocation = GetMousePositionInWorld();
-			Server_TriggerAction(MouseLocation);
+			//Server_TriggerAction(MouseLocation);
 		}
 	}
 }

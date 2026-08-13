@@ -123,7 +123,7 @@ void ABaseAmmo::DealHumanDamage(FVector IncomingVelocity, EBodyPart BodyPart, AA
 	}
 
 
-	float Damage = (-1 * CalculateEnergy(IncomingVelocity) * BodyPartMultiplier * ArmourMultiplier);
+	float Damage = (CalculateEnergy(IncomingVelocity) * BodyPartMultiplier * ArmourMultiplier);
 	//PrintDebugInfo(BodyPart, BodyPartMultiplier, ArmourMultiplier, IncomingVelocity);
 	UGameplayStatics::ApplyDamage(DamagedActor, Damage, GetInstigatorController(), GetOwner()->GetOwner(), DamageTypeClass);
 }
