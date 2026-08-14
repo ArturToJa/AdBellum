@@ -1,0 +1,449 @@
+Ad Bellum — LLM Context
+1. Project Overview
+
+Name: Undecided
+Engine: Unreal Engine 5.7.4
+Platform: PC initially; other platforms possible later
+Genre: FPS + RTS / tactical wargame
+Multiplayer: Up to 8 players, server authoritative
+Game type: Match-based warfare; no story campaign currently planned
+Setting: Modern warfare, usually NATO vs Russia
+
+Main inspirations:
+
+Arma
+Combat Mission
+Wargame
+Core concept
+
+The player commands military formations from an RTS perspective and can possess an individual unit to play in first person.
+
+Core loop:
+
+RTS command → Units execute orders → Possess unit → FPS combat
+       ↑                                      │
+       └──────────── Return to RTS ───────────┘
+2. Player / RTS
+
+The player starts the match in RTS mode.
+
+Unit selection
+Drag-selection box
+Implemented in RTS_HUD
+Uses GetActorsInSelectionRectangle()
+Selecting a unit effectively selects its entire Formation
+Possession
+Select Formation
+Press B → possess a random BaseUnit from that Formation
+Press B again → return to RTS mode
+Uses Unreal Possess()
+RTS camera is disabled while possessing a unit
+3. Main Gameplay Architecture
+Player
+  │
+  ▼
+BaseFormation
+  │
+  ▼
+BaseUnit
+  │
+  ▼
+UnitAIController
+
+The player normally commands Formations, not individual units.
+
+A Formation is a logical grouping of units. It has no physical representation and does not move itself. It delegates actions/movement to its units.
+
+4. Main Classes
+System	Class
+Unit	BaseUnit
+Formation	BaseFormation
+Unit AI	UnitAIController
+Formation AI	FormationAIController
+Player	AdBellumPlayerController
+Game mode	AdBellumGameMode
+Game instance	AdBellumGameInstance
+Save system	SaveSystem
+Orders	UOrdersManager / OrdersManagerComponent
+Base order	BaseOrder
+RTS HUD	RTS_HUD
+
+Approximately 170 C++ classes/files currently exist.
+
+5. Formations
+
+BaseFormation derives from APawn.
+
+A Formation represents an arbitrary collection of units.
+
+Properties:
+
+Can contain different unit types
+Each BaseUnit belongs to only one Formation
+Units are stored in an array inside BaseFormation
+Formations are created by AdBellumGameMode
+Units are spawned when their Formation is created
+Units cannot currently be added/removed during gameplay
+Formation splitting is planned
+
+A Formation has:
+
+FormationAIController
+OrdersManagerComponent
+
+The Formation has no physical world representation.
+
+6. Units
+
+There is currently one BaseUnit class for all unit types.
+
+BaseUnit
+  └── AALSCharacter
+        └── ACharacter
+
+Every BaseUnit currently has its own AIController.
+
+All current units are full Unreal Characters using ALS.
+
+Current scale is approximately 20 units, but the goal is to support as many units as possible.
+
+7. AI Architecture
+BaseFormation
+    │
+    ▼
+FormationAIController
+    │
+    └── distributes goals/orders
+            │
+            ▼
+        BaseUnit
+            │
+            ▼
+     UnitAIController
+            │
+       ┌────┴────┐
+       ▼         ▼
+ AI Perception  Behavior Tree
+       │         │
+       └────┬────┘
+            ▼
+     OrdersManager
+Unit AI
+
+Currently uses:
+
+AI Perception
+Behavior Trees
+EQS
+Unreal AI navigation
+
+UnitAIController is primarily Blueprint.
+
+It mainly handles:
+
+Perception
+Finding targets
+Determining friendly/enemy targets
+AI combat target selection
+
+The Behavior Tree can read the current order through an interface.
+
+The project is moving from Behavior Trees toward State Tree.
+
+Formation AI
+
+Formation AI is currently very early.
+
+It currently uses:
+
+FormationAIController
+Behavior Tree
+Blackboard
+
+It is planned to move to State Tree.
+
+There are currently no finalized Formation AI states.
+
+The intended autonomous default behavior is a HoldPosition state where the formation takes defensive positions and searches for enemies.
+
+8. Orders System
+
+Both BaseUnit and BaseFormation have an OrdersManagerComponent.
+
+Orders are regular C++ classes, not UObjects or Actors.
+
+They are owned using:
+
+TUniquePtr<BaseOrder>
+
+BaseOrder contains:
+
+AAIController* owningController;
+UObject* targetUnit;
+FVector targetPosition;
+bool bIsAggresive;
+TUniquePtr<BaseOrder> subOrder;
+
+Orders support:
+
+Current order
+Order queue
+Immediate orders
+Nested sub-orders
+AI-generated orders
+Order completion callbacks
+Current orders
+AttackUnitOrder
+EnterOrder
+FollowUnitOrder
+HoldPositionOrder
+InteractOrder
+MoveLocationOrder
+OccupyAreaOfInterestOrder
+PatrolOrder
+ReloadOrder
+StopOrder
+TakeCoverOrder
+TrainingOrder
+Order execution
+
+An order can create a sub-order without replacing the main goal.
+
+Example:
+
+AttackUnitOrder
+    └── ReloadOrder
+
+or:
+
+MoveLocationOrder
+    └── TakeCoverOrder
+
+After the sub-order completes, the main order continues.
+
+The order queue automatically activates the next order when the current order finishes.
+
+AI can create both orders and sub-orders.
+
+9. Order Philosophy
+
+Orders represent goals, while AI decides how to accomplish those goals.
+
+For example:
+
+Move to Location
+
+does not necessarily mean:
+
+Walk directly there regardless of danger.
+
+The intended system supports two concepts:
+
+Hard / Direct Order
+
+The unit should prioritize the player's command and ignore environmental distractions.
+
+Example:
+
+Move to this location regardless of enemies.
+
+Soft Order
+
+The unit should pursue the goal while reacting to its surroundings and maximizing survivability.
+
+Example:
+
+Move to this location, but take cover or engage enemies if necessary.
+
+The exact implementation of Hard vs Soft orders is not finalized.
+
+bIsAggresive currently exists, but should not automatically be treated as the Hard/Soft system.
+
+10. Formation → Unit Commands
+
+Players command Formations.
+
+Formation AI distributes the resulting goals/orders to BaseUnits.
+
+Currently, a Formation's MoveToLocation command is ultimately sent directly to the units' OrdersManagerComponent.
+
+The Formation itself does not navigate.
+
+Formation-level tactical behavior is still under development.
+
+AttackUnitOrder at the Formation level is not yet implemented.
+
+11. Current Unit AI Capabilities
+Capability	Status
+Navigation	Implemented
+Enemy perception	Implemented
+Aiming	Implemented
+Shooting	Implemented
+Take cover	Implemented, needs testing
+Search for cover	Implemented, needs testing
+Patrol	Implemented
+Follow squad leader	Planned
+Formation movement	Planned
+React to being shot	Needs testing
+Retreat	Planned
+Suppression	Planned
+Vehicles	Implemented, currently on hold
+12. Combat
+
+Weapons currently include:
+
+Pistols
+Assault rifles
+Snipers
+
+Implemented:
+
+Health
+Damage
+Armor
+Hit locations
+Death
+
+Not implemented:
+
+Downed/wounded state
+Medical
+Revival
+Ballistics
+
+Uses EasyBallistics.
+
+Bullets currently physically travel through the world.
+
+A cheaper simulated ballistic system may replace this in the future for performance.
+
+13. Vehicles
+
+Vehicles are implemented but currently on hold.
+
+AI vehicle functionality exists.
+
+Relevant orders include:
+
+EnterOrder
+InteractOrder
+14. Multiplayer
+Server authoritative
+Replication implemented
+Up to 8 players
+Multiple players can command their own armies/formations
+Intended to support:
+PvE
+PvP
+PvPvE
+15. Plugins
+
+Currently used:
+
+ALS
+EasyBallistics
+SmartModularUI
+AdvancedSessions
+RecoilAnimation
+DragonIK
+16. Unreal Systems
+Used
+Enhanced Input
+Behavior Trees
+EQS
+AI Perception
+Data Assets
+Data Tables
+Replication
+Niagara, currently limited
+Not currently used
+Gameplay Ability System
+Mass Entity
+World Partition
+MetaSounds
+Planned / Under consideration
+State Tree
+Mass Entity
+World Partition
+More Niagara
+17. Major Technical Problem
+
+The biggest current problem is unit scalability.
+
+Current units are full ALS Characters with individual:
+
+Character/animation systems
+AIController
+AI logic
+Perception
+Navigation
+Combat
+Replication
+
+This makes large numbers of units difficult to support with stable performance.
+
+The developer is considering moving large-scale unit simulation toward Mass Entity, but no Mass implementation has started yet.
+
+The target is to determine the practical maximum through testing rather than committing to a fixed unit count.
+
+18. Development Status
+Working
+RTS mode
+Unit/Formation selection
+FPS possession
+Formation spawning
+Unit spawning
+Unit AI
+Basic Formation AI
+Navigation
+Perception
+Combat
+Orders
+Queued orders
+Nested sub-orders
+Multiplayer/replication
+Vehicles
+Needs refinement/testing
+Cover AI
+Formation AI
+Reaction to being shot
+Large unit counts
+Planned
+State Tree migration
+Formation movement
+Follow squad leader
+Retreat
+Suppression
+Better Formation AI
+Formation casualty handling
+Formation splitting
+Mass Entity investigation
+Potential World Partition
+Not implemented
+Wounded/downed system
+Medical/revival
+GAS
+Mass Entity
+On hold
+Vehicle development
+19. Important Rules for AI Assistants
+
+When helping with this project:
+
+Prefer C++ for core systems.
+Do not unnecessarily move systems into Blueprint.
+Maintain server authority and replication.
+Do not invent class names.
+Ask for code when implementation details are unknown.
+Clearly distinguish implemented systems from planned systems.
+Treat BaseFormation as a logical entity, not a physical group.
+Treat BaseUnit as the physical battlefield entity.
+Remember that each BaseUnit currently has its own AIController.
+Remember that Formation AI and Unit AI are separate systems.
+Orders represent goals; AI determines how to achieve them.
+AI can create nested sub-orders.
+Hard/Soft orders are planned concepts and are not fully implemented.
+Do not assume bIsAggresive is equivalent to Hard/Soft.
+Consider scalability whenever designing per-unit systems.
+Mass Entity is only a future possibility, not an existing system.
+State Tree migration is planned; current Behavior Tree architecture may change.
