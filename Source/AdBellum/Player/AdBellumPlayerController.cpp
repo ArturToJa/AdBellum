@@ -152,34 +152,65 @@ void AAdBellumPlayerController::Client_AcknowledgePossession_Implementation(APaw
 	{
 		SpawnRTSHud();
 	}
+
 	if (CharacterHUD == nullptr)
 	{
 		SpawnCharacterHud();
 	}
+
 	if (NewPawn == RTSCameraPawn)
 	{
 		MyHUD = RTSHUD;
+
 		if (CharacterHUD)
 		{
 			CharacterHUD->HUDClose();
 		}
+
 		RTSHUD->HUDOpen(NewPawn);
+
+		// RTS:
+		// - Cursor visible
+		// - UMG can receive mouse input
+		// - World/PlayerController can still receive input
+		//   when no interactive widget consumes it.
 		SetShowMouseCursor(true);
+
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+
+		SetInputMode(InputMode);
+
+		IsSelectingOrder = false;
 	}
 	else if (ABaseUnit* ALSPawn = Cast<ABaseUnit>(NewPawn))
 	{
 		MyHUD = CharacterHUD;
-		if(RTSHUD)
+
+		if (RTSHUD)
 		{
 			RTSHUD->HUDClose();
 		}
+
 		CharacterHUD->HUDOpen(NewPawn);
+
+		// FPS:
+		// - Hide cursor
+		// - Capture game input
 		SetShowMouseCursor(false);
+
+		FInputModeGameOnly InputMode;
+		SetInputMode(InputMode);
+
+		SetIgnoreLookInput(false);
+		SetIgnoreMoveInput(false);
+
 		IsSelectingOrder = false;
 	}
 	else
 	{
-		// error, unknown Pawn being possessed
+		// Unknown pawn
 	}
 }
 

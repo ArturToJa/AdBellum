@@ -178,7 +178,10 @@ void ABaseFormation::PerformOrder(AActor* TargetUnit, FVector TargetPosition)
 {
 	for (APawn* Unit : ActorsInFormation)
 	{
-		PerformOrder<T>(Unit, TargetUnit, TargetPosition);
+		if (IITargetable::Execute_IsAlive(Unit))
+		{
+			PerformOrder<T>(Unit, TargetUnit, TargetPosition);
+		}
 	}
 }
 

@@ -168,6 +168,15 @@ void AALSPlayerController::CameraUpAction(const FInputActionValue& Value)
 	}
 	if (PossessedCharacter)
 	{
+		//float LookAxis = Value.GetMagnitude();
+
+		//UE_LOG(
+		//	LogTemp,
+		//	Warning,
+		//	TEXT("LOOK INPUT: Camera UP Action=%f "),
+		//	LookAxis
+		//);
+		
 		IALSInputInterface::Execute_CameraUpAction(PossessedCharacter, Value.GetMagnitude());
 		//PossessedCharacter->CameraUpAction(Value.GetMagnitude());
 	}
@@ -181,6 +190,15 @@ void AALSPlayerController::CameraRightAction(const FInputActionValue& Value)
 	}
 	if (PossessedCharacter)
 	{
+		//float LookAxis = Value.GetMagnitude();
+
+		//UE_LOG(
+		//	LogTemp,
+		//	Warning,
+		//	TEXT("LOOK INPUT: Camera RIGHT Action=%f "),
+		//	LookAxis
+		//);
+
 		IALSInputInterface::Execute_CameraRightAction(PossessedCharacter, Value.GetMagnitude());
 		//PossessedCharacter->CameraRightAction(Value.GetMagnitude());
 	}

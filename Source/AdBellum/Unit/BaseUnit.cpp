@@ -813,9 +813,9 @@ void ABaseUnit::HandleWeaponStatesOnPlayerDepossessed()
 {
 	RecoilAnimationComponent->Deactivate();
 	HipFire = false;
-	UsingADS = false;
 	TriggerActive = false;
-	SetRotationMode(EALSRotationMode::LookingDirection);
+	AimAction_Implementation(false);
+	AimActionCompleted_Implementation();
 	for (const auto& KeyValue : WeaponArray)
 	{
 		if (KeyValue)
