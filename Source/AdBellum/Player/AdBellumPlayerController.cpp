@@ -420,8 +420,17 @@ void AAdBellumPlayerController::SetSelectedFormations_Implementation(const TArra
 	{
 		SelectionFormation = SelectedFormations[0];
 	}
+	else 
+	{
+		SelectionFormation = nullptr;
+	}
 	//SelectedPawns = InPawns;
 }
+
+// void AAdBellumPlayerController::SetSelectedPawn_Implementation(APawn* InSelectedPawn)
+// {
+// 	SelectionPawn = InSelectedPawn;
+// }
 
 
 void AAdBellumPlayerController::NotifyHUDRole_Implementation(EALSStationaryRole StationaryRole, AActor* ControlledActor)

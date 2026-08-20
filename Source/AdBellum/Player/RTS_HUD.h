@@ -27,6 +27,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<ABaseFormation*> SelectedFormations;
 
+	APawn* SelectedPawn;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	URTSFormationUnitTableWidget* FormationUnitTableWidget;
@@ -60,4 +61,6 @@ public:
 	void SetCurrentSelection(bool Visible);
 
 	void CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsArray);
+
+	bool IsActorValidForSelection(APawn* Actor);
 };

@@ -118,6 +118,10 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void SetSelectedFormations(const TArray<ABaseFormation*>& SelectedFormations);
+
+	// UFUNCTION(Server, Reliable)
+	// void SetSelectedPawn(APawn* InSelectedPawn);
+
 	template<OrderEnum Type>
 	void PerformOrder(AActor* TargetUnit, FVector TargetPosition);
 	void RightMouseButtonPressed(bool Enabled);
@@ -173,4 +177,6 @@ private:
 	OrderEnum SelectingOrder;
 	UPROPERTY(Replicated)
 	TObjectPtr<ABaseFormation> SelectionFormation;
+	// UPROPERTY(Replicated)
+	// APawn* SelectionPawn;
 };

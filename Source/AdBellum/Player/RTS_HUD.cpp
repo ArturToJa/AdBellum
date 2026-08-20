@@ -53,7 +53,13 @@ void ARTS_HUD::SelectionModeEnd_Implementation()
 	if (PC)
 	{
 		PC->SetSelectedFormations(SelectedFormations);
+		// if(SelectedPawn)
+		// {
+		// 	PC->SetSelectedPawn(SelectedPawn);
+		// }
+		//add selected unit to variable
 		// Set selection of formations in the URTSFormationUnitTableWidget
+		//maybe add selected pawn to the widget as well
         UpdateWidgetSelection(SelectedFormations);
 	}
 }
@@ -89,20 +95,42 @@ void ARTS_HUD::CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsA
 {
 	SetCurrentSelection(false);
 	SelectedFormations.Empty();
+	if (SelectedFormationsArray.IsEmpty()) return;
 	int PlayerTeam = IIPlayer::Execute_GetTeamIndex(GetOwner());
 	AAdBellumGameState* GameState = GetWorld()->GetGameState<AAdBellumGameState>();
-	for (APawn* Actor : SelectedFormationsArray)
+
+	if (SelectedFormationsArray.Num() == 1)
 	{
-		if (Actor->GetClass()->ImplementsInterface(USelectable::StaticClass()))
+		SelectedPawn = IsActorValidForSelection(SelectedFormationsArray[0]) ? SelectedFormationsArray[0] : nullptr;
+		SelectedFormations.AddUnique(IFormable::Execute_GetFormation(SelectedPawn));
+		GameState->SetSelectionCircle(true, SelectedPawn);
+	}
+	else
+	{
+		SelectedPawn = nullptr;
+		for (APawn* Actor : SelectedFormationsArray)
 		{
-			if (IOwnershipInterface::Execute_GetOwningPlayer(Actor) == GetOwner()) // zmienić warunek na !IsEnemyUnit z AdBellumGameInstance
+			if (IsActorValidForSelection(Actor))
 			{
-				if (ITargetable::Execute_IsAlive(Actor))
-				{
-					SelectedFormations.AddUnique(IFormable::Execute_GetFormation(Actor));
-					GameState->SetSelectionCircle(true, Actor);
-				}
+				SelectedFormations.AddUnique(IFormable::Execute_GetFormation(Actor));
+				//add selected actor
+				GameState->SetSelectionCircle(true, Actor);
 			}
 		}
 	}
+}
+
+bool ARTS_HUD::IsActorValidForSelection(APawn* Actor)
+{
+	if (Actor->GetClass()->ImplementsInterface(USelectable::StaticClass()))
+	{
+		if (IOwnershipInterface::Execute_GetOwningPlayer(Actor) == GetOwner()) // zmienić warunek na !IsEnemyUnit z AdBellumGameInstance
+		{
+			if (ITargetable::Execute_IsAlive(Actor))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
