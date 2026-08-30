@@ -44,6 +44,11 @@ void AALSPlayerCameraManager::OnPossess(APawn* NewPawn)
 	check(NewPawn);
 	if (AALSBaseCharacter* NewCharacter = Cast<AALSBaseCharacter>(NewPawn))
 	{
+		if (ControlledCharacter != nullptr)
+		{
+			ControlledCharacter->SetCameraBehavior(nullptr);
+		}
+		
 		ControlledCharacter = NewCharacter;
 
 		// Update references in the Camera Behavior AnimBP.
@@ -67,6 +72,15 @@ void AALSPlayerCameraManager::OnPossess(APawn* NewPawn)
 
 		ALSDebugComponent = ControlledCharacter->FindComponentByClass<UALSDebugComponent>();
 		castedNewCharacter = Cast<AALSCharacter>(ControlledCharacter);
+	}
+	else
+	{
+		if (ControlledCharacter != nullptr)
+		{
+			ControlledCharacter->SetCameraBehavior(nullptr);
+			ControlledCharacter = nullptr;
+			castedNewCharacter = nullptr;
+		}
 	}
 }
 

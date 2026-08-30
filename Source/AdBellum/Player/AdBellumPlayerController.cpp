@@ -35,7 +35,6 @@ void AAdBellumPlayerController::BeginPlay()
 		SpawnInfo.Owner = this;
 		SpawnInfo.Instigator = GetInstigator();
 		SpawnInfo.ObjectFlags |= RF_Transient;	// We never want to save default player pawns into a map
-		//SelectionFormation = GetWorld()->SpawnActor<ABaseFormation>(SpawnInfo);
 	}
 }
 
@@ -129,6 +128,7 @@ void AAdBellumPlayerController::GetLifetimeReplicatedProps(TArray< FLifetimeProp
 	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, RTSCameraPawn, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, SelectingOrder, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, SelectionFormation, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, SelectionPawn, COND_OwnerOnly);
 }
 
 void AAdBellumPlayerController::OnPossess(APawn* NewPawn)
@@ -226,8 +226,12 @@ void AAdBellumPlayerController::ServerPossessAction_Implementation()
 {
 	if (PossessedCharacter == RTSCameraPawn)
 	{
-		//if (!SelectedPawns.IsEmpty())
-		if (SelectionFormation)
+		if (SelectionPawn)
+		{
+			ClientClearSelection();
+			Possess(SelectionPawn);
+		}
+		else if (SelectionFormation)
 		{
 			if (APawn* UnitToPossess = SelectionFormation->GetUnitForPossesion())
 			{
@@ -424,13 +428,12 @@ void AAdBellumPlayerController::SetSelectedFormations_Implementation(const TArra
 	{
 		SelectionFormation = nullptr;
 	}
-	//SelectedPawns = InPawns;
 }
 
-// void AAdBellumPlayerController::SetSelectedPawn_Implementation(APawn* InSelectedPawn)
-// {
-// 	SelectionPawn = InSelectedPawn;
-// }
+void AAdBellumPlayerController::SetSelectedPawn_Implementation(APawn* InSelectedPawn)
+{
+	SelectionPawn = InSelectedPawn;
+}
 
 
 void AAdBellumPlayerController::NotifyHUDRole_Implementation(EALSStationaryRole StationaryRole, AActor* ControlledActor)

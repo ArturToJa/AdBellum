@@ -53,10 +53,10 @@ void ARTS_HUD::SelectionModeEnd_Implementation()
 	if (PC)
 	{
 		PC->SetSelectedFormations(SelectedFormations);
-		// if(SelectedPawn)
-		// {
-		// 	PC->SetSelectedPawn(SelectedPawn);
-		// }
+		 if(SelectedPawn)
+		 {
+		 	PC->SetSelectedPawn(SelectedPawn);
+		 }
 		//add selected unit to variable
 		// Set selection of formations in the URTSFormationUnitTableWidget
 		//maybe add selected pawn to the widget as well
@@ -112,6 +112,10 @@ void ARTS_HUD::CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsA
 		{
 			if (IsActorValidForSelection(Actor))
 			{
+				if(SelectedPawn == nullptr)
+				{
+					SelectedPawn = Actor;
+				}
 				SelectedFormations.AddUnique(IFormable::Execute_GetFormation(Actor));
 				//add selected actor
 				GameState->SetSelectionCircle(true, Actor);
