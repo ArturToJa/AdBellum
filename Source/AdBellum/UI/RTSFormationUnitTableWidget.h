@@ -7,7 +7,8 @@
 
 class UUniformGridPanel;
 class UScrollBox;
-class URTSMinimumDataCardWidget;
+class URTSUnitCardWidget;
+class URTSFormationCardWidget;
 class ABaseFormation;
 class ABaseUnit;
 
@@ -25,7 +26,9 @@ public:
 
     // Card widget class to instantiate
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTS|Layout")
-    TSubclassOf<URTSMinimumDataCardWidget> CardWidgetClass;
+    TSubclassOf<URTSUnitCardWidget> UnitCardWidgetClass;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RTS|Layout")
+    TSubclassOf<URTSFormationCardWidget> FormationCardWidgetClass;
 
     // Events
     UPROPERTY(BlueprintAssignable, Category = "RTS|Events")
@@ -38,14 +41,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "RTS|API")
     void InitializeWidget(const TArray<ABaseFormation*>& Formations);
 
-    UFUNCTION(BlueprintCallable, Category = "RTS|API")
-    void Refresh();
-
-    UFUNCTION(BlueprintPure, Category = "RTS|API")
-    ABaseFormation* GetSelectedFormation() const { return SelectedFormation.Get(); }
-
-    UFUNCTION(BlueprintPure, Category = "RTS|API")
-    ABaseUnit* GetSelectedUnit() const { return SelectedUnit.Get(); }
 
 protected:
     virtual void NativeConstruct() override;
@@ -57,24 +52,5 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UScrollBox* UnitScrollBox;
 
-private:
-    // References to formations provided in Initialize
-    TArray<TWeakObjectPtr<ABaseFormation>> FormationsArray;
 
-    // Currently selected objects
-    TWeakObjectPtr<ABaseFormation> SelectedFormation;
-    TWeakObjectPtr<ABaseUnit> SelectedUnit;
-
-    // Mapping from bound actor to created card widget for quick refresh
-    TMap<TWeakObjectPtr<UObject>, URTSMinimumDataCardWidget*> CardMap;
-
-    // rebuild helpers
-    void RebuildFormationCards();
-    void RebuildUnitCards();
-    void RefreshFormationCard(ABaseFormation* Formation);
-    void RefreshUnitCard(ABaseUnit* Unit);
-
-    // callbacks
-    UFUNCTION()
-    void OnCardClicked(UObject* BoundObject);
 };
