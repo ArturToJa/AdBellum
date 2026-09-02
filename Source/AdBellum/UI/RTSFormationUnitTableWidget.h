@@ -45,6 +45,9 @@ public:
 protected:
     virtual void NativeConstruct() override;
 
+    void OnFormationClicked(ABaseFormation* Formation, int Index);
+	void OnUnitClicked(ABaseUnit* Unit, int Index);
+
     // Bind these widget names in the UMG Blueprint
     UPROPERTY(meta = (BindWidget))
     UScrollBox* FormationScrollBox;
