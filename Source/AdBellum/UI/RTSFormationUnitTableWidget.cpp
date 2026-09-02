@@ -18,7 +18,7 @@ void URTSFormationUnitTableWidget::InitializeWidget(const TArray<ABaseFormation*
 		UWidget* Widget = FormationWidgets[i];
         if(URTSFormationCardWidget* CardWidget = Cast<URTSFormationCardWidget>(Widget))
         {
-			CardWidget->OnFormationCardClicked.BindRaw(this, &URTSFormationUnitTableWidget::OnFormationClicked);
+			CardWidget->OnFormationCardClicked.BindUObject(this, &URTSFormationUnitTableWidget::OnFormationClicked);
 		}
     }
     TArray<UWidget*> UnitWidgets = UnitScrollBox->GetAllChildren();
@@ -27,7 +27,7 @@ void URTSFormationUnitTableWidget::InitializeWidget(const TArray<ABaseFormation*
         UWidget* Widget = UnitWidgets[i];
         if (URTSUnitCardWidget* CardWidget = Cast<URTSUnitCardWidget>(Widget))
         {
-            CardWidget->OnUnitCardClicked.BindRaw(this, &URTSFormationUnitTableWidget::OnUnitClicked);
+            CardWidget->OnUnitCardClicked.BindUObject(this, &URTSFormationUnitTableWidget::OnUnitClicked);
         }
     }
 }

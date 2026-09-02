@@ -32,10 +32,10 @@ public:
 
     // Events
     UPROPERTY(BlueprintAssignable, Category = "RTS|Events")
-    FRTSFormationClicked OnFormationClicked;
+    FRTSFormationClicked OnFormationClickedDelegate;
 
     UPROPERTY(BlueprintAssignable, Category = "RTS|Events")
-    FRTSUnitClicked OnUnitClicked;
+    FRTSUnitClicked OnUnitClickedDelegate;
 
     // Initialize with formations (caller owns the array)
     UFUNCTION(BlueprintCallable, Category = "RTS|API")
