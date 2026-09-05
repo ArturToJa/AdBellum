@@ -199,6 +199,24 @@ OrderEnum UOrdersManager::GetCurrentOrderType()
 	return CurrentOrder->GetSubOrderType();
 }
 
+BaseOrder* UOrdersManager::GetOrder() 
+{
+	if (HasOrders()) 
+	{
+		return CurrentOrder.Get();
+	}
+	return nullptr;
+}
+
+BaseOrder* UOrdersManager::GetSubOrder()
+{
+	if (HasOrders()) 
+	{
+		return CurrentOrder->GetSubOrder();
+	}
+	return nullptr;
+}
+
 void UOrdersManager::BP_AddOrder(OrderEnum OrderType, bool bIsQueued, AActor* TargetObject, FVector TargetPosition)
 {
 	switch (OrderType)

@@ -152,6 +152,18 @@ public:
 		}
 	}
 
+	virtual BaseOrder* GetSubOrder() 
+	{
+		if (HasSubOrders()) 
+		{
+			return subOrder->GetSubOrder();
+		}
+		else 
+		{
+			return this;
+		}
+	}
+
 public:
 	FSimpleDelegate OnOrderCompleted;
 

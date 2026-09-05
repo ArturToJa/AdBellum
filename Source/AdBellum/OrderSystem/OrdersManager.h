@@ -100,5 +100,8 @@ public:
 		void BP_AddOrder(OrderEnum OrderType, bool bIsQueued, AActor* TargetObject, FVector TargetPosition);
 	void SetAsNonAggressiveOrder();
 	void SetAsNonAggressiveOrderInQueue();
+	BaseOrder* GetOrder();
+	BaseOrder* GetSubOrder();
+
 
 };

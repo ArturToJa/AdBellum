@@ -8,7 +8,11 @@
 #include "Interfaces/Selectable.h"
 #include "Formation/BaseFormation.h"
 #include "EngineUtils.h"
+#include "NiagaraComponent.h"
 #include "UI/RTSFormationUnitTableWidget.h"
+#include "NiagaraFunctionLibrary.h"
+#include "OrderSystem/OrdersManager.h"
+#include "Formation/FormationInterface.h"
 
 
 void ARTS_HUD::HUDOpen(AActor* ControlledActor)
@@ -61,7 +65,124 @@ void ARTS_HUD::SelectionModeEnd_Implementation()
 		// Set selection of formations in the URTSFormationUnitTableWidget
 		//maybe add selected pawn to the widget as well
         UpdateWidgetSelection(SelectedFormations);
+		DrawOrderLineForFormations(SelectedFormations);
 	}
+}
+
+void ARTS_HUD::DrawOrderLineForFormations(const TArray<ABaseFormation*>& Formations) 
+{
+	ClearLines();
+	for (ABaseFormation* Formation : Formations) 
+	{
+		DrawOrderLineForFormation(Formation);
+	}
+}
+
+void ARTS_HUD::DrawOrderLineForFormation(ABaseFormation* Formation) 
+{
+	DrawOrderLine(Formation, 7.0f);
+
+	for (APawn* Pawn : Formation->GetUnitsInFormation_Implementation()) 
+	{
+		DrawOrderLineForUnit(Pawn);
+	}
+}
+
+void ARTS_HUD::DrawOrderLineForUnit(APawn* Unit) 
+{
+	DrawOrderLine(Unit, 4.0f);
+}
+
+void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize) 
+{
+	if (!LineVFX || !Pawn) return;
+
+	UNiagaraComponent* NiagaraComp = UNiagaraFunctionLibrary::SpawnSystemAttached(
+		LineVFX,
+		Pawn->GetRootComponent(),
+		NAME_None,
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		EAttachLocation::KeepRelativeOffset,
+		false,
+		true,
+		ENCPoolMethod::AutoRelease
+	);
+
+	if (NiagaraComp)
+	{
+		ActorLineMap.Add(Pawn, NiagaraComp);
+	}
+
+	UOrdersManager* TempOrdersManager = nullptr;
+	if (Pawn->GetClass()->ImplementsInterface(UFormationInterface::StaticClass()))
+	{
+		TArray<APawn*> Units = IFormationInterface::Execute_GetUnitsInFormation(Pawn);
+		for (APawn* CurrentUnit : Units) 
+		{
+			AController* Controller = CurrentUnit->GetController();
+			if (Controller && !Controller->IsPlayerController())
+			{
+				TempOrdersManager = IOrderable::Execute_GetOrdersManagerComponent(Controller);
+				break;
+			}
+		}
+	}
+	else
+	{
+		AController* Controller = Pawn->GetController();
+		if (Controller &&!Controller->IsPlayerController()) 
+		{
+			TempOrdersManager = IOrderable::Execute_GetOrdersManagerComponent(Controller);
+		}
+	}
+
+	if (!TempOrdersManager) 
+	{ 
+		return; 
+	}
+	
+	BaseOrder* FormationOrder = TempOrdersManager->GetOrder();
+	if (!FormationOrder) return;
+	NiagaraComp->SetVariableObject("TargetObject", FormationOrder->GetTargetUnit());
+	NiagaraComp->SetVariableVec3("End", FormationOrder->GetTargetPosition());
+	NiagaraComp->SetFloatParameter("MinSize", 7.0f);
+
+	switch (FormationOrder->GetOrderType())
+	{
+
+	case OrderEnum::Move:
+	case OrderEnum::Patrol:
+	case OrderEnum::Follow:
+		NiagaraComp->SetColorParameter("Color", FLinearColor::Green);
+		break;
+	case OrderEnum::Interact:
+		NiagaraComp->SetColorParameter("Color", FLinearColor::Yellow);
+		break;
+	case OrderEnum::Attack:
+	case OrderEnum::OccupyAOI:
+	case OrderEnum::Training:
+		NiagaraComp->SetColorParameter("Color", FLinearColor::Red);
+		break;
+	default:
+		break;
+	}
+
+}
+
+void ARTS_HUD::ClearLines() 
+{
+	
+	for (auto& KVP : ActorLineMap)
+	{
+		UNiagaraComponent* CurrentComponent = KVP.Value;
+
+		if (CurrentComponent && CurrentComponent->IsActive())
+		{
+			CurrentComponent->DeactivateImmediate();
+		}
+	}
+	ActorLineMap.Empty();
 }
 
 void ARTS_HUD::InitializeWidget(TArray<ABaseFormation*>& Formations)

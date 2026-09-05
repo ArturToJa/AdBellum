@@ -10,6 +10,7 @@
 
 class AALSBaseCharacter;
 class ABaseFormation;
+class UNiagaraComponent;
 
 /**
  * 
@@ -63,4 +64,19 @@ public:
 	void CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsArray);
 
 	bool IsActorValidForSelection(APawn* Actor);
+
+	void DrawOrderLineForFormation(ABaseFormation* Formation);
+
+	void DrawOrderLineForFormations(const TArray<ABaseFormation*>& Formations);
+
+	void DrawOrderLineForUnit(APawn* Unit);
+
+	void DrawOrderLine(APawn* Pawn, float MinSize);
+
+	void ClearLines();
+	TMap<AActor*, UNiagaraComponent*> ActorLineMap;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UNiagaraSystem* LineVFX;
+
 };
