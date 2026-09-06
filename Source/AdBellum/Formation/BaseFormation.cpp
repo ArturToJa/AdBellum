@@ -40,9 +40,14 @@ ABaseFormation::ABaseFormation()
 }
 
 // Called when the game starts or when spawned
-void ABaseFormation::BeginPlay()
+void ABaseFormation::BeginPlay() 
 {
-	Super::BeginPlay();
+	Super::BeginPlay(); 
+	// Start formation update timer 
+	if (GetWorld()) 
+	{ 
+		GetWorldTimerManager().SetTimer(FormationUpdateTimerHandle, this, &ABaseFormation::UpdateFormationPosition, FormationUpdateInterval, true); 
+	} 
 }
 
 void ABaseFormation::Tick(float DeltaTime)
@@ -53,6 +58,34 @@ void ABaseFormation::Tick(float DeltaTime)
 	{
 		FindCovers(FirstActorOfInterest->GetActorLocation());
 	}
+}
+
+
+// Make this function callable dependend on order - when player makes order to formation  
+void ABaseFormation::UpdateFormationPosition()
+{ 
+	TArray<APawn*> FoundAliveUnits; for(APawn* Unit : ActorsInFormation) 
+	{ 
+		if (IITargetable::Execute_IsAlive(Unit)) 
+		{ 
+			FoundAliveUnits.Add(Unit); 
+		} 
+	} 
+	SetActorLocation(CalculateAverageLocation(FoundAliveUnits),false); 
+}
+
+FVector ABaseFormation::CalculateAverageLocation(const TArray<APawn*>& Units) 
+{
+	if (Units.Num() == 0) return FVector::ZeroVector; 
+	FVector SumLocation = FVector::ZeroVector; 
+	for (APawn* Unit : Units)
+	{ 
+		if (Unit) 
+		{ 
+			SumLocation += Unit->GetActorLocation(); 
+		} 
+	}
+	return SumLocation / Units.Num(); 
 }
 
 void ABaseFormation::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -132,6 +165,102 @@ void ABaseFormation::MoveOrder_Implementation(FVector TargetPosition)
 		IOrderable::Execute_GetOrdersManagerComponent(Actor->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 	}
 }
+//void ABaseFormation::MoveOrder_Implementation(FVector TargetPosition)
+//{
+//	TArray<APawn*> AliveUnitsToMove;
+//
+//	for (APawn* Unit : ActorsInFormation)
+//	{
+//		if (IsValid(Unit) && IITargetable::Execute_IsAlive(Unit))
+//		{
+//			AliveUnitsToMove.Add(Unit);
+//		}
+//	}
+//
+//	AssignFormationPositions(AliveUnitsToMove, TargetPosition);
+//}
+
+void ABaseFormation::AssignFormationPositions(const TArray<APawn*>& UnitsToOrder, FVector TargetPosition)
+{
+	const int32 TotalUnits = UnitsToOrder.Num();
+
+	if (TotalUnits == 0)
+	{
+		return;
+	}
+
+	for (int32 Index = 0; Index < TotalUnits; ++Index)
+	{
+		APawn* Unit = UnitsToOrder[Index];
+
+		if (!IsValid(Unit))
+		{
+			continue;
+		}
+		const FVector UnitTargetPosition = CalculateUnitPosition(Index, TotalUnits, TargetPosition);
+
+		//add order to move 
+		TUniquePtr<GeneralOrder<OrderEnum::Move>::OrderType> OrderToPerform = MakeUnique<GeneralOrder<OrderEnum::Move>::OrderType>(nullptr, UnitTargetPosition);
+		IOrderable::Execute_GetOrdersManagerComponent(Unit->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
+	}
+}
+
+FVector ABaseFormation::CalculateUnitPosition(int32 UnitIndex, int32 TotalUnits, FVector TargetPosition) const
+{
+	if (TotalUnits <= 0)
+	{
+		return TargetPosition;
+	}
+
+	// Direction from formation towards the target
+	FVector MovementDirection =
+		(TargetPosition - GetActorLocation()).GetSafeNormal2D();
+
+	// If target is exactly at formation location
+	if (MovementDirection.IsNearlyZero())
+	{
+		MovementDirection =
+			GetActorForwardVector().GetSafeNormal2D();
+	}
+
+	// Vector perpendicular to movement direction
+	FVector RightDirection =
+		FVector::CrossProduct(
+			FVector::UpVector,
+			MovementDirection).GetSafeNormal2D();
+
+	// Total width of the line
+	const float FormationWidth =
+		(TotalUnits - 1) * DistanceBetweenUnits;
+
+	// Start of the line, centered around TargetPosition
+	const FVector LineStart =
+		TargetPosition -
+		RightDirection * (FormationWidth * 0.5f);
+
+	// Position of this unit on the line
+	FVector UnitPosition =
+		LineStart +
+		RightDirection * (UnitIndex * DistanceBetweenUnits);
+
+	// Random spread
+	if (UnitSpread > 0.0f)
+	{
+		const float SideOffset =
+			FMath::FRandRange(-UnitSpread, UnitSpread);
+
+		const float ForwardOffset =
+			FMath::FRandRange(-UnitSpread, UnitSpread);
+
+		UnitPosition +=
+			RightDirection * SideOffset +
+			MovementDirection * ForwardOffset;
+	}
+
+	UnitPosition.Z = TargetPosition.Z;
+
+	return UnitPosition;
+}
 
 void ABaseFormation::AttackTarget_Implementation(UObject* TargetObject)
 {
@@ -176,11 +305,32 @@ APawn* ABaseFormation::GetUnitForPossesion()
 template<OrderEnum T>
 void ABaseFormation::PerformOrder(AActor* TargetUnit, FVector TargetPosition)
 {
-	for (APawn* Unit : ActorsInFormation)
+	
+	if (T == OrderEnum::Move)
 	{
-		if (IITargetable::Execute_IsAlive(Unit))
+		TArray<APawn*> ActiveAliveUnits;
+		for (APawn* Unit : ActorsInFormation)
 		{
-			PerformOrder<T>(Unit, TargetUnit, TargetPosition);
+			if (IITargetable::Execute_IsAlive(Unit))
+			{
+				ActiveAliveUnits.Add(Unit);
+			}
+		}
+		int TotalUnits = ActiveAliveUnits.Num();
+		for (int Index = 0; Index < TotalUnits; ++Index)
+		{
+			const FVector UnitTargetPosition = CalculateUnitPosition(Index, TotalUnits, TargetPosition);
+			PerformOrder<T>(ActiveAliveUnits[Index], TargetUnit, UnitTargetPosition);
+		}
+	}
+	else
+	{
+		for (APawn* Unit : ActorsInFormation)
+		{
+			if (IITargetable::Execute_IsAlive(Unit))
+			{
+				PerformOrder<T>(Unit, TargetUnit, TargetPosition);
+			}
 		}
 	}
 }

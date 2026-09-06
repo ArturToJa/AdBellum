@@ -36,6 +36,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "EQS")
 	UEnvQuery* FindCoverQuery;
 
+	/** Time interval (seconds) between formation position updates */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Formation")
+	float FormationUpdateInterval = 0.5f; /** Distance between units in formation line */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Formation")
+	float DistanceBetweenUnits = 100.0f; /** How much units scatter from the uniform line (randomization) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Formation")
+	float UnitSpread = 50.0f;
+
 
 	// Selectable
 	virtual class UOrdersManager* GetOrdersManagerComponent_Implementation() override;
@@ -61,6 +69,11 @@ public:
 	virtual int GetFormationCost_Implementation() override;
 	virtual void RespawnFormation_Implementation(ABaseSpawnArea* SpawnArea) override;
 	virtual AActor* GetFirstActorOfInterest_Implementation() override;
+
+
+	void AssignFormationPositions(const TArray<APawn*>& UnitsToOrder, FVector TargetPosition);
+
+	FVector CalculateUnitPosition(int32 UnitIndex, int32 TotalUnits, FVector TargetPosition) const;
 
 	void SetActors(TArray<APawn*> Actors);
 	APawn* GetUnitForPossesion();
@@ -103,6 +116,11 @@ private:
 	void ClearNoiseTimeoutTimer(AActor* EnemyUnit);
 	void SetMiddlePosition(float DistanceThreshold);
 	void ClearCoverData();
+
+	FTimerHandle FormationUpdateTimerHandle; 
+	void UpdateFormationPosition(); 
+	FVector CalculateAverageLocation(const TArray<APawn*>& Units);
+	 
 	TMap<AActor*, int> EnemiesInSight;
 	TMap<AActor*, FVector> LastKnownPosition;
 	TMap<AActor*, FTimerHandle> LastPositionTimerMap;

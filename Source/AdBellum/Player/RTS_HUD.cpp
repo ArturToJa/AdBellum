@@ -80,7 +80,7 @@ void ARTS_HUD::DrawOrderLineForFormations(const TArray<ABaseFormation*>& Formati
 
 void ARTS_HUD::DrawOrderLineForFormation(ABaseFormation* Formation) 
 {
-	DrawOrderLine(Formation, 7.0f);
+	DrawOrderLine(Formation, 1.0f);
 
 	for (APawn* Pawn : Formation->GetUnitsInFormation_Implementation()) 
 	{
@@ -90,7 +90,7 @@ void ARTS_HUD::DrawOrderLineForFormation(ABaseFormation* Formation)
 
 void ARTS_HUD::DrawOrderLineForUnit(APawn* Unit) 
 {
-	DrawOrderLine(Unit, 4.0f);
+	DrawOrderLine(Unit, 10.0f);
 }
 
 void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize) 
