@@ -19,6 +19,7 @@ public:
 
 	virtual void Execute() override
 	{
+		BaseOrder::Execute();
 		TArray<AActor*> AOIs = IIAreaOfInterest::Execute_GetUnoccupiedPOI(targetUnit);
 		if (!AOIs.IsEmpty())
 		{

@@ -65,8 +65,31 @@ void ARTS_HUD::SelectionModeEnd_Implementation()
 		// Set selection of formations in the URTSFormationUnitTableWidget
 		//maybe add selected pawn to the widget as well
         UpdateWidgetSelection(SelectedFormations);
-		DrawOrderLineForFormations(SelectedFormations);
+		InitOrderLineForFormations();
 	}
+}
+
+void ARTS_HUD::InitOrderLineForFormations()
+{
+	for (ABaseFormation* Formation : SelectedFormations)
+	{
+		for (APawn* Pawn : Formation->GetUnitsInFormation_Implementation())
+		{
+			AController* Controller = Pawn->GetController();
+			if (Controller && !Controller->IsPlayerController())
+			{
+				UOrdersManager* OrdersManagerComponent = IOrderable::Execute_GetOrdersManagerComponent(Controller);
+				OrdersManagerComponent->OnHUDNotify.BindUObject(this, &ARTS_HUD::ResetOrderLineForFormations);
+			}
+		}
+	}
+	
+	ResetOrderLineForFormations();
+}
+
+void ARTS_HUD::ResetOrderLineForFormations()
+{
+	DrawOrderLineForFormations(SelectedFormations);
 }
 
 void ARTS_HUD::DrawOrderLineForFormations(const TArray<ABaseFormation*>& Formations) 
@@ -97,22 +120,6 @@ void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize)
 {
 	if (!LineVFX || !Pawn) return;
 
-	UNiagaraComponent* NiagaraComp = UNiagaraFunctionLibrary::SpawnSystemAttached(
-		LineVFX,
-		Pawn->GetRootComponent(),
-		NAME_None,
-		FVector::ZeroVector,
-		FRotator::ZeroRotator,
-		EAttachLocation::KeepRelativeOffset,
-		false,
-		true,
-		ENCPoolMethod::AutoRelease
-	);
-
-	if (NiagaraComp)
-	{
-		ActorLineMap.Add(Pawn, NiagaraComp);
-	}
 
 	UOrdersManager* TempOrdersManager = nullptr;
 	if (Pawn->GetClass()->ImplementsInterface(UFormationInterface::StaticClass()))
@@ -123,7 +130,7 @@ void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize)
 			AController* Controller = CurrentUnit->GetController();
 			if (Controller && !Controller->IsPlayerController())
 			{
-				TempOrdersManager = IOrderable::Execute_GetOrdersManagerComponent(Controller);
+				//TempOrdersManager = IOrderable::Execute_GetOrdersManagerComponent(Controller);
 				break;
 			}
 		}
@@ -144,6 +151,27 @@ void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize)
 	
 	BaseOrder* FormationOrder = TempOrdersManager->GetOrder();
 	if (!FormationOrder) return;
+
+	UNiagaraComponent* NiagaraComp = UNiagaraFunctionLibrary::SpawnSystemAttached(
+		LineVFX,
+		Pawn->GetRootComponent(),
+		NAME_None,
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		EAttachLocation::KeepRelativeOffset,
+		false,
+		true,
+		ENCPoolMethod::AutoRelease
+	);
+
+	if (!NiagaraComp)
+	{
+		return;
+	}
+
+	OrderLineMap.Add(FormationOrder, NiagaraComp);
+	//FormationOrder->OnHUDNotify.BindUObject(this, &ARTS_HUD::ResetOrderLineForFormations);
+
 	NiagaraComp->SetVariableObject("TargetObject", FormationOrder->GetTargetUnit());
 	NiagaraComp->SetVariableVec3("End", FormationOrder->GetTargetPosition());
 	NiagaraComp->SetFloatParameter("MinSize", 7.0f);
@@ -173,7 +201,7 @@ void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize)
 void ARTS_HUD::ClearLines() 
 {
 	
-	for (auto& KVP : ActorLineMap)
+	for (auto& KVP : OrderLineMap)
 	{
 		UNiagaraComponent* CurrentComponent = KVP.Value;
 
@@ -182,7 +210,7 @@ void ARTS_HUD::ClearLines()
 			CurrentComponent->DeactivateImmediate();
 		}
 	}
-	ActorLineMap.Empty();
+	OrderLineMap.Empty();
 }
 
 void ARTS_HUD::InitializeWidget(TArray<ABaseFormation*>& Formations)
@@ -214,8 +242,7 @@ void ARTS_HUD::SetCurrentSelection_Implementation(bool Visible)
 
 void ARTS_HUD::CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsArray)
 {
-	SetCurrentSelection(false);
-	SelectedFormations.Empty();
+	ClearSelectedFormations();
 	if (SelectedFormationsArray.IsEmpty()) return;
 	int PlayerTeam = IIPlayer::Execute_GetTeamIndex(GetOwner());
 	AAdBellumGameState* GameState = GetWorld()->GetGameState<AAdBellumGameState>();
@@ -258,4 +285,23 @@ bool ARTS_HUD::IsActorValidForSelection(APawn* Actor)
 		}
 	}
 	return false;
+}
+
+void ARTS_HUD::ClearSelectedFormations()
+{
+	for (ABaseFormation* Formation : SelectedFormations)
+	{
+		for (APawn* Pawn : Formation->GetUnitsInFormation_Implementation())
+		{
+			AController* Controller = Pawn->GetController();
+			if (Controller && !Controller->IsPlayerController())
+			{
+				UOrdersManager* OrdersManagerComponent = IOrderable::Execute_GetOrdersManagerComponent(Controller);
+				OrdersManagerComponent->OnHUDNotify.Unbind();
+			}
+		}
+	}
+
+	SetCurrentSelection(false);
+	SelectedFormations.Empty();
 }

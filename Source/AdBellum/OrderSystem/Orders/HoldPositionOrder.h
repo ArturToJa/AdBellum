@@ -14,6 +14,7 @@ public:
 
 	virtual void Execute() override
 	{
+		BaseOrder::Execute();
 		IOrderable::Execute_Stop(owningController, targetPosition);
 	}
 

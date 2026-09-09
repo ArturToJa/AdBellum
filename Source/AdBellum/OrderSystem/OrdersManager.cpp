@@ -29,7 +29,7 @@ void UOrdersManager::BeginPlay()
 
 	CurrentOrder = MakeUnique<StopOrder>(nullptr, GetOwner()->GetActorLocation());
 	CurrentOrder->SetOwner(Cast<AAIController>(GetOwner()));
-	CurrentOrder->OnOrderCompleted.BindUObject(this, &UOrdersManager::NotifyCurrentOrderCompleted);
+	CurrentOrder->OnOrderCompleted.AddUObject(this, &UOrdersManager::NotifyCurrentOrderCompleted);
 	Super::BeginPlay();
 }
 
@@ -84,6 +84,7 @@ void UOrdersManager::NotifyCurrentOrderCompleted()
 	{
 		NotifyMainOrderCompleted();
 	}
+	OnHUDNotify.ExecuteIfBound();
 }
 
 void UOrdersManager::NotifyMainOrderCompleted()
@@ -91,6 +92,11 @@ void UOrdersManager::NotifyMainOrderCompleted()
 	CurrentOrder->Finalize();
 	SetStopOrder();
 	ProcessNextOrder();
+}
+
+void UOrdersManager::NotifySubOrderStarted()
+{
+	OnHUDNotify.ExecuteIfBound();
 }
 
 bool UOrdersManager::IsCurrentOrderOfType(OrderEnum Type)
@@ -111,8 +117,10 @@ void UOrdersManager::PerformOrder(TUniquePtr<BaseOrder> OrderToPerform)
 	CurrentOrder.Reset();
 	CurrentOrder = MoveTemp(OrderToPerform);
 	CurrentOrder->SetOwner(Cast<AAIController>(GetOwner()));
-	CurrentOrder->OnOrderCompleted.BindUObject(this, &UOrdersManager::NotifyCurrentOrderCompleted);
+	CurrentOrder->OnOrderCompleted.AddUObject(this, &UOrdersManager::NotifyCurrentOrderCompleted);
+	CurrentOrder->OnSubOrderStarted.BindUObject(this, &UOrdersManager::NotifySubOrderStarted);
 	CurrentOrder->Execute();
+	OnHUDNotify.ExecuteIfBound();
 }
 
 void UOrdersManager::UpdateOrder()

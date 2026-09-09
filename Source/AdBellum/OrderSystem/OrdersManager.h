@@ -76,6 +76,7 @@ public:
 		void NotifyCurrentOrderCompleted();
 	UFUNCTION(BlueprintCallable)
 		void NotifyMainOrderCompleted();
+		void NotifySubOrderStarted();
 	UFUNCTION(BlueprintCallable)
 		bool IsCurrentOrderOfType(OrderEnum Type);
 	UFUNCTION(BlueprintCallable)
@@ -103,5 +104,5 @@ public:
 	BaseOrder* GetOrder();
 	BaseOrder* GetSubOrder();
 
-
+	FSimpleDelegate OnHUDNotify;
 };

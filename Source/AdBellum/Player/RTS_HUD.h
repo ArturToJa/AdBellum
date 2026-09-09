@@ -11,6 +11,7 @@
 class AALSBaseCharacter;
 class ABaseFormation;
 class UNiagaraComponent;
+class BaseOrder;
 
 /**
  * 
@@ -61,9 +62,15 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	void SetCurrentSelection(bool Visible);
 
+	void ClearSelectedFormations();
+
 	void CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsArray);
 
 	bool IsActorValidForSelection(APawn* Actor);
+
+	void InitOrderLineForFormations();
+
+	void ResetOrderLineForFormations();
 
 	void DrawOrderLineForFormation(ABaseFormation* Formation);
 
@@ -74,7 +81,7 @@ public:
 	void DrawOrderLine(APawn* Pawn, float MinSize);
 
 	void ClearLines();
-	TMap<AActor*, UNiagaraComponent*> ActorLineMap;
+	TMap<BaseOrder*, UNiagaraComponent*> OrderLineMap;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	UNiagaraSystem* LineVFX;

@@ -16,6 +16,7 @@ public:
 
 	virtual void Execute() override
 	{
+		BaseOrder::Execute();
 		RunSubOrder(MakeUnique<MoveLocationOrder>(nullptr, IALSInteractionInterface::Execute_InteractLocation(targetUnit)));
 	}
 

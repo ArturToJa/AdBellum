@@ -15,6 +15,7 @@ public:
 
 	virtual void Execute() override
 	{
+		BaseOrder::Execute();
 		IOrderable::Execute_DoStandUp(owningController);
 		IOrderable::Execute_MoveOrder(owningController, targetPosition);
 	}

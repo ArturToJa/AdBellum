@@ -27,6 +27,7 @@ public:
 
 	virtual void Execute() override
 	{
+		BaseOrder::Execute();
 		WeaponObject = IArmedUnitInterface::Execute_GetWeapon(owningController->GetPawn());
 
 		// Initialize combat data structures for unit and weapon

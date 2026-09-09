@@ -52,7 +52,10 @@ public:
 		{
 			if (IsFinished())
 			{
-				OnOrderCompleted.ExecuteIfBound();
+				if (OnOrderCompleted.IsBound())
+				{
+					OnOrderCompleted.Broadcast();
+				}
 			}
 		}
 	}
@@ -111,7 +114,9 @@ public:
 			subOrder = MoveTemp(inSubOrder);
 			subOrder->SetOwner(owningController);
 			UE_LOG(LogTemp, Verbose, TEXT("BaseOrder::RunSubOrder: Created new suborder for owner=%s Type=%d"), owningController ? *owningController->GetName() : TEXT("<null>"), (int)subOrder->GetOrderType());
-			subOrder->OnOrderCompleted.BindRaw(this, &BaseOrder::FinishSubOrder);
+			subOrder->OnOrderCompleted.AddRaw(this, &BaseOrder::FinishSubOrder);
+			subOrder->OnSubOrderStarted.BindRaw(this, &BaseOrder::StartSubOrder);
+			StartSubOrder();
 			subOrder->Execute(); // Trigger Execute function on sub-order
 		}
 	}
@@ -124,6 +129,11 @@ public:
 	bool HasSubOrders() const
 	{
 		return subOrder.IsValid();
+	}
+
+	void StartSubOrder()
+	{
+		OnSubOrderStarted.ExecuteIfBound();
 	}
 
 	void FinishSubOrder()
@@ -165,7 +175,8 @@ public:
 	}
 
 public:
-	FSimpleDelegate OnOrderCompleted;
+	FSimpleMulticastDelegate OnOrderCompleted;
+	FSimpleDelegate OnSubOrderStarted;
 
 protected:
 	AAIController* owningController;

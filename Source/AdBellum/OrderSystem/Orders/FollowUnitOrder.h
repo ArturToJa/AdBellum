@@ -15,6 +15,7 @@ public:
 
 	virtual void Execute() override
 	{
+		BaseOrder::Execute();
 		RunSubOrder(MakeUnique<MoveLocationOrder>(nullptr, Cast<AActor>(targetUnit)->GetActorLocation()));
 	}
 
