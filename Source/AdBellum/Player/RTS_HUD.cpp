@@ -13,6 +13,9 @@
 #include "NiagaraFunctionLibrary.h"
 #include "OrderSystem/OrdersManager.h"
 #include "Formation/FormationInterface.h"
+#include "Interfaces/MarkerInterface.h"
+#include "NavigationUI.h"
+#include "Blueprint/SlateBlueprintLibrary.h"
 
 
 void ARTS_HUD::HUDOpen(AActor* ControlledActor)
@@ -33,9 +36,16 @@ void ARTS_HUD::DrawHUD()
 		float LocationY;
 		GetOwningPlayerController()->GetMousePosition(LocationX, LocationY);
 		TArray<APawn*> OutActors;
+		TSet<FGuid> OutMarkers;
+		DrawRect(SelectionColor, AnchorPoint.X, AnchorPoint.Y, LocationX - AnchorPoint.X, LocationY - AnchorPoint.Y);
+
 		GetActorsInSelectionRectangle<APawn>(AnchorPoint, FVector2D(LocationX, LocationY), OutActors, false, false);
 		CheckSelectedFormations(OutActors);
-		DrawRect(FLinearColor(0.261f, 1.0f, 0.235f, 0.4f), AnchorPoint.X, AnchorPoint.Y, LocationX - AnchorPoint.X, LocationY - AnchorPoint.Y);
+
+
+		CheckFormationMarkersInSelection(OutMarkers, FVector2D(LocationX, LocationY));
+		CheckSelectedMarkersForFormation(OutMarkers);
+
 	}
 }
 
@@ -68,6 +78,83 @@ void ARTS_HUD::SelectionModeEnd_Implementation()
 	}
 	
 	UpdateWidgetSelection(SelectedFormations);
+}
+
+void ARTS_HUD::CheckFormationMarkersInSelection(TSet<FGuid>& Markers, const FVector2D& CurrentMousePosition)
+{
+	Markers.Empty();
+
+	const float MinX = FMath::Min(AnchorPoint.X, CurrentMousePosition.X);
+	const float MaxX = FMath::Max(AnchorPoint.X, CurrentMousePosition.X);
+	const float MinY = FMath::Min(AnchorPoint.Y, CurrentMousePosition.Y);
+	const float MaxY = FMath::Max(AnchorPoint.Y, CurrentMousePosition.Y);
+
+	UNavigationUI_Subsystem* SmartUISubSystem = GetGameInstance()->GetSubsystem<UNavigationUI_Subsystem>();
+
+	if (!SmartUISubSystem)
+	{
+		return;
+	}
+
+	const TSet<FGuid> MarkerGuids = SmartUISubSystem->GetMarkers();
+
+	AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(GetOwningPlayerController());
+
+	if (!PC)
+	{
+		return;
+	}
+
+	for (const FGuid& MarkerGuid : MarkerGuids)
+	{
+		const FMarkerData MarkerData = SmartUISubSystem->GetMarkerData(MarkerGuid);
+
+		if (!MarkerData.LinkedComponent)
+		{
+			continue;
+		}
+
+		UMarkerWidget* CurrentMarkerWidget =
+			IMarkerInterface::Execute_GetWidget(MarkerData.LinkedComponent);
+
+		if (!CurrentMarkerWidget)
+		{
+			continue;
+		}
+
+		// Get the actual widget geometry on the viewport.
+		const FGeometry CurrentMarkerWidgetGeometry = CurrentMarkerWidget->GetCachedGeometry();
+
+		FVector2D WidgetViewportPosition;
+		FVector2D WidgetPixelPosition;
+
+		USlateBlueprintLibrary::LocalToViewport(GetWorld(), CurrentMarkerWidgetGeometry, FVector2D::ZeroVector, WidgetPixelPosition, WidgetViewportPosition);
+
+		const FVector2D WidgetSize =
+			CurrentMarkerWidgetGeometry.GetAbsoluteSize();
+
+		// Marker is circular, so use half of its largest dimension
+		// as the selection tolerance/radius.
+		const float MarkerRadius = FMath::Max(WidgetSize.X, WidgetSize.Y) * 0.5f;
+
+		// WidgetPixelPosition represents the projected top-left
+		// of the widget, so calculate its center.
+		const FVector2D MarkerCenter = WidgetPixelPosition + (WidgetSize * 0.5f);
+
+		// Expand the selection rectangle by the marker radius.
+		const float ExpandedMinX = MinX - MarkerRadius;
+		const float ExpandedMaxX = MaxX + MarkerRadius;
+		const float ExpandedMinY = MinY - MarkerRadius;
+		const float ExpandedMaxY = MaxY + MarkerRadius;
+
+		if (MarkerCenter.X >= ExpandedMinX &&
+			MarkerCenter.X <= ExpandedMaxX &&
+			MarkerCenter.Y >= ExpandedMinY &&
+			MarkerCenter.Y <= ExpandedMaxY)
+		{
+			Markers.Add(MarkerGuid);
+		}
+	}
 }
 
 void ARTS_HUD::InitOrderLineForFormations()
@@ -255,18 +342,56 @@ void ARTS_HUD::SetCurrentSelection_Implementation(bool Visible)
 	}
 }
 
+
+void ARTS_HUD::CheckSelectedMarkersForFormation(const TSet<FGuid>& SelectedMarkersArray)
+{
+	SelectedMarkerGuids.Empty();
+	if (SelectedMarkersArray.Num() == 0) return;
+
+	AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(GetOwningPlayerController());
+
+	if (!PC) return;
+
+	UNavigationUI_Subsystem* SmartUISubSystem = GetGameInstance()->GetSubsystem<UNavigationUI_Subsystem>();
+
+	if (!SmartUISubSystem) return;
+
+	TArray<ABaseFormation*> SelectedFormationsArray;
+
+	for (const FGuid& MarkerGuid : SelectedMarkersArray)
+	{
+		const FMarkerData MarkerData = SmartUISubSystem->GetMarkerData(MarkerGuid);
+		if (MarkerData.LinkedComponent)
+		{
+			
+			SelectedMarkerGuids.Add(MarkerGuid);
+			AActor* MarkerFormation = MarkerData.LinkedComponent->GetOwner();
+			if((IOwnershipInterface::Execute_GetOwningPlayer(MarkerFormation) == GetOwner()))
+			{
+				SelectedFormationsArray.Add(Cast<ABaseFormation>(MarkerFormation));
+			}
+			// You can also perform additional logic here, such as highlighting the selected markers in the UI.
+		}
+	}
+	SetFormationsInPlayerController(SelectedFormationsArray);
+}
+
 void ARTS_HUD::CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsArray)
 {
-	ClearSelectedFormations();
+	SetCurrentSelection(false);
+	SelectedFormations.Empty();
 	if (SelectedFormationsArray.IsEmpty()) return;
-	int PlayerTeam = IIPlayer::Execute_GetTeamIndex(GetOwner());
+	//int PlayerTeam = IIPlayer::Execute_GetTeamIndex(GetOwner());
 	AAdBellumGameState* GameState = GetWorld()->GetGameState<AAdBellumGameState>();
 
 	if (SelectedFormationsArray.Num() == 1)
 	{
-		SelectedPawn = IsActorValidForSelection(SelectedFormationsArray[0]) ? SelectedFormationsArray[0] : nullptr;
-		SelectedFormations.AddUnique(IFormable::Execute_GetFormation(SelectedPawn));
-		GameState->SetSelectionCircle(true, SelectedPawn);
+		if (IsActorValidForSelection(SelectedFormationsArray[0]))
+		{
+			SelectedPawn = SelectedFormationsArray[0];
+			SelectedFormations.AddUnique(IFormable::Execute_GetFormation(SelectedPawn));
+			GameState->SetSelectionCircle(true, SelectedPawn);
+		}
 	}
 	else
 	{
@@ -275,7 +400,7 @@ void ARTS_HUD::CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsA
 		{
 			if (IsActorValidForSelection(Actor))
 			{
-				if(SelectedPawn == nullptr)
+				if (SelectedPawn == nullptr)
 				{
 					SelectedPawn = Actor;
 				}

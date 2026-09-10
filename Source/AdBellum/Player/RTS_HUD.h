@@ -31,6 +31,9 @@ protected:
 
 	APawn* SelectedPawn;
 
+	UPROPERTY()
+	TSet<FGuid> SelectedMarkerGuids;
+
 	URTSFormationUnitTableWidget* FormationUnitTableWidget;
 
 public:
@@ -70,6 +73,10 @@ public:
 
 	void CheckSelectedFormations(const TArray<APawn*>& SelectedFormationsArray);
 
+	void CheckSelectedMarkersForFormation(const TSet<FGuid>& SelectedMarkersArray);
+
+	void CheckFormationMarkersInSelection(TSet<FGuid>& Markers, const FVector2D& CurrentMousePosition);
+
 	bool IsActorValidForSelection(APawn* Actor);
 
 	void InitOrderLineForFormations();
@@ -94,4 +101,8 @@ public:
 	void SetFormationsInPlayerController(TArray<ABaseFormation*> Formations);
 	UFUNCTION()
 	void SetUnitInPlayerController(APawn* SelectedUnit);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FLinearColor SelectionColor = FLinearColor(1.0f, 1.0f, 1.0f, 0.33f);
+
 };
