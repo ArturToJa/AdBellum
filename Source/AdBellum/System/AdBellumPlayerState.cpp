@@ -3,6 +3,7 @@
 
 #include "AdBellumPlayerState.h"
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/PlayerController.h"
 #include "Interfaces/OwnershipInterface.h"
 #include "AdBellumGameMode.h"
 #include "Formation/FormationInterface.h"
@@ -21,6 +22,20 @@ void AAdBellumPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 void AAdBellumPlayerState::SetInitialTickets_Implementation(int InitialTickets)
 {
 	AvailableTickets = InitialTickets;
+
+	// OnRep_AvailableTickets (which drives the HUD ticket counter via
+	// BP_OnRep_AvailableTickets) is only ever invoked by replication landing
+	// on a remote proxy - it never fires for a locally-controlled owner,
+	// since there is no separate proxy to replicate to. Without this, the
+	// host's ticket counter would never update at all, even though the
+	// client (a genuine remote proxy) works correctly.
+	if (APlayerController* PC = GetPlayerController())
+	{
+		if (PC->IsLocalController())
+		{
+			OnRep_AvailableTickets();
+		}
+	}
 }
 
 bool AAdBellumPlayerState::TryConsumeTickets_Implementation(int NumberOfTickets)
@@ -28,6 +43,16 @@ bool AAdBellumPlayerState::TryConsumeTickets_Implementation(int NumberOfTickets)
 	if (HasEnoughTickets(NumberOfTickets))
 	{
 		AvailableTickets -= NumberOfTickets;
+
+		// See SetInitialTickets_Implementation above - OnRep_AvailableTickets
+		// never fires for a locally-controlled owner.
+		if (APlayerController* PC = GetPlayerController())
+		{
+			if (PC->IsLocalController())
+			{
+				OnRep_AvailableTickets();
+			}
+		}
 		return true;
 	}
 	return false;

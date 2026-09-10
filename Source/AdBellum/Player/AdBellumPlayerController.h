@@ -19,6 +19,7 @@ class AALSBaseCharacter;
 class BaseOrder;
 class ACharacterHUD;
 class ABaseFormation;
+class AReplicationReporter;
 /**
  * 
  */
@@ -80,6 +81,8 @@ public:
 	virtual void NotifyCharacterHUD_Implementation(FNotifyHUDData NotifyData) override;
 	virtual void UpdateCameraDamageEffects_Implementation(float HPRatio) override;
 	virtual void InitializeRTSHUD_Implementation(ABaseFormation* Formation) override;
+	virtual TArray<ABaseFormation*> GetOwnedFormations_Implementation() override;
+	virtual void SetOwnedFormations_Implementation(TArray<ABaseFormation*>& Formations) override;
 
 	UFUNCTION(Client, Reliable)
 	void Client_UpdateCameraDamageEffects(float HPRatio);
@@ -99,11 +102,19 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SetSelectionCircle(AActor* SelectedActor, bool IsVisible);
 
+	// Pointer to the per-client ReplicationReporter actor. Replicated to the
+	// owning client only so client-side code can find the reporter quickly.
+	UPROPERTY(ReplicatedUsing=OnRep_ReplicationReporter)
+	TObjectPtr<class AReplicationReporter> ReplicationReporterActor;
+
+	UFUNCTION()
+	void OnRep_ReplicationReporter();
+
 
 	FTimerHandle RTSSpawnTimerHandle;
 
-	UPROPERTY(EditDefaultsOnly)
-	TSubclassOf<ARTSPlayer> RTSCameraClass;
+	UFUNCTION()
+	void TryInitializeRTSHUD();
 
 	UPROPERTY(EditDefaultsOnly)
 	TSubclassOf<ARTS_HUD> RTSHUDClass;
@@ -170,6 +181,17 @@ private:
 	void Server_FindSuitableOrder(AActor* FoundActor, FVector MouseLocation);
 	void MoveSuitableOrder(AActor* FoundActor, FVector MouseLocation);
 
+	// Client_SetUnitPrefab/Client_OnWeaponCreated can be dispatched before an
+	// actor reference they carry (a unit or weapon) has actually finished
+	// replicating to this specific client - there is no per-client delivery
+	// confirmation on this notification path, unlike the replication-batch
+	// system used for the initial squad spawn. A not-yet-replicated
+	// reference arrives as null, and calling an Execute_ interface function
+	// on a null target asserts/crashes. These retry any not-yet-resolved
+	// entries a short time later instead.
+	void ConfigureUnitPrefabsWithRetry(TArray<AActor*> Units, TArray<FMeshCreatorPrefabStruct> Prefabs, int32 Attempts = 0);
+	void ConfigureWeaponsWithRetry(TArray<AActor*> Weapons, TArray<FUnitWeaponDataStruct> WeaponPrefabs, int32 Attempts = 0);
+
 	//TArray<APawn*> SelectedPawns;
 
 	bool IsSelectingOrder = false;
@@ -179,4 +201,9 @@ private:
 	TObjectPtr<ABaseFormation> SelectionFormation;
 	UPROPERTY(Replicated)
 	APawn* SelectionPawn;
+	UPROPERTY(ReplicatedUsing=OnRep_OwnedFormations)
+	TArray<ABaseFormation*> OwnedFormations;
+
+	UFUNCTION()
+	void OnRep_OwnedFormations();
 };

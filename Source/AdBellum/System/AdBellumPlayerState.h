@@ -47,6 +47,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	TSoftObjectPtr<UWorld> LobbyLevel;
 
+
 private:
 	UPROPERTY(ReplicatedUsing=OnRep_AvailableTickets)
 	int AvailableTickets = 0;

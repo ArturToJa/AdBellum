@@ -20,6 +20,7 @@
 #include "CharacterHUD.h"
 #include "Formation/BaseFormation.h"
 #include "Trainer/TrainingHelper.h"
+#include "Player/ReplicationReporter.h"
 
 
 AAdBellumPlayerController::AAdBellumPlayerController(const FObjectInitializer& ObjectInitializer)
@@ -40,23 +41,16 @@ void AAdBellumPlayerController::BeginPlay()
 
 void AAdBellumPlayerController::SpawnRTSCamera_Implementation(FTransform SpawnTransform)
 {
-	FActorSpawnParameters SpawnInfoRTSCamera;
-	SpawnInfoRTSCamera.Owner = this;
-	SpawnInfoRTSCamera.Instigator = GetInstigator();
-	SpawnInfoRTSCamera.ObjectFlags |= RF_Transient;	// We never want to save default player pawns into a map
-
-	FTransform RTSCameraTransform = SpawnTransform;
-
-	RTSCameraPawn = GetWorld()->SpawnActor<ARTSPlayer>(RTSCameraClass, RTSCameraTransform, SpawnInfoRTSCamera);
+	// Moved RTS camera spawn to GameMode to centralize server-owned spawning and
+	// batch replication. Forward request to GameMode implementation.
 	if (HasAuthority())
 	{
-		OnRep_RTSPlayerSpawned();
-	}
-	Possess(RTSCameraPawn);
-	GetWorld()->GetTimerManager().SetTimer(RTSSpawnTimerHandle, [this, SpawnTransform]()
+		AAdBellumGameMode* GM = Cast<AAdBellumGameMode>(UGameplayStatics::GetGameMode(this));
+		if (GM)
 		{
-			Client_SetPlayerCameraManager(SpawnTransform.GetRotation());
-		}, 1.0f, false);
+			GM->CreateRTSCameraForPlayer(this, SpawnTransform);
+		}
+	}
 }
 
 void AAdBellumPlayerController::NotifyActorReplicated_Implementation(AActor* ReplicatedActor)
@@ -94,10 +88,12 @@ void AAdBellumPlayerController::Client_SetPlayerCameraManager_Implementation(FQu
 
 void AAdBellumPlayerController::OnRep_RTSPlayerSpawned()
 {
+	UE_LOG(LogTemp, Warning, TEXT("[DEBUG] OnRep_RTSPlayerSpawned: RTSCameraPawn=%s"), RTSCameraPawn ? TEXT("valid") : TEXT("NULL"));
 	if (RTSCameraPawn)
 	{
 		RTSCameraPawn->OrderActionDelegate.BindUObject(this, &AAdBellumPlayerController::RightMouseButtonPressed);
 		RTSCameraPawn->InteractionActionDelegate.BindUObject(this, &AAdBellumPlayerController::SelectTargetForOrder);
+		SpawnRTSHud();
 	}
 }
 
@@ -109,6 +105,8 @@ void AAdBellumPlayerController::SpawnRTSHud()
 	SpawnInfoRTSHUD.ObjectFlags |= RF_Transient;	// We never want to save HUDs into a map
 	RTSHUD = GetWorld()->SpawnActor<ARTS_HUD>(RTSHUDClass, SpawnInfoRTSHUD);
 	RTSCameraPawn->HUD = RTSHUD;
+	UE_LOG(LogTemp, Warning, TEXT("[DEBUG] SpawnRTSHud: RTSHUD=%s WidgetReadyRightAfterSpawn=%d"),
+		RTSHUD ? TEXT("valid") : TEXT("NULL"), RTSHUD ? RTSHUD->IsFormationWidgetReady() : false);
 }
 
 void AAdBellumPlayerController::SpawnCharacterHud()
@@ -125,10 +123,12 @@ void AAdBellumPlayerController::GetLifetimeReplicatedProps(TArray< FLifetimeProp
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AAdBellumPlayerController, PlayerIndex);
 	DOREPLIFETIME(AAdBellumPlayerController, TeamIndex);
+	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, OwnedFormations, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, RTSCameraPawn, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, SelectingOrder, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, SelectionFormation, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, SelectionPawn, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(AAdBellumPlayerController, ReplicationReporterActor, COND_OwnerOnly);
 }
 
 void AAdBellumPlayerController::OnPossess(APawn* NewPawn)
@@ -150,7 +150,7 @@ void AAdBellumPlayerController::Client_AcknowledgePossession_Implementation(APaw
 {
 	if (RTSHUD == nullptr)
 	{
-		SpawnRTSHud();
+		//SpawnRTSHud();
 	}
 
 	if (CharacterHUD == nullptr)
@@ -473,6 +473,64 @@ void AAdBellumPlayerController::InitializeRTSHUD_Implementation(ABaseFormation* 
 	RTSHUD->InitializeWidget(Formations);
 }
 
+void AAdBellumPlayerController::OnRep_OwnedFormations()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[DEBUG] OnRep_OwnedFormations: OwnedFormations.Num()=%d RTSHUD=%s WidgetReady=%d"),
+		OwnedFormations.Num(), RTSHUD ? TEXT("valid") : TEXT("NULL"), RTSHUD ? RTSHUD->IsFormationWidgetReady() : false);
+	// When the OwnedFormations array finishes replicating to the client,
+	// ensure the RTS HUD exists AND its widget has been created (via HUDOpen)
+	// before initializing it with the replicated array.
+	// Start a short repeating timer to retry until both are ready.
+	if (RTSHUD == nullptr || !RTSHUD->IsFormationWidgetReady())
+	{
+		if (!GetWorldTimerManager().IsTimerActive(RTSSpawnTimerHandle))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[DEBUG] OnRep_OwnedFormations: starting retry timer"));
+			GetWorldTimerManager().SetTimer(RTSSpawnTimerHandle, this, &AAdBellumPlayerController::TryInitializeRTSHUD, 0.1f, true);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DEBUG] OnRep_OwnedFormations: calling InitializeWidget directly"));
+		RTSHUD->InitializeWidget(OwnedFormations);
+	}
+}
+
+void AAdBellumPlayerController::TryInitializeRTSHUD()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[DEBUG] TryInitializeRTSHUD tick: RTSHUD=%s WidgetReady=%d"),
+		RTSHUD ? TEXT("valid") : TEXT("NULL"), RTSHUD ? RTSHUD->IsFormationWidgetReady() : false);
+	if (RTSHUD && RTSHUD->IsFormationWidgetReady())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DEBUG] TryInitializeRTSHUD: calling InitializeWidget, clearing timer"));
+		RTSHUD->InitializeWidget(OwnedFormations);
+		GetWorldTimerManager().ClearTimer(RTSSpawnTimerHandle);
+	}
+}
+
+TArray<ABaseFormation*> AAdBellumPlayerController::GetOwnedFormations_Implementation()
+{
+	return OwnedFormations;
+}
+
+void AAdBellumPlayerController::SetOwnedFormations_Implementation(TArray<ABaseFormation*>& Formations)
+{
+	UE_LOG(LogTemp, Warning, TEXT("[DEBUG] SetOwnedFormations_Implementation: Formations.Num()=%d IsLocalController=%d"),
+		Formations.Num(), IsLocalController());
+	OwnedFormations = Formations;
+
+	// OnRep_OwnedFormations (which initializes the RTS HUD with the owned
+	// formations) is only ever invoked by replication landing on a remote
+	// proxy - it never fires for a locally-controlled owner, since there is
+	// no separate proxy to replicate to. Without this, the host's RTS HUD
+	// would never get initialized at all, even though the client (a genuine
+	// remote proxy) works correctly.
+	if (IsLocalController())
+	{
+		OnRep_OwnedFormations();
+	}
+}
+
 void AAdBellumPlayerController::Client_OnHUDNotify_Implementation(FNotifyHUDData NotifyData)
 {
 	if (CharacterHUD == MyHUD)
@@ -501,6 +559,14 @@ void AAdBellumPlayerController::Client_NotifyHUDRole_Implementation(EALSStationa
 		}
 	}
  }
+
+void AAdBellumPlayerController::OnRep_ReplicationReporter()
+{
+	if (ReplicationReporterActor)
+	{
+		ReplicationReporterActor->InitializeReporter(this);
+	}
+}
 
 template<OrderEnum Type>
 void AAdBellumPlayerController::PerformOrder(AActor* TargetUnit, FVector TargetPosition)
@@ -592,18 +658,84 @@ void AAdBellumPlayerController::SelectTargetForOrder(OrderEnum OrderType)
 
 void AAdBellumPlayerController::Client_SetUnitPrefab_Implementation(const TArray<AActor*>& Units, const TArray<FMeshCreatorPrefabStruct>& Prefabs)
 {
+	ConfigureUnitPrefabsWithRetry(Units, Prefabs);
+}
+
+void AAdBellumPlayerController::ConfigureUnitPrefabsWithRetry(TArray<AActor*> Units, TArray<FMeshCreatorPrefabStruct> Prefabs, int32 Attempts)
+{
+	TArray<AActor*> PendingUnits;
+	TArray<FMeshCreatorPrefabStruct> PendingPrefabs;
+
 	for (int i = 0; i < Units.Num(); ++i)
 	{
+		if (!Units[i])
+		{
+			PendingUnits.Add(Units[i]);
+			PendingPrefabs.Add(Prefabs[i]);
+			continue;
+		}
 		ICustomizable::Execute_ConfigureUnit(Units[i], Prefabs[i]);
+	}
+
+	static constexpr int32 MaxAttempts = 50; // ~5 seconds at 0.1s per retry
+	if (!PendingUnits.IsEmpty())
+	{
+		if (Attempts >= MaxAttempts)
+		{
+			return;
+		}
+		TWeakObjectPtr<AAdBellumPlayerController> WeakThis(this);
+		FTimerDelegate Delegate = FTimerDelegate::CreateLambda([WeakThis, PendingUnits, PendingPrefabs, Attempts]()
+		{
+			if (AAdBellumPlayerController* StrongThis = WeakThis.Get())
+			{
+				StrongThis->ConfigureUnitPrefabsWithRetry(PendingUnits, PendingPrefabs, Attempts + 1);
+			}
+		});
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, Delegate, 0.1f, false);
 	}
 }
 
 void AAdBellumPlayerController::Client_OnWeaponCreated_Implementation(const TArray<AActor*>& Weapons, const TArray<FUnitWeaponDataStruct>& WeaponPrefabs)
 {
+	ConfigureWeaponsWithRetry(Weapons, WeaponPrefabs);
+}
+
+void AAdBellumPlayerController::ConfigureWeaponsWithRetry(TArray<AActor*> Weapons, TArray<FUnitWeaponDataStruct> WeaponPrefabs, int32 Attempts)
+{
+	TArray<AActor*> PendingWeapons;
+	TArray<FUnitWeaponDataStruct> PendingPrefabs;
+
 	for (int i = 0; i < Weapons.Num(); ++i)
 	{
+		if (!Weapons[i] || !WeaponPrefabs[i].OwningUnit)
+		{
+			PendingWeapons.Add(Weapons[i]);
+			PendingPrefabs.Add(WeaponPrefabs[i]);
+			continue;
+		}
 		ICustomizable::Execute_ConfigureWeapon(WeaponPrefabs[i].OwningUnit, Cast<ABaseWeapon>(Weapons[i]), WeaponPrefabs[i].Weapon.WeaponSocketType);
 		IIWeapon::Execute_ConfigureWeapon(Weapons[i], WeaponPrefabs[i].Weapon.WeaponCustomizationData);
+	}
+
+	static constexpr int32 MaxAttempts = 50; // ~5 seconds at 0.1s per retry
+	if (!PendingWeapons.IsEmpty())
+	{
+		if (Attempts >= MaxAttempts)
+		{
+			return;
+		}
+		TWeakObjectPtr<AAdBellumPlayerController> WeakThis(this);
+		FTimerDelegate Delegate = FTimerDelegate::CreateLambda([WeakThis, PendingWeapons, PendingPrefabs, Attempts]()
+		{
+			if (AAdBellumPlayerController* StrongThis = WeakThis.Get())
+			{
+				StrongThis->ConfigureWeaponsWithRetry(PendingWeapons, PendingPrefabs, Attempts + 1);
+			}
+		});
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, Delegate, 0.1f, false);
 	}
 }
 

@@ -8,6 +8,7 @@
 #include "IPlayer.generated.h"
 
 class ABaseUnit;
+class ABaseFormation;
 
 UENUM(BlueprintType)
 enum class ENotifyHudType : uint8
@@ -70,4 +71,8 @@ public:
 		void UpdateCameraDamageEffects(float HPRatio);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IPlayer")
 		void InitializeRTSHUD(ABaseFormation* Formation);
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IPlayer")
+		TArray<ABaseFormation*> GetOwnedFormations();
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IPlayer")
+		void SetOwnedFormations(TArray<ABaseFormation*>& Formations);
 };

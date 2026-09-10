@@ -94,8 +94,12 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void NotifyNewTicketsIndex(int NewTicketsIndex);
 
-	UFUNCTION(Server, Reliable)
-	void ServerSetPlayerSquad(const FString& SquadName, const TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, int Team, int Slot);
+	// Applies a player's chosen squad to the server-authoritative team arrays.
+	// Only ever runs on the server: called from
+	// AMainMenuPlayerController::Server_SetPlayerSquad once that client's
+	// selection has actually arrived. Not an RPC itself - a client can only
+	// call Server RPCs on actors it owns, and no client owns the GameState.
+	void ApplyPlayerSquad(const FString& SquadName, const TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, int Team, int Slot);
 
 	UFUNCTION(BlueprintCallable)
 	void SetPlayerSquad(const FString& SquadName, int Team, int Slot);

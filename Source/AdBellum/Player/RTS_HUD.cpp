@@ -53,20 +53,21 @@ void ARTS_HUD::SelectionModeStart_Implementation()
 void ARTS_HUD::SelectionModeEnd_Implementation()
 {
 	SelectionStarted = false;
+	SetFormationsInPlayerController(SelectedFormations);
+	UpdateWidgetSelection(SelectedFormations);
 	AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(GetOwningPlayerController());
-	if (PC)
+	if (SelectedPawn)
 	{
 		PC->SetSelectedFormations(SelectedFormations);
-		 if(SelectedPawn)
-		 {
-		 	PC->SetSelectedPawn(SelectedPawn);
-		 }
+		SetUnitInPlayerController(SelectedPawn);
 		//add selected unit to variable
 		// Set selection of formations in the URTSFormationUnitTableWidget
 		//maybe add selected pawn to the widget as well
-        UpdateWidgetSelection(SelectedFormations);
+		UpdateWidgetSelection(SelectedFormations);
 		InitOrderLineForFormations();
 	}
+	
+	UpdateWidgetSelection(SelectedFormations);
 }
 
 void ARTS_HUD::InitOrderLineForFormations()
@@ -138,14 +139,17 @@ void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize)
 	else
 	{
 		AController* Controller = Pawn->GetController();
-		if (Controller &&!Controller->IsPlayerController()) 
+		UE_LOG(LogTemp, Warning, TEXT("[DEBUG] DrawOrderLine: Pawn=%s Controller=%s IsPlayerController=%d HasAuthority=%d"),
+			*Pawn->GetName(), Controller ? *Controller->GetName() : TEXT("NULL"),
+			Controller ? Controller->IsPlayerController() : -1, Pawn->HasAuthority());
+		if (Controller &&!Controller->IsPlayerController())
 		{
 			TempOrdersManager = IOrderable::Execute_GetOrdersManagerComponent(Controller);
 		}
 	}
 
-	if (!TempOrdersManager) 
-	{ 
+	if (!TempOrdersManager)
+	{
 		return; 
 	}
 	
@@ -215,11 +219,22 @@ void ARTS_HUD::ClearLines()
 
 void ARTS_HUD::InitializeWidget(TArray<ABaseFormation*>& Formations)
 {
-	BP_InitializeWidget();
     if (FormationUnitTableWidget)
     {
+        UE_LOG(LogTemp, Warning, TEXT("[DEBUG] ARTS_HUD::InitializeWidget: widget valid, Formations.Num()=%d"), Formations.Num());
         FormationUnitTableWidget->InitializeWidget(Formations);
+		FormationUnitTableWidget->OnFormationClickedDelegate.AddDynamic(this, &ARTS_HUD::SetFormationsInPlayerController);
+		FormationUnitTableWidget->OnUnitClickedDelegate.AddDynamic(this, &ARTS_HUD::SetUnitInPlayerController);
     }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DEBUG] ARTS_HUD::InitializeWidget: FormationUnitTableWidget is NULL - skipping!"));
+    }
+}
+
+void ARTS_HUD::InitializeFormationUnitTableWidget(URTSFormationUnitTableWidget* InWidget)
+{
+	FormationUnitTableWidget = InWidget;
 }
 
 void ARTS_HUD::UpdateWidgetSelection(TArray<ABaseFormation*>& Formations)
@@ -304,4 +319,44 @@ void ARTS_HUD::ClearSelectedFormations()
 
 	SetCurrentSelection(false);
 	SelectedFormations.Empty();
+}
+
+void ARTS_HUD::SetFormationsInPlayerController(TArray<ABaseFormation*> Formations)
+{
+	UE_LOG(LogTemp, Warning, TEXT("[DEBUG] SetFormationsInPlayerController: Formations.Num()=%d"), Formations.Num());
+	AAdBellumGameState* GameState = GetWorld()->GetGameState<AAdBellumGameState>();
+	AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(GetOwningPlayerController());
+	ClearSelectedFormations();
+	if (PC)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DEBUG] SetFormationsInPlayerController: PC valid, calling SetSelectedFormations"));
+		PC->SetSelectedFormations(Formations);
+		SelectedFormations = Formations;
+		for (AActor* Actor : Formations)
+		{
+			if (Actor)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[DEBUG] SetFormationsInPlayerController: Setting selection circle for Actor=%s"), *Actor->GetName());
+				GameState->SetSelectionCircle(true, Actor);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[DEBUG] SetFormationsInPlayerController: Actor is NULL"));
+			}
+		}
+		InitOrderLineForFormations();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DEBUG] SetFormationsInPlayerController: PC is NULL"));
+	}
+}
+
+void ARTS_HUD::SetUnitInPlayerController(APawn* SelectedUnit)
+{
+	AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(GetOwningPlayerController());
+	if (PC)
+	{
+		PC->SetSelectedPawn(SelectedUnit);
+	}
 }

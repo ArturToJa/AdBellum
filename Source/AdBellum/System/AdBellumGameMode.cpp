@@ -2,19 +2,533 @@
 
 
 #include "AdBellumGameMode.h"
-#include "Player/SpawnArea.h"
-#include "Player/RandomSpawnArea.h"
-#include "AdBellumGameState.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
 #include "Interfaces/OwnershipInterface.h"
 #include "Formation/BaseFormation.h"
-#include "AdBellumPlayerState.h"
-#include "Player/IPlayer.h"
 #include "GameModes/TeamDeathmatchGameMode.h"
+#include "AdBellumGameState.h"
+#include "AdBellumPlayerState.h"
+#include "Player/SpawnArea.h"
+#include "Player/RandomSpawnArea.h"
+#include "Player/ReplicationReporter.h"
+#include "Library/NetworkComponent.h"
+#include "Player/AdBellumPlayerController.h"
+#include "Player/IPlayer.h"
+#include "Player/RTSPlayer.h"
 
 void AAdBellumGameMode::BeginPlay()
 {}
+
+void AAdBellumGameMode::CreateRTSCameraForPlayer(APlayerController* PC, const FTransform& SpawnTransform)
+{
+	if (!PC || !PC->HasAuthority())
+	{
+		return;
+	}
+
+	// Use GameMode-configured camera class
+	TSubclassOf<ARTSPlayer> CameraClass = RTSCameraClass;
+	if (!CameraClass)
+	{
+		return;
+	}
+
+	AAdBellumPlayerController* AdPC = Cast<AAdBellumPlayerController>(PC);
+	if (!AdPC)
+	{
+		return;
+	}
+
+	FActorSpawnParameters SpawnInfo;
+	SpawnInfo.Owner = PC;
+	SpawnInfo.Instigator = PC->GetInstigator();
+	SpawnInfo.ObjectFlags |= RF_Transient;
+
+	ARTSPlayer* SpawnedCamera = GetWorld()->SpawnActor<ARTSPlayer>(CameraClass, SpawnTransform, SpawnInfo);
+	if (!SpawnedCamera)
+	{
+		return;
+	}
+
+	// Ensure it is only relevant to its owner on the network
+	SpawnedCamera->SetReplicates(true);
+	SpawnedCamera->SetOwner(PC);
+	SpawnedCamera->bOnlyRelevantToOwner = true;
+
+	// Assign to controller and possess
+	// Assign to controller and possess. If the concrete controller type is
+	// AAdBellumPlayerController, keep its RTSCameraPawn reference in sync.
+	
+
+	AdPC->RTSCameraPawn = SpawnedCamera;
+	//PC->Possess(SpawnedCamera);
+
+	// OnRep_RTSPlayerSpawned (which binds the RTS camera's right-click order
+	// delegate and spawns the RTS HUD) is only ever invoked by replication
+	// landing on a remote proxy - it never fires for a locally-controlled
+	// owner, since there is no separate proxy to replicate to. Without this,
+	// the host would never get its RTS order delegate bound at all, even
+	// though the client (a genuine remote proxy) works correctly.
+	if (AdPC->IsLocalController())
+	{
+		AdPC->OnRep_RTSPlayerSpawned();
+	}
+
+	// Add camera to a per-player-only batch so only the owner will be expected to report it
+	TArray<FString> ExpectedPlayers;
+	if (PC->PlayerState)
+	{
+		FUniqueNetIdPtr Id = PC->PlayerState->GetUniqueId().GetUniqueNetId();
+		if (Id.IsValid())
+		{
+			ExpectedPlayers.Add(Id->ToString());
+		}
+	}
+
+	int32 BatchId = CreateOpenBatch(1, 0.1f, ExpectedPlayers, false);
+	// Ensure the batch exists and add actor
+	ReplicationBatches.FindOrAdd(BatchId).Actors.Add(SpawnedCamera);
+	// assign to network component if present so clients also receive batch id
+	if (UNetworkComponent* NetComp = SpawnedCamera->FindComponentByClass<UNetworkComponent>())
+	{
+		NetComp->SetReplicationBatchId(BatchId);
+	}
+	// Immediately flush this small per-player batch so the owner is told about it
+	ForceFlushBatch(BatchId);
+
+	// Schedule the same client timer behavior as before
+	// Uses its own handle - AdPC->RTSSpawnTimerHandle is claimed by the
+	// unrelated TryInitializeRTSHUD retry-poll and must not be shared,
+	// or whichever timer is armed last silently blocks the other.
+	FTransform TransformCopy = SpawnTransform;
+	FTimerHandle CameraManagerTimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(CameraManagerTimerHandle, [AdPC, TransformCopy]() {
+		AdPC->Client_SetPlayerCameraManager(TransformCopy.GetRotation());
+	}, 1.0f, false);
+
+}
+
+void AAdBellumGameMode::OnReporterReady(const FString& PlayerNetId)
+{
+	// Mark the player as having a ready reporter
+	ReporterReadyPlayers.Add(PlayerNetId);
+
+	// Any flushed batches that were waiting for this reporter should be sent
+	// now. Iterate through flushed batches and resend the batch to this
+	// reporter if the batch expected this player.
+	for (const TPair<int32, FReplicationBatch>& Pair : ReplicationBatches)
+	{
+		int32 BatchId = Pair.Key;
+		const FReplicationBatch& Batch = Pair.Value;
+		if (!Batch.bFlushed || !Batch.ExpectedPlayers.Contains(PlayerNetId))
+		{
+			continue;
+		}
+
+		// find player controller for this NetId
+		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+		{
+			AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(It->Get());
+			if (PC && PC->PlayerState)
+			{
+				FUniqueNetIdPtr Id = PC->PlayerState->GetUniqueId().GetUniqueNetId();
+				if (Id.IsValid() && Id->ToString() == PlayerNetId)
+				{
+					// Rebuild the actor list for this batch and send
+					if (PC->ReplicationReporterActor)
+					{
+						TArray<AActor*> ActorsToSend;
+						for (const TWeakObjectPtr<AActor>& Weak : Batch.Actors)
+						{
+							if (AActor* A = Weak.Get())
+							{
+								ActorsToSend.Add(A);
+							}
+						}
+						PC->ReplicationReporterActor->Client_ReceiveBatch(BatchId, ActorsToSend);
+					}
+					break;
+				}
+			}
+		}
+	}
+	// If all connected players have reported their reporter ready, complete
+	// the reporter-ready phase and finalize replication (flush any remaining
+	// open batch that may contain actors created during initialization).
+	int32 Connected = ConnectedPlayers;
+	int32 ReadyCount = ReporterReadyPlayers.Num();
+	if (!bReportersReadyPhaseComplete && Connected > 0 && ReadyCount >= Connected)
+	{
+		bReportersReadyPhaseComplete = true;
+		// Now that all reporters are ready, flush any open batch and finalize
+		// replication so ReadyToStartMatch will consider batches completed.
+		if (ActiveOpenBatchId != 0)
+		{
+			ForceFlushBatch(ActiveOpenBatchId);
+		}
+		FinalizeReplication();
+		bIsInitializing = false;
+	}
+}
+
+void AAdBellumGameMode::OnPlayerReplicationFinished(const FString& PlayerNetId)
+{
+	// Per-player replication finished: do per-player continuation.
+	UE_LOG(LogTemp, Log, TEXT("Player %s finished replication."), *PlayerNetId);
+	// Find the player controller and call a continuation hook if needed.
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(It->Get());
+		if (PC && PC->PlayerState)
+		{
+			FUniqueNetIdPtr Id = PC->PlayerState->GetUniqueId().GetUniqueNetId();
+			if (Id.IsValid() && Id->ToString() == PlayerNetId)
+			{
+				// Example: initialize HUD or enable player-specific gameplay.
+				if (PC->RTSHUD == nullptr)
+				{
+					PC->SpawnRTSHud();
+				}
+				// If there is a per-player initialization that should now run,
+				// call it here. This is intentionally minimal; expand as needed.
+				break;
+			}
+		}
+	}
+}
+
+int32 AAdBellumGameMode::CreateOpenBatch(int32 TargetSize, float TimeoutSeconds, const TArray<FString>& ExpectedPlayers, bool bMustWait)
+{
+	int32 BatchId = NextReplicationBatchId++;
+	FReplicationBatch& Batch = ReplicationBatches.Add(BatchId);
+	Batch.TargetSize = TargetSize;
+	Batch.TimeoutSeconds = TimeoutSeconds;
+	Batch.bMustWait = bMustWait;
+	Batch.bIncludeFuturePlayers = ExpectedPlayers.Num() == 0;
+
+	if (Batch.bIncludeFuturePlayers)
+	{
+		// include current players; future players will be added in OnNewPlayerArrived
+		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+		{
+			AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(It->Get());
+			if (PC && PC->PlayerState)
+			{
+				FUniqueNetIdPtr Id = PC->PlayerState->GetUniqueId().GetUniqueNetId();
+				if (Id.IsValid())
+				{
+					Batch.ExpectedPlayers.Add(Id->ToString());
+				}
+			}
+		}
+	}
+	else
+	{
+		for (const FString& IdStr : ExpectedPlayers)
+		{
+			Batch.ExpectedPlayers.Add(IdStr);
+		}
+	}
+	return BatchId;
+}
+
+int32 AAdBellumGameMode::AddActorToBatch(AActor* Actor)
+{
+	if (!Actor)
+	{
+		return 0;
+	}
+
+	if (ActiveOpenBatchId == 0)
+	{
+		ActiveOpenBatchId = CreateOpenBatch(DefaultBatchSize, DefaultBatchTimeout);
+	}
+	// NOTE: BatchId is read here, after ActiveOpenBatchId is guaranteed non-zero.
+	// The previous version captured "BatchId = ActiveOpenBatchId" at the top of
+	// the function, before a new batch could be created, and never refreshed
+	// it - so the first actor added right after a batch closed was filed under
+	// a stale id 0 with no target size or timeout, and was silently never
+	// flushed or reported to any client.
+	const int32 BatchId = ActiveOpenBatchId;
+
+	FReplicationBatch& Batch = ReplicationBatches.FindOrAdd(BatchId);
+	if (Batch.bFlushed)
+	{
+		return BatchId;
+	}
+
+	Batch.Actors.Add(Actor);
+
+	// assign to network component so clients receive the batch id
+	if (UNetworkComponent* NetComp = Actor->FindComponentByClass<UNetworkComponent>())
+	{
+		NetComp->SetReplicationBatchId(BatchId);
+	}
+
+	// If first actor, start timer
+	if (Batch.Actors.Num() == 1)
+	{
+		FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AAdBellumGameMode::OnBatchFlushTimer, BatchId);
+		GetWorld()->GetTimerManager().SetTimer(Batch.TimerHandle, Delegate, Batch.TimeoutSeconds, false);
+	}
+
+	if (Batch.TargetSize > 0 && Batch.Actors.Num() >= Batch.TargetSize)
+	{
+		ForceFlushBatch(BatchId);
+	}
+
+	return BatchId;
+}
+
+void AAdBellumGameMode::AddUnitToBatch(AActor* Unit, const FMeshCreatorPrefabStruct& Prefab)
+{
+	int32 BatchId = AddActorToBatch(Unit);
+	if (FReplicationBatch* Batch = ReplicationBatches.Find(BatchId))
+	{
+		Batch->UnitActors.Add(Unit);
+		Batch->UnitPrefabsData.Add(Prefab);
+	}
+}
+
+void AAdBellumGameMode::AddWeaponToBatch(AActor* Weapon, const FUnitWeaponDataStruct& Prefab)
+{
+	int32 BatchId = AddActorToBatch(Weapon);
+	if (FReplicationBatch* Batch = ReplicationBatches.Find(BatchId))
+	{
+		Batch->WeaponActors.Add(Weapon);
+		Batch->WeaponPrefabsData.Add(Prefab);
+	}
+}
+
+void AAdBellumGameMode::ForceFlushBatch(int32 BatchId)
+{
+	FReplicationBatch* BatchPtr = ReplicationBatches.Find(BatchId);
+	if (!BatchPtr || BatchPtr->bFlushed)
+	{
+		return;
+	}
+	FReplicationBatch& Batch = *BatchPtr;
+
+	// Cancel timer
+	GetWorld()->GetTimerManager().ClearTimer(Batch.TimerHandle);
+
+	// Flush now
+	TArray<AActor*> ActorsToSend;
+	for (TWeakObjectPtr<AActor>& Weak : Batch.Actors)
+	{
+		if (AActor* A = Weak.Get())
+		{
+			ActorsToSend.Add(A);
+		}
+	}
+
+	// Mark flushed
+	Batch.bFlushed = true;
+
+	// If this was the active open batch, clear it so next spawn will create a new one
+	if (ActiveOpenBatchId == BatchId)
+	{
+		ActiveOpenBatchId = 0;
+	}
+
+	// initialize report tracking
+	Batch.ReportsPerPlayer.Empty();
+
+	// Phase 1: fully rebuild ExpectedPlayers from every currently connected
+	// player BEFORE sending anything to anyone.
+	//
+	// This has to be a separate pass from sending. Sending Client_ReceiveBatch
+	// to a locally-controlled recipient (the listen-server host) executes
+	// synchronously in-process, which can cascade through
+	// Client_ReceiveBatch_Implementation's "already locally reported" check
+	// straight into Server_ReportBatchComplete -> OnClientReportedBatchComplete,
+	// which removes this batch from ReplicationBatches the moment
+	// ReportsPerPlayer.Num() >= ExpectedPlayers.Num(). If sending happened
+	// interleaved with building ExpectedPlayers, the host (processed first)
+	// could satisfy that condition using only ITS OWN entry - before any
+	// other player had been added - erasing the batch out from under this
+	// loop and turning every subsequent Batch.ExpectedPlayers.Add() for the
+	// remaining players into a write through a dangling reference. Building
+	// the complete set first, then sending in a second pass that only reads
+	// from a local snapshot, avoids that reentrancy hazard entirely.
+	Batch.ExpectedPlayers.Empty();
+	TArray<AAdBellumPlayerController*> RecipientCandidates;
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(It->Get());
+		if (!PC)
+		{
+			continue;
+		}
+		RecipientCandidates.Add(PC);
+
+		if (PC->PlayerState)
+		{
+			FUniqueNetIdPtr Id = PC->PlayerState->GetUniqueId().GetUniqueNetId();
+			if (Id.IsValid())
+			{
+				Batch.ExpectedPlayers.Add(Id->ToString());
+			}
+		}
+	}
+
+	// Phase 2: ExpectedPlayers is now complete and won't be touched again for
+	// this batch, so it's safe to start sending - even though a send below
+	// may cause the batch to be completed and removed from ReplicationBatches
+	// partway through this loop. Only send the notification if the reporter
+	// is known to be ready on that client; if not, keep the batch flushed but
+	// skip the notification for now (OnReporterReady will resend it once that
+	// client's reporter signals ready).
+	//
+	// NOTE: Batch/BatchPtr must not be touched anywhere below this point -
+	// only the local snapshots captured above (ActorsToSend, RecipientCandidates,
+	// BatchId) and GameMode members (ReporterReadyPlayers) are used from here on.
+	for (AAdBellumPlayerController* PC : RecipientCandidates)
+	{
+		if (!PC->ReplicationReporterActor)
+		{
+			continue;
+		}
+		FUniqueNetIdPtr Id = PC->PlayerState ? PC->PlayerState->GetUniqueId().GetUniqueNetId() : nullptr;
+		if (Id.IsValid() && ReporterReadyPlayers.Contains(Id->ToString()))
+		{
+			PC->ReplicationReporterActor->Client_ReceiveBatch(BatchId, ActorsToSend);
+		}
+	}
+}
+
+void AAdBellumGameMode::OnBatchFlushTimer(int32 BatchId)
+{
+	// Timer triggered; flush whatever we have
+	ForceFlushBatch(BatchId);
+}
+
+void AAdBellumGameMode::OnClientReportedBatchComplete(const FString& PlayerNetId, int32 BatchId)
+{
+	FReplicationBatch* BatchPtr = ReplicationBatches.Find(BatchId);
+	if (!BatchPtr)
+	{
+		return;
+	}
+
+	BatchPtr->ReportsPerPlayer.Add(PlayerNetId);
+
+	// This player has now actually received every actor in this batch -
+	// only now is it safe to tell them how to configure any units/weapons
+	// it contained, instead of racing ahead of replication.
+	SendBatchConfigurationToPlayer(*BatchPtr, PlayerNetId);
+
+	if (BatchPtr->ReportsPerPlayer.Num() >= BatchPtr->ExpectedPlayers.Num())
+	{
+		// A bIncludeFuturePlayers batch (the common case: it was created
+		// before every expected player had connected) can still gain MORE
+		// expected players later, via OnNewPlayerArrived - which only works
+		// by finding this batch in ReplicationBatches. If we removed it here
+		// just because everyone connected SO FAR has reported it, it would
+		// vanish before a not-yet-connected player ever had a chance to be
+		// added, be sent Client_ReceiveBatch, or receive
+		// SendBatchConfigurationToPlayer for the actors in it - which is
+		// exactly why a host's own squad (flushed and "complete" the instant
+		// the host itself reports, since no one else had connected yet) was
+		// never being configured for a client who connected afterward. Only
+		// actually retire the batch once we know no more players are still
+		// expected to connect.
+		bool bMoreConnectionsExpected = BatchPtr->bIncludeFuturePlayers && ConnectedPlayers < PendingConnections;
+		if (!bMoreConnectionsExpected)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Replication batch %d fully reported by all players"), BatchId);
+			GetWorld()->GetTimerManager().ClearTimer(BatchPtr->TimerHandle);
+			// Clean up: a single Remove() now retires everything about this batch
+			// (target size, timeout, timer, flushed flag, expected/reported
+			// players) in one step, instead of the nine separate map removals
+			// this used to require - which had already drifted: the old code
+			// never removed the batch's entry from BatchMustWait, so a stale
+			// bool accumulated there for every completed batch for the lifetime
+			// of the GameMode.
+			ReplicationBatches.Remove(BatchId);
+			BatchPtr = nullptr;
+		}
+	}
+
+	// If this batch was marked as must-wait, and the reporting player has
+	// now reported all batches they were expected to, we can mark that
+	// individual player as finished and allow per-player initialization to
+	// proceed without waiting for other players.
+	// Check whether this player has any remaining pending must-wait batches.
+	bool bHasPending = false;
+	for (const TPair<int32, FReplicationBatch>& Pair : ReplicationBatches)
+	{
+		const FReplicationBatch& Batch = Pair.Value;
+		if (!Batch.bMustWait)
+			continue;
+
+		if (!Batch.ExpectedPlayers.Contains(PlayerNetId))
+			continue;
+
+		// If this player hasn't been counted in the reports for this batch,
+		// that means there is still pending work for them.
+		if (!Batch.ReportsPerPlayer.Contains(PlayerNetId) || Batch.ReportsPerPlayer.Num() < Batch.ExpectedPlayers.Num())
+		{
+			bHasPending = true;
+			break;
+		}
+	}
+
+	if (!bHasPending)
+	{
+		PlayersFinishedReplication.Add(PlayerNetId);
+		OnPlayerReplicationFinished(PlayerNetId);
+	}
+}
+
+AAdBellumPlayerController* AAdBellumGameMode::FindPlayerControllerByNetId(const FString& PlayerNetId) const
+{
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(It->Get());
+		if (PC && PC->PlayerState)
+		{
+			FUniqueNetIdPtr Id = PC->PlayerState->GetUniqueId().GetUniqueNetId();
+			if (Id.IsValid() && Id->ToString() == PlayerNetId)
+			{
+				return PC;
+			}
+		}
+	}
+	return nullptr;
+}
+
+void AAdBellumGameMode::SendBatchConfigurationToPlayer(const FReplicationBatch& Batch, const FString& PlayerNetId)
+{
+	AAdBellumPlayerController* PC = FindPlayerControllerByNetId(PlayerNetId);
+	if (!PC)
+	{
+		return;
+	}
+
+	if (!Batch.UnitActors.IsEmpty())
+	{
+		TArray<AActor*> Units;
+		Units.Reserve(Batch.UnitActors.Num());
+		for (const TWeakObjectPtr<AActor>& Weak : Batch.UnitActors)
+		{
+			Units.Add(Weak.Get());
+		}
+		PC->Client_SetUnitPrefab(Units, Batch.UnitPrefabsData);
+	}
+
+	if (!Batch.WeaponActors.IsEmpty())
+	{
+		TArray<AActor*> Weapons;
+		Weapons.Reserve(Batch.WeaponActors.Num());
+		for (const TWeakObjectPtr<AActor>& Weak : Batch.WeaponActors)
+		{
+			Weapons.Add(Weak.Get());
+		}
+		PC->Client_OnWeaponCreated(Weapons, Batch.WeaponPrefabsData);
+	}
+}
 
 void AAdBellumGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
@@ -99,39 +613,80 @@ void AAdBellumGameMode::InitializeSpawnAreas()
 #endif
 }
 
-TMap<FString, bool> AAdBellumGameMode::InitializePlayerIsReplicatedMap()
-{
-	TMap<FString, bool> IsReplicatedForPlayerMap;
 
-	if (AAdBellumGameState* AdBellumGameState = GetGameState<AAdBellumGameState>())
-	{
-		for (APlayerState* PlayerState : AdBellumGameState->PlayerArray)
-		{
-			if (PlayerState)
-			{
-				FUniqueNetIdPtr UserId = PlayerState->GetUniqueId().GetUniqueNetId();
-				if (UserId.IsValid())
-				{
-					#if !UE_SERVER
-					if (UserId->ToString() != AdminNetId)
-					{
-					#endif
-						IsReplicatedForPlayerMap.Add(UserId->ToString(), false);
-					#if !UE_SERVER
-					}
-					#endif
-				}
-			}
-		}
-	}
-	return IsReplicatedForPlayerMap;
-}
+
 
 void AAdBellumGameMode::OnNewPlayerArrived(FString PlayerNetId)
 {
-	for (TPair<AActor*, TMap<FString, bool>>& IsReplicatedMap : AllActorsMap)
+
+
+	// Also send any already-flushed batches to the new player so they can
+	// report completion for those batches as well.
+	APlayerController* TargetPC = nullptr;
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
-		IsReplicatedMap.Value.Add(PlayerNetId, false);
+		APlayerController* PC = It->Get();
+		if (PC && PC->PlayerState)
+		{
+			FUniqueNetIdPtr Id = PC->PlayerState->GetUniqueId().GetUniqueNetId();
+			if (Id.IsValid() && Id->ToString() == PlayerNetId)
+			{
+				TargetPC = PC;
+				break;
+			}
+		}
+	}
+
+	if (!TargetPC)
+	{
+		return;
+	}
+
+	AAdBellumPlayerController* NewPC = Cast<AAdBellumPlayerController>(TargetPC);
+	if (!NewPC || !NewPC->ReplicationReporterActor)
+	{
+		return;
+	}
+
+	for (TPair<int32, FReplicationBatch>& Pair : ReplicationBatches)
+	{
+		int32 BatchId = Pair.Key;
+		FReplicationBatch& Batch = Pair.Value;
+		if (!Batch.bFlushed)
+		{
+			continue;
+		}
+
+		// Only send this flushed batch to the new player if the batch was
+		// created as global (include future players) or it explicitly
+		// included this player in the expected set.
+		bool bShouldSend = false;
+		if (Batch.bIncludeFuturePlayers)
+		{
+			bShouldSend = true;
+			// also add this new player to expected set so they must report
+			Batch.ExpectedPlayers.Add(PlayerNetId);
+		}
+		else if (Batch.ExpectedPlayers.Contains(PlayerNetId))
+		{
+			bShouldSend = true;
+		}
+
+		if (!bShouldSend)
+		{
+			continue;
+		}
+
+		// send the batch contents to the new player's reporter
+		TArray<AActor*> ActorsToSend;
+		for (const TWeakObjectPtr<AActor>& Weak : Batch.Actors)
+		{
+			if (AActor* A = Weak.Get())
+			{
+				ActorsToSend.Add(A);
+			}
+		}
+		NewPC->ReplicationReporterActor->Client_ReceiveBatch(BatchId, ActorsToSend);
 	}
 }
 
@@ -146,23 +701,31 @@ void AAdBellumGameMode::SpawnAIPlayer(int TeamId, int PlayerId, FMultiplayerData
 		const TArray<FMeshCreatorPrefabStruct>& UnitsData = PlayerData.PlayerSquad.UnitPrefabDataArray;
 		AddPlayer(TeamId, AIPlayer);
 		AIPlayers.Emplace(AIPlayer);
-		SpawnFormationForPlayer(AIPlayer, TeamId, PlayerId, PlayerData.PlayerSquad.UnitPrefabDataArray, nullptr, true);
+		SpawnFormationForPlayer(AIPlayer, TeamId, PlayerId, PlayerData.PlayerSquad.UnitPrefabDataArray, nullptr);
 	}
 }
 
-void AAdBellumGameMode::SpawnFormationForPlayer(AActor* Player, int TeamId, int PlayerId, TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, ABaseSpawnArea* SpawnArea, bool bIsDefault)
+void AAdBellumGameMode::SpawnFormationForPlayer(AActor* Player, int TeamId, int PlayerId, TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, ABaseSpawnArea* SpawnArea)
 {
 	ABaseFormation* Formation = GetWorld()->SpawnActorDeferred<ABaseFormation>(DefaultFormationClass, FTransform(), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	Formation->SetOwner(Player);
 	Formation->FinishSpawning(FTransform());
-	AllActorsMap.Add(Formation, InitializePlayerIsReplicatedMap());
+	// Batch system handles replication tracking now.
+	AddActorToBatch(Formation);
 	IOwnershipInterface::Execute_SetOwningPlayer(Formation, Player);
 	IOwnershipInterface::Execute_SetTeamIndex(Formation, TeamId);
-	SpawnUnitsForPlayer(Player, TeamId, PlayerId, Formation, UnitPrefabs, SpawnArea, bIsDefault);
+	SpawnUnitsForPlayer(Player, TeamId, PlayerId, Formation, UnitPrefabs, SpawnArea);
 	Formation->FinalizeFormation();
+
+	TArray<ABaseFormation*> CreatedFormations;
+	CreatedFormations.Add(Formation);
+	if (Player->GetClass()->ImplementsInterface(UIPlayer::StaticClass()))
+	{
+		IIPlayer::Execute_SetOwnedFormations(Player, CreatedFormations);
+	}
 }
 
-void AAdBellumGameMode::SpawnUnitsForPlayer(AActor* Player, int TeamId, int PlayerId, ABaseFormation* Formation, TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, ABaseSpawnArea* SpawnArea, bool bIsDefault)
+void AAdBellumGameMode::SpawnUnitsForPlayer(AActor* Player, int TeamId, int PlayerId, ABaseFormation* Formation, TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, ABaseSpawnArea* SpawnArea)
 {
 	if (!UnitPrefabs.IsEmpty())
 	{
@@ -196,20 +759,15 @@ void AAdBellumGameMode::SpawnUnitsForPlayer(AActor* Player, int TeamId, int Play
 						SpawnedUnit->SetOwner(Player);
 						SpawnedUnit->FinishSpawning(SpawnTransform);
 						AddUnitForPlayer(SpawnedUnit, Player, UnitData);
-						SpawnWeaponsForUnit(SpawnedUnit, UnitData.WeaponPrefabData, bIsDefault);
-						if (bIsDefault)
-						{
-							AllUnits.Add(SpawnedUnit);
-							AllUnitsPrefabs.Add(UnitData);
-						}
-						else
-						{
-							AllUnitsReady.Add(SpawnedUnit);
-							AllUnitsPrefabsReady.Add(UnitData);
-							ScheduleSpawnTimer();
-						}
+
+						// Records this unit's prefab data against whichever
+						// batch it lands in, so it gets configured on each
+						// client only once that client actually reports
+						// having received it (see OnClientReportedBatchComplete).
+						AddUnitToBatch(SpawnedUnit, UnitData);
+
+						SpawnWeaponsForUnit(SpawnedUnit, UnitData.WeaponPrefabData);
 						IFormationInterface::Execute_AddUnitToFormation(Formation, SpawnedUnit);
-						AllActorsMap.Add(SpawnedUnit, InitializePlayerIsReplicatedMap());
 					}
 
 				}
@@ -219,7 +777,7 @@ void AAdBellumGameMode::SpawnUnitsForPlayer(AActor* Player, int TeamId, int Play
 	}
 }
 
-void AAdBellumGameMode::SpawnWeaponsForUnit(AActor* Unit, TArray<FWeaponPrefabDataStruct> WeaponPrefabData, bool bIsDefault)
+void AAdBellumGameMode::SpawnWeaponsForUnit(AActor* Unit, TArray<FWeaponPrefabDataStruct> WeaponPrefabData)
 {
 	if (!WeaponPrefabData.IsEmpty())
 	{
@@ -241,18 +799,11 @@ void AAdBellumGameMode::SpawnWeaponsForUnit(AActor* Unit, TArray<FWeaponPrefabDa
 					FUnitWeaponDataStruct UnitWeaponDataStruct;
 					UnitWeaponDataStruct.OwningUnit = Unit;
 					UnitWeaponDataStruct.Weapon = WeaponDataStruct;
-					if (bIsDefault)
-					{
-						AllWeapons.Add(SpawnedWeapon);
-						AllWeaponsPrefabs.Add(UnitWeaponDataStruct);
-					}
-					else
-					{
-						AllWeaponsReady.Add(SpawnedWeapon);
-						AllWeaponsPrefabsReady.Add(UnitWeaponDataStruct);
-						ScheduleSpawnTimer();
-					}
-					AllActorsMap.Add(SpawnedWeapon, InitializePlayerIsReplicatedMap());
+					// Records this weapon's prefab data against whichever
+					// batch it lands in, so it gets configured on each
+					// client only once that client actually reports having
+					// received it (see OnClientReportedBatchComplete).
+					AddWeaponToBatch(SpawnedWeapon, UnitWeaponDataStruct);
 				}
 				else
 				{
@@ -260,31 +811,6 @@ void AAdBellumGameMode::SpawnWeaponsForUnit(AActor* Unit, TArray<FWeaponPrefabDa
 				}
 			}
 		}
-	}
-}
-
-void AAdBellumGameMode::SetupUnits()
-{
-	if (AAdBellumGameState* AdBellumGameState = GetGameState<AAdBellumGameState>())
-	{
-		AdBellumGameState->SetUnitPrefab(AllUnitsReady, AllUnitsPrefabsReady);
-		AdBellumGameState->OnWeaponCreated(AllWeaponsReady, AllWeaponsPrefabsReady);
-		AllUnitsReady.Empty();
-		AllUnitsPrefabsReady.Empty();
-		AllWeaponsReady.Empty();
-		AllWeaponsPrefabsReady.Empty();
-		if (AllActorsMap.IsEmpty())
-		{
-			GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
-		}
-	}
-}
-
-void AAdBellumGameMode::ScheduleSpawnTimer()
-{
-	if (!GetWorldTimerManager().IsTimerActive(SpawnTimerHandle))
-	{
-		GetWorldTimerManager().SetTimer(SpawnTimerHandle, this, &AAdBellumGameMode::SetupUnits, 1.0f, false);
 	}
 }
 
@@ -332,30 +858,64 @@ APlayerController* AAdBellumGameMode::SpawnPlayerController(ENetRole InRemoteRol
 
 bool AAdBellumGameMode::ReadyToStartMatch_Implementation()
 {
-	for (const TPair<AActor*, TMap<FString, bool>>& UnitForPlayers : AllActorsMap)
+	// Ensure all players have a ready reporter before considering batches.
+	// If any player doesn't yet have a ready reporter, we're not ready.
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 	{
-		for (const TPair<FString, bool>& IsReplicatedMap : UnitForPlayers.Value)
+		APlayerController* PC = Cast<APlayerController>(It->Get());
+		if (PC && PC->PlayerState)
 		{
-			if (!IsReplicatedMap.Value)
+			FUniqueNetIdPtr Id = PC->PlayerState->GetUniqueId().GetUniqueNetId();
+			if (Id.IsValid())
 			{
-				return false;
+				if (!ReporterReadyPlayers.Contains(Id->ToString()))
+				{
+					return false;
+				}
 			}
 		}
 	}
+
+	// Check all batches that are marked as must-wait. For each such batch, it
+	// must be flushed and all expected players must have reported completion.
+	for (const TPair<int32, FReplicationBatch>& Pair : ReplicationBatches)
+	{
+		const FReplicationBatch& Batch = Pair.Value;
+		if (!Batch.bMustWait)
+		{
+			continue;
+		}
+
+		if (!Batch.bFlushed)
+		{
+			return false;
+		}
+
+		if (Batch.ReportsPerPlayer.Num() < Batch.ExpectedPlayers.Num())
+		{
+			return false;
+		}
+	}
+
 	return PendingConnections == ConnectedPlayers;
 }
 
 void AAdBellumGameMode::HandleMatchHasStarted()
 {
 	Super::HandleMatchHasStarted();
-	AllUnitsReady = AllUnits;
-	AllUnitsPrefabsReady = AllUnitsPrefabs;
-	AllWeaponsReady = AllWeapons;
-	AllWeaponsPrefabsReady = AllWeaponsPrefabs;
-	SetupUnits();
+	// Unit/weapon configuration is no longer sent from here: it is sent
+	// per-player from OnClientReportedBatchComplete, the moment that specific
+	// player confirms they've actually received the relevant batch - which,
+	// for the initial squad, has already happened for every player by the
+	// time ReadyToStartMatch allows us to get here.
 	InitializeGameMode();
 	AutoPossessPlayers();
-	bIsInitializing = false;
+	// We now enter the reporter-ready phase: wait for per-client reporters to
+	// be replicated and the clients to acknowledge readiness. Only then will
+	// we finalize replication (flush outstanding batches to reporters).
+	bIsInitializing = true;
+	bReportersReadyPhaseComplete = false;
+	// FinalizeReplication will be called once all reporters report ready.
 }
 
 void AAdBellumGameMode::EndMatch()
@@ -400,6 +960,34 @@ void AAdBellumGameMode::HandleStartingNewPlayer_Implementation(APlayerController
 	ConnectedPlayers++;
 	if (APlayerState* PlayerState = (NewPlayer != NULL) ? ToRawPtr(NewPlayer->PlayerState) : NULL)
 	{
+		// Spawn a per-client ReplicationReporter actor on the server and store
+		// a replicated pointer to it on the player's PlayerState so the client
+		// will receive the reference and other client-side actors can discover
+		// the reporter via their PlayerState.
+		if (true)
+		{
+			// Prefer assigning the reporter to the PlayerController for fast
+			// owner-only replication to the owning client.
+			AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(NewPlayer);
+			if (PC && PC->ReplicationReporterActor == nullptr)
+			{
+				FActorSpawnParameters SpawnParams;
+				SpawnParams.Owner = NewPlayer;
+				SpawnParams.Instigator = NewPlayer->GetPawn();
+				SpawnParams.ObjectFlags |= RF_Transient;
+				AReplicationReporter* Reporter = GetWorld()->SpawnActor<AReplicationReporter>(AReplicationReporter::StaticClass(), FTransform::Identity, SpawnParams);
+				if (Reporter)
+				{
+					Reporter->SetOwner(NewPlayer);
+					PC->ReplicationReporterActor = Reporter;
+				Reporter->InitializeReporter(NewPlayer);
+				// Do NOT start sending batches until the client confirms the reporter
+				// was replicated and is ready. The client will call Server_ReportReady
+				// when it receives the reporter actor.
+					// No-op patch: maintain exact context location for future patches.
+				}
+			}
+		}
 		FUniqueNetIdPtr UserId = PlayerState->GetUniqueId().GetUniqueNetId();
 		if (UserId.IsValid())
 		{
@@ -425,8 +1013,8 @@ void AAdBellumGameMode::HandleStartingNewPlayer_Implementation(APlayerController
 							if (MultiplayerData.UniqueNetIdString == UserIdString)
 							{
 								int PlayerIndex = AddPlayer(TeamIndex, NewPlayer);
-								IIPlayer::Execute_SpawnRTSCamera(NewPlayer, GetDefaultSpawnArea(TeamIndex)->GetPlayerSpawnPoint());
-								SpawnFormationForPlayer(NewPlayer, TeamIndex, PlayerIndex, MultiplayerData.PlayerSquad.UnitPrefabDataArray, nullptr, true);
+								CreateRTSCameraForPlayer(NewPlayer, GetDefaultSpawnArea(TeamIndex)->GetPlayerSpawnPoint());
+								SpawnFormationForPlayer(NewPlayer, TeamIndex, PlayerIndex, MultiplayerData.PlayerSquad.UnitPrefabDataArray, nullptr);
 								return;
 							}
 						}
@@ -440,19 +1028,19 @@ void AAdBellumGameMode::HandleStartingNewPlayer_Implementation(APlayerController
 				if (PlayersData[0].Num() < DefaultPlayerSquads[0].PlayerSquadDataArray.Num())
 				{
 					int PlayerIndex = AddPlayer(0, NewPlayer);
-					IIPlayer::Execute_SpawnRTSCamera(NewPlayer, GetDefaultSpawnArea(0)->GetPlayerSpawnPoint());
-					SpawnFormationForPlayer(NewPlayer, 0, PlayerIndex, DefaultPlayerSquads[0].PlayerSquadDataArray[PlayerIndex].UnitPrefabDataArray, nullptr, true);
+					CreateRTSCameraForPlayer(NewPlayer, GetDefaultSpawnArea(0)->GetPlayerSpawnPoint());
+					SpawnFormationForPlayer(NewPlayer, 0, PlayerIndex, DefaultPlayerSquads[0].PlayerSquadDataArray[PlayerIndex].UnitPrefabDataArray, nullptr);
 				}
 				else if (PlayersData[1].Num() < DefaultPlayerSquads[1].PlayerSquadDataArray.Num())
 				{
 					int PlayerIndex = AddPlayer(1, NewPlayer);
-					IIPlayer::Execute_SpawnRTSCamera(NewPlayer, GetDefaultSpawnArea(1)->GetPlayerSpawnPoint());
-					SpawnFormationForPlayer(NewPlayer, 1, PlayerIndex, DefaultPlayerSquads[1].PlayerSquadDataArray[PlayerIndex].UnitPrefabDataArray, nullptr, true);
+					CreateRTSCameraForPlayer(NewPlayer, GetDefaultSpawnArea(1)->GetPlayerSpawnPoint());
+					SpawnFormationForPlayer(NewPlayer, 1, PlayerIndex, DefaultPlayerSquads[1].PlayerSquadDataArray[PlayerIndex].UnitPrefabDataArray, nullptr);
 				}
 				else
 				{
 					int PlayerIndex = AddPlayer(0, NewPlayer);
-					IIPlayer::Execute_SpawnRTSCamera(NewPlayer, GetDefaultSpawnArea(0)->GetPlayerSpawnPoint());
+					CreateRTSCameraForPlayer(NewPlayer, GetDefaultSpawnArea(0)->GetPlayerSpawnPoint());
 				}
 			}
 		}
@@ -576,37 +1164,10 @@ TArray<AActor*> AAdBellumGameMode::GetPlayerEnemyUnits_Implementation(AActor* Pl
 
 void AAdBellumGameMode::NotifyActorReplicated(FString NetId, AActor* ReplicatedActor)
 {
-	if (AllActorsMap.Contains(ReplicatedActor) && AllActorsMap[ReplicatedActor].Contains(NetId))
-	{
-		AllActorsMap[ReplicatedActor][NetId] = true;
-		if (!bIsInitializing)
-		{
-			bool bAllActorsReady = true;
-			for (const TPair<FString, bool>& IsReplicatedMap : AllActorsMap[ReplicatedActor])
-			{
-				if (!IsReplicatedMap.Value)
-				{
-					bAllActorsReady = false;
-					break;
-				}
-			}
-			if (bAllActorsReady)
-			{
-				AllActorsMap.Remove(ReplicatedActor);
-				//if (ReplicatedActor->GetClass()->ImplementsInterface(USelectable::StaticClass()))
-				//{
-				//	AllUnitsReady.Add(ReplicatedActor);
-				//	AllUnitsPrefabsReady.Add(AllUnitsPrefabs[AllUnits.Find(ReplicatedActor)]);
-				//}
-				//else if(ReplicatedActor->GetClass()->ImplementsInterface(UIWeapon::StaticClass()))
-				//{
-				//	AllWeaponsReady.Add(ReplicatedActor);
-				//	AllWeaponsPrefabsReady.Add(AllWeaponsPrefabs[AllWeapons.Find(ReplicatedActor)]);
-				//}
-				// setup the replicated actor
-			}
-		}
-	}
+	// Compatibility stub: per-actor replication tracking removed in favor of
+	// batch-driven reporting. This function no longer performs bookkeeping.
+	(void)NetId;
+	(void)ReplicatedActor;
 }
 
 void AAdBellumGameMode::InitializeGameMode()
@@ -655,4 +1216,9 @@ void AAdBellumGameMode::AutoPossessPlayers()
 			}
 		}
 	}
+}
+
+void AAdBellumGameMode::FinalizeReplication()
+{
+
 }

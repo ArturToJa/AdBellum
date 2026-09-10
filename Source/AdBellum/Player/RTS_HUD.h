@@ -31,12 +31,14 @@ protected:
 
 	APawn* SelectedPawn;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	URTSFormationUnitTableWidget* FormationUnitTableWidget;
 
 public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void BP_InitializeWidget();
+
+	UFUNCTION(BlueprintCallable)
+	void InitializeFormationUnitTableWidget(URTSFormationUnitTableWidget* InWidget);
 
 	void HUDOpen(AActor* ControlledActor);
 
@@ -50,6 +52,8 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void InitializeWidget(TArray<ABaseFormation*>& Formations);
+
+	bool IsFormationWidgetReady() const { return FormationUnitTableWidget != nullptr; }
 
 	void UpdateWidgetSelection(TArray<ABaseFormation*>& Formations);
 
@@ -86,4 +90,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	UNiagaraSystem* LineVFX;
 
+	UFUNCTION()
+	void SetFormationsInPlayerController(TArray<ABaseFormation*> Formations);
+	UFUNCTION()
+	void SetUnitInPlayerController(APawn* SelectedUnit);
 };

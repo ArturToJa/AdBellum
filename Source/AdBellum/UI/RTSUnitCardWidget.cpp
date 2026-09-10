@@ -6,8 +6,13 @@ void URTSUnitCardWidget::NativeConstruct()
     Super::NativeConstruct();
 }
 
-void URTSUnitCardWidget::InitializeWidget(const TArray<ABaseUnit*>& Formations)
+void URTSUnitCardWidget::InitializeWidget(APawn* InUnit)
 {
+    Unit = InUnit;
 
+}
+
+void URTSUnitCardWidget::Clear()
+{
 
 }

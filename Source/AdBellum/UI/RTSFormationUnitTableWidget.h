@@ -12,8 +12,8 @@ class URTSFormationCardWidget;
 class ABaseFormation;
 class ABaseUnit;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRTSFormationClicked, ABaseFormation*, Formation);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRTSUnitClicked, ABaseUnit*, Unit);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRTSFormationClicked, TArray<ABaseFormation*>, Formation);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRTSUnitClicked, APawn*, Unit);
 
 UCLASS()
 class ADBELLUM_API URTSFormationUnitTableWidget : public UUserWidget
@@ -45,7 +45,7 @@ public:
 protected:
     virtual void NativeConstruct() override;
 
-    void OnFormationClicked(ABaseFormation* Formation, int Index);
+    void OnFormationClicked(ABaseFormation* Formation, int InIndex);
 	void OnUnitClicked(ABaseUnit* Unit, int Index);
 
     // Bind these widget names in the UMG Blueprint
@@ -54,6 +54,8 @@ protected:
 
     UPROPERTY(meta = (BindWidget))
     UScrollBox* UnitScrollBox;
+
+    TArray<UWidget*> UnitCardWidgetsBuffer;
 
 
 };

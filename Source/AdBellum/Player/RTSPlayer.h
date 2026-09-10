@@ -69,6 +69,10 @@ public:
 
 	TObjectPtr<ARTS_HUD> HUD;
 
+	// Network component used by the replication batching system
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	class UNetworkComponent* NetworkComponent;
+
 private:
 	FVector2D GetMouseDeltas(FVector2D MousePosition, FVector2D ViewportScaled);
 	bool bFreeCameraRotationEnabled;

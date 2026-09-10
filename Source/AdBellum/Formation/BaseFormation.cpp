@@ -695,7 +695,7 @@ void ABaseFormation::OnCoverQueryFinished(TSharedPtr<FEnvQueryResult> Result)
 
 void ABaseFormation::FinalizeFormation()
 {
-	IIPlayer::Execute_InitializeRTSHUD(OwningPlayer, this);
+	//IIPlayer::Execute_InitializeRTSHUD(OwningPlayer, this);
 }
 
 TMap<AActor*, int> ABaseFormation::GetEnemiesInSight_Implementation()

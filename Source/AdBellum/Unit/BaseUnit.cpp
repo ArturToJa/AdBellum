@@ -32,6 +32,14 @@ ABaseUnit::ABaseUnit(const FObjectInitializer& ObjectInitializer)
 {
 	RecoilAnimationComponent = CreateDefaultSubobject<URecoilAnimationComponent>(TEXT("Recoil Animation Component"));
 	NetworkComponent = CreateDefaultSubobject<UNetworkComponent>(TEXT("Network Component"));
+	// Units are added to the same must-wait replication batches as their
+	// owning ABaseFormation/ABaseWeapon (see AAdBellumGameMode::SpawnUnitsForPlayer),
+	// which both already force bAlwaysRelevant = true for this reason: without
+	// it, a unit spawned far from another player's camera falls back to
+	// default distance-based net relevancy and may never replicate to that
+	// player at all, so that player's ReplicationReporter can never reach the
+	// batch's expected actor count and ReadyToStartMatch blocks forever.
+	bAlwaysRelevant = true;
 	//OptimizationComponent = CreateDefaultSubobject<UOptimizationProxyComponent>(TEXT("Optimization Component"));
 	AIPerception = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("AIPerception"));
 	AIPerception->SetIsReplicated(true);

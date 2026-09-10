@@ -15,9 +15,12 @@ class ADBELLUM_API USaveSystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 public:
+	UPROPERTY()
 	UDefaultSquadsDataAsset* DefaultSquadsDataAsset;
 private:
+	UPROPERTY()
 	UUnitSaveGame* UnitSaveGame;
+	UPROPERTY()
 	USquadSaveGame* SquadSaveGame;
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
@@ -43,13 +46,13 @@ public:
 	bool DoesSquadPrefabExist(const FString& SquadName) const;
 
 	UFUNCTION(BlueprintCallable)
-	TMap<FString, FUnitSaveData>& GetSaveSquadPrefabs() const;
+	TMap<FString, FUnitSaveData>& GetSaveSquadPrefabs();
 
 	UFUNCTION(BlueprintCallable)
-	TMap<FString, FUnitSaveData>& GetDefaultSquadPrefabs() const;
+	TMap<FString, FUnitSaveData>& GetDefaultSquadPrefabs();
 
 	UFUNCTION(BlueprintCallable)
-	FUnitSaveData& GetSquadPrefab(const FString& SquadName) const;
+	FUnitSaveData& GetSquadPrefab(const FString& SquadName);
 
 	// Unit related functions
 	UFUNCTION(BlueprintCallable)
@@ -65,13 +68,13 @@ public:
 	bool DoesUnitPrefabExist(const FString& UnitName) const;
 
 	UFUNCTION(BlueprintCallable)
-	TMap<FString, FMeshCreatorPrefabStruct>& GetSaveUnitPrefabs() const;
+	TMap<FString, FMeshCreatorPrefabStruct>& GetSaveUnitPrefabs();
 
 	UFUNCTION(BlueprintCallable)
-	TMap<FString, FMeshCreatorPrefabStruct>& GetDefaultUnitPrefabs() const;
+	TMap<FString, FMeshCreatorPrefabStruct>& GetDefaultUnitPrefabs();
 
 	UFUNCTION(BlueprintCallable)
-	FMeshCreatorPrefabStruct& GetUnitPrefab(const FString& UnitName) const;
+	FMeshCreatorPrefabStruct& GetUnitPrefab(const FString& UnitName);
 private:
 	void LoadOrCreateSquadSave();
 	void LoadOrCreateUnitSave();

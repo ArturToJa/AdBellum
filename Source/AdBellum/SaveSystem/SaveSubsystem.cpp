@@ -11,8 +11,10 @@ void USaveSystem::Initialize(FSubsystemCollectionBase& Collection)
 	LoadOrCreateSquadSave();
 	LoadOrCreateUnitSave();
 	ValidateSquadPrefabData();
-
-	DefaultSquadsDataAsset = Cast<UAdBellumGameInstance>(GetGameInstance())->DefaultSquadsDataAsset;
+	if (UAdBellumGameInstance* GI = Cast<UAdBellumGameInstance>(GetGameInstance()))
+	{
+		DefaultSquadsDataAsset = GI->DefaultSquadsDataAsset;
+	}
 }
 
 void USaveSystem::Deinitialize()
@@ -135,18 +137,36 @@ bool USaveSystem::DoesSquadPrefabExist(const FString& SquadName) const
 	return bExistsInSave || bExistsInDataAsset;
 }
 
-TMap<FString, FUnitSaveData>& USaveSystem::GetSaveSquadPrefabs() const
+TMap<FString, FUnitSaveData>& USaveSystem::GetSaveSquadPrefabs()
 {
-	return SquadSaveGame->SquadPrefabs;
+	if (!SquadSaveGame)
+	{
+		LoadOrCreateSquadSave();
+	}
+	static TMap<FString, FUnitSaveData> EmptyMap;
+	if (SquadSaveGame)
+	{
+		return SquadSaveGame->SquadPrefabs;
+	}
+	return EmptyMap;
 }
 
-TMap<FString, FUnitSaveData>& USaveSystem::GetDefaultSquadPrefabs() const
+TMap<FString, FUnitSaveData>& USaveSystem::GetDefaultSquadPrefabs()
 {
-	return DefaultSquadsDataAsset->DefaultSquads;
+	static TMap<FString, FUnitSaveData> EmptyMap;
+	if (DefaultSquadsDataAsset)
+	{
+		return DefaultSquadsDataAsset->DefaultSquads;
+	}
+	return EmptyMap;
 }
 
-FUnitSaveData& USaveSystem::GetSquadPrefab(const FString& SquadName) const
+FUnitSaveData& USaveSystem::GetSquadPrefab(const FString& SquadName)
 {
+	if (!SquadSaveGame)
+	{
+		LoadOrCreateSquadSave();
+	}
 	bool bExistsInSave = SquadSaveGame && SquadSaveGame->SquadPrefabs.Contains(SquadName);
 	bool bExistsInDataAsset = DefaultSquadsDataAsset && DefaultSquadsDataAsset->DefaultSquads.Contains(SquadName);
 	if (bExistsInSave)
@@ -247,18 +267,36 @@ bool USaveSystem::DoesUnitPrefabExist(const FString& UnitName) const
 	return bExistsInSave || bExistsInDataAsset;
 }
 
-TMap<FString, FMeshCreatorPrefabStruct>& USaveSystem::GetSaveUnitPrefabs() const
+TMap<FString, FMeshCreatorPrefabStruct>& USaveSystem::GetSaveUnitPrefabs()
 {
-	return UnitSaveGame->UnitPrefabs;
+	if (!UnitSaveGame)
+	{
+		LoadOrCreateUnitSave();
+	}
+	static TMap<FString, FMeshCreatorPrefabStruct> EmptyMap;
+	if (UnitSaveGame)
+	{
+		return UnitSaveGame->UnitPrefabs;
+	}
+	return EmptyMap;
 }
 
-TMap<FString, FMeshCreatorPrefabStruct>& USaveSystem::GetDefaultUnitPrefabs() const
+TMap<FString, FMeshCreatorPrefabStruct>& USaveSystem::GetDefaultUnitPrefabs()
 {
-	return DefaultSquadsDataAsset->DefaultUnits;
+	static TMap<FString, FMeshCreatorPrefabStruct> EmptyMap;
+	if (DefaultSquadsDataAsset)
+	{
+		return DefaultSquadsDataAsset->DefaultUnits;
+	}
+	return EmptyMap;
 }
 
-FMeshCreatorPrefabStruct& USaveSystem::GetUnitPrefab(const FString& UnitName) const
+FMeshCreatorPrefabStruct& USaveSystem::GetUnitPrefab(const FString& UnitName)
 {
+	if (!UnitSaveGame)
+	{
+		LoadOrCreateUnitSave();
+	}
 	bool bExistsInSave = UnitSaveGame && UnitSaveGame->UnitPrefabs.Contains(UnitName);
 	bool bExistsInDataAsset = DefaultSquadsDataAsset && DefaultSquadsDataAsset->DefaultUnits.Contains(UnitName);
 	if (bExistsInSave)
@@ -300,11 +338,15 @@ void USaveSystem::LoadOrCreateUnitSave()
 
 void USaveSystem::ValidateSquadPrefabData() const
 {
-	for(TPair<FString, FUnitSaveData> SquadPrefab : SquadSaveGame->SquadPrefabs)
+	if (!SquadSaveGame)
 	{
-		SquadPrefab.Value.UnitPrefabNames.RemoveAllSwap([this](const FString& UnitName) 
-			{ 
-				return !DoesUnitPrefabExist(UnitName); 
+		return;
+	}
+	for (TPair<FString, FUnitSaveData>& SquadPrefab : SquadSaveGame->SquadPrefabs)
+	{
+		SquadPrefab.Value.UnitPrefabNames.RemoveAllSwap([this](const FString& UnitName)
+			{
+				return !DoesUnitPrefabExist(UnitName);
 			});
 	}
 }

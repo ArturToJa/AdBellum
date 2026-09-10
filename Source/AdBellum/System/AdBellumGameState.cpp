@@ -3,8 +3,6 @@
 
 #include "AdBellumGameState.h"
 #include "Interfaces/Selectable.h"
-#include "GameFramework/PlayerState.h"
-#include "Player/AdBellumPlayerController.h"
 
 void AAdBellumGameState::BeginPlay()
 {
@@ -23,6 +21,8 @@ AInstancedStaticMeshManager* AAdBellumGameState::GetInstancedStaticMeshManager_I
 void AAdBellumGameState::SetSelectionCircle(bool Visible, AActor* Unit)
 {
 	AInstancedStaticMeshManager* ISMM = GetInstancedStaticMeshManager();
+	UE_LOG(LogTemp, Warning, TEXT("[DEBUG] SetSelectionCircle: Visible=%d Unit=%s ISMM=%s"),
+		Visible, Unit ? *Unit->GetName() : TEXT("NULL"), ISMM ? TEXT("valid") : TEXT("NULL"));
 	if (ISMM)
 	{
 		if (Visible)
@@ -37,24 +37,3 @@ void AAdBellumGameState::SetSelectionCircle(bool Visible, AActor* Unit)
 	}
 }
 
-void AAdBellumGameState::SetUnitPrefab(TArray<AActor*> Units, TArray<FMeshCreatorPrefabStruct> Prefabs)
-{
-	for (TObjectPtr<APlayerState> PlayerState : PlayerArray)
-	{
-		if (AAdBellumPlayerController* AdPlayerController = Cast<AAdBellumPlayerController>(PlayerState->GetPlayerController()))
-		{
-			AdPlayerController->Client_SetUnitPrefab(Units, Prefabs);
-		}
-	}
-}
-
-void AAdBellumGameState::OnWeaponCreated(TArray<AActor*> Weapons, TArray<FUnitWeaponDataStruct> WeaponPrefabs)
-{
-	for (TObjectPtr<APlayerState> PlayerState : PlayerArray)
-	{
-		if (AAdBellumPlayerController* AdPlayerController = Cast<AAdBellumPlayerController>(PlayerState->GetPlayerController()))
-		{
-			AdPlayerController->Client_OnWeaponCreated(Weapons, WeaponPrefabs);
-		}
-	}
-}

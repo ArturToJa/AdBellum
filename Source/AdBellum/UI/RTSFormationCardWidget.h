@@ -5,6 +5,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/Overlay.h"
 #include "RTSFormationCardWidget.generated.h"
 
 class UScrollBox;
@@ -18,11 +19,9 @@ class ADBELLUM_API URTSFormationCardWidget : public UUserWidget
     GENERATED_BODY()
 
 public:
-
-
-    // Initialize with formations (caller owns the array)
-    UFUNCTION(BlueprintCallable, Category = "RTS|API")
     void InitializeWidget(ABaseFormation* InFormation);
+
+    void Clear();
 
     UFUNCTION()
     void OnCardButtonClicked();
@@ -32,6 +31,9 @@ public:
 
 protected:
     virtual void NativeConstruct() override;
+
+    UPROPERTY(meta = (BindWidget))
+    UOverlay* Overlay;
 
     UPROPERTY(meta = (BindWidget))
     UButton* CardButton;

@@ -91,11 +91,6 @@ public:
 	AInstancedStaticMeshManager* GetInstancedStaticMeshManager();
 
 	void SetSelectionCircle(bool Visible, AActor* Unit);
-
-	//Unit creation
-	void SetUnitPrefab(TArray<AActor*> Units, TArray<FMeshCreatorPrefabStruct> Prefabs);
-
-	void OnWeaponCreated(TArray<AActor*> Weapons, TArray<FUnitWeaponDataStruct> WeaponPrefabs);
 private:
 	AInstancedStaticMeshManager* InstancedStaticMeshManager;
 	

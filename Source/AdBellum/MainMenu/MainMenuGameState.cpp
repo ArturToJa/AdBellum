@@ -5,6 +5,7 @@
 #include "System/AdBellumGameInstance.h"
 #include "SaveSystem/SaveSubsystem.h"
 #include "Net/UnrealNetwork.h"
+#include "MainMenuPlayerController.h"
 
 AMainMenuGameState::AMainMenuGameState(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -238,7 +239,7 @@ void AMainMenuGameState::SetTicketsIndex(int _TicketsIndex)
 	NotifyNewTicketsIndex(_TicketsIndex);
 }
 
-void AMainMenuGameState::ServerSetPlayerSquad_Implementation(const FString& SquadName, const TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, int Team, int Slot)
+void AMainMenuGameState::ApplyPlayerSquad(const FString& SquadName, const TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, int Team, int Slot)
 {
 	GEngine->AddOnScreenDebugMessage(
 		-1,
@@ -274,8 +275,15 @@ void AMainMenuGameState::SetPlayerSquad(const FString& SquadName, int Team, int 
 	{
 		SquadUnits.Add(SaveSystem->GetUnitPrefab(UnitName));
 	}
-	
-	ServerSetPlayerSquad(SquadName, SquadUnits, Team, Slot);
+
+	// A client can only call a Server RPC on an actor it owns - this
+	// GameState is never owned by any particular client, so the RPC must go
+	// through the calling player's own PlayerController instead.
+	APlayerController* LocalPC = GetWorld()->GetFirstPlayerController();
+	if (AMainMenuPlayerController* PC = Cast<AMainMenuPlayerController>(LocalPC))
+	{
+		PC->Server_SetPlayerSquad(SquadName, SquadUnits, Team, Slot);
+	}
 }
 
 void AMainMenuGameState::SetMultiplayerData(int GameModeIndex, int TicketsIndex)

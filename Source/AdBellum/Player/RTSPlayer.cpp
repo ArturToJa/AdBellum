@@ -2,6 +2,7 @@
 
 
 #include "RTSPlayer.h"
+#include "Library/NetworkComponent.h"
 #include "RTS_HUD.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "AdBellumPlayerController.h"
@@ -20,6 +21,7 @@ ARTSPlayer::ARTSPlayer()
 	SetReplicates(true);
 	SetActorTickEnabled(false);
 	FloatingMovement = CreateDefaultSubobject<UFloatingPawnMovement>(TEXT("Floating Movement"));
+	NetworkComponent = CreateDefaultSubobject<UNetworkComponent>(TEXT("NetworkComponent"));
 }
 
 void ARTSPlayer::InitializePlayableAreaFromBox()
