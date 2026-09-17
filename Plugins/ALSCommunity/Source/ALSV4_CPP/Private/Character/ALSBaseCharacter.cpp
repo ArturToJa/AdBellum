@@ -1559,22 +1559,6 @@ void AALSBaseCharacter::CameraActionCompleted_Implementation() {
 	}
 }
 
-void AALSBaseCharacter::SprintAction_Implementation(bool bValue)
-{
-	if (bValue)
-	{
-		SetDesiredGait(EALSGait::Sprinting);
-		if (EALSRotationMode::Aiming == RotationMode) 
-		{
-			CameraPOV = 67.5f;
-		}
-	}
-	else
-	{
-		SetDesiredGait(EALSGait::Running);
-		CameraPOV = 90.0f;
-	}
-}
 
 void AALSBaseCharacter::JumpAction_Implementation(bool bValue)
 {
@@ -1741,16 +1725,16 @@ void AALSBaseCharacter::ScrollAction_Implementation(bool Value)
 		//scroll up
 		if(!Value)
 		{
-			if (!(CameraPOV >= CameraPOVMax))
+			if (!(CameraFOV >= CameraFOVMax))
 			{
-				CameraPOV += CameraPOVStep;
+				CameraFOV += CameraFOVStep;
 			}
 		}
 		else
 		{
-			if (!(CameraPOV <= CameraPOVMin))
+			if (!(CameraFOV <= CameraFOVMin))
 			{
-				CameraPOV -= CameraPOVStep;
+				CameraFOV -= CameraFOVStep;
 			}
 		}
 	}
@@ -1933,14 +1917,14 @@ void AALSBaseCharacter::NotifyOpenHud_Implementation(bool bValue)
 	ALSDebugComponent->OpenVehicleHud(bValue, StationaryRole);
 }
 
-void AALSBaseCharacter::SetCameraPOV(float TargetPOV) 
+void AALSBaseCharacter::SetCameraFOV(float TargetPOV) 
 {
-	CameraPOV = TargetPOV;
+	CameraFOV = TargetPOV;
 }
 
-float AALSBaseCharacter::GetCameraPOV()
+float AALSBaseCharacter::GetCameraFOV()
 {
-	return CameraPOV;
+	return CameraFOV;
 }
 
 void AALSBaseCharacter::SetOwnerHeadVisibility(bool Value)

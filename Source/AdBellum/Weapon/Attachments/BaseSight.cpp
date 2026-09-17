@@ -35,13 +35,15 @@ void ABaseSight::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME(ABaseSight, BaseMouseSensitivity);
 }
 
-void ABaseSight::CalibrateSight(FVector TargetLocation)
+void ABaseSight::CalibrateSight(FVector TargetLocation, FRotator BarrelRotation)
 {
-	FRotator TargetRotation = UKismetMathLibrary::FindLookAtRotation(SightArrow->GetRelativeLocation(), TargetLocation);
-	//UKismetSystemLibrary::PrintString(GetWorld(), FString::SanitizeFloat(TargetRotation.Yaw).Append("<--- Calculated YAW value "), true, true);
-	//SightView->AddRelativeRotation(FRotator(0.0f, TargetRotation.Yaw,0.0f),true, nullptr, ETeleportType::TeleportPhysics);
-	RootComponent->SetRelativeRotation(FRotator(TargetRotation.Pitch, 0.0f,0.0f),true, nullptr, ETeleportType::TeleportPhysics);
-	//UKismetSystemLibrary::PrintString(GetWorld(), "SIGHT CALIBRATED", true, true);
+	FRotator SightRotation = UKismetMathLibrary::FindLookAtRotation(SightArrow->GetRelativeLocation(), TargetLocation);
+
+	USceneComponent* RootComp = GetRootComponent();
+	USceneComponent* AttachParent = RootComp->GetAttachParent();
+	USightChildActorComponent* SightActorComponent = Cast<USightChildActorComponent>(AttachParent);
+
+	RootComponent->SetRelativeRotation(FRotator(SightActorComponent->GetRelativeRotation().Pitch - (BarrelRotation.Pitch - SightRotation.Pitch), 0.0f,0.0f),true, nullptr, ETeleportType::TeleportPhysics);
 }
 
 void ABaseSight::NotifyAim(bool bIsAiming)
@@ -69,10 +71,27 @@ ABaseSight* USightChildActorComponent::GetSightActor() const
 	return Cast<ABaseSight>(this->GetChildActor());
 }
 
-void USightChildActorComponent::CalibrateSightActor(FVector TargetLocation)
+void USightChildActorComponent::CalibrateSightActor(FVector TargetLocation, FRotator BarrelRotation)
 {
 	if (GetSightActor())
 	{
-		GetSightActor()->CalibrateSight(TargetLocation);
+		GetSightActor()->CalibrateSight(TargetLocation, BarrelRotation);
 	}
+}
+
+float ABaseSight::GetSightFOV() const
+{
+	return SightFOV;
+}
+
+void ABaseSight::SetAimingMeshScale(bool bIsAiming) 
+{
+	SightMesh->SetRelativeScale3D(bIsScoped && bIsAiming
+		? FVector(0.1f, 1.0f, 1.0f)
+		: FVector(1.0f, 1.0f, 1.0f));
+}
+
+bool ABaseSight::GetIsScoped() const
+{
+	return bIsScoped;
 }

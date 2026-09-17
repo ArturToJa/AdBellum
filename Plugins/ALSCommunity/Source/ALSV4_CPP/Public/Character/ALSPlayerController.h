@@ -137,6 +137,9 @@ public:
 	TObjectPtr<APawn> PossessedCharacter = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ALS|Input")
+	bool bEnableDebugInputs = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ALS|Input")
 	TObjectPtr<UInputMappingContext> DefaultInputMappingContext = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ALS|Input")

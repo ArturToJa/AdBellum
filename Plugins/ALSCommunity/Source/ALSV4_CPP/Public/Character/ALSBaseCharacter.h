@@ -329,17 +329,17 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SetUseMainCameraTransform(bool value);
 
-	float CameraPOV = 90.0f;
+	float CameraFOV = 90.0f;
 
-	float CameraPOVMin = 30.0f;
+	float CameraFOVMin = 30.0f;
 
-	float CameraPOVMax = 90.0f;
+	float CameraFOVMax = 90.0f;
 
-	float CameraPOVStep = 15.0f;
+	float CameraFOVStep = 15.0f;
 
-	float GetCameraPOV();
+	float GetCameraFOV();
 
-	void SetCameraPOV(float POV);
+	void SetCameraFOV(float POV);
 
 	bool GetUseMainCameraTransform();
 
@@ -452,8 +452,6 @@ public:
 	virtual void CameraRightAction_Implementation(float Value) override;
 
 	virtual void JumpAction_Implementation(bool bValue) override;
-
-	virtual void SprintAction_Implementation(bool bValue) override;
 
 	virtual void CameraTapAction_Implementation() override;
 

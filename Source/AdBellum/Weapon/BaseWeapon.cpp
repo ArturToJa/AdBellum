@@ -146,8 +146,10 @@ void ABaseWeapon::CalibrateSight()
 {
 	if (SightComponent->GetChildActor())
 	{
-		FVector HitLocation = EBarrel->GetRelativeTransform().GetUnitAxis(EAxis::X) * 10000.0f + EBarrel->GetRelativeLocation();
-		SightComponent->CalibrateSightActor(HitLocation);
+		FVector StartLocation = EBarrel->GetComponentLocation();
+		FVector HitLocation = EBarrel->GetRelativeTransform().GetUnitAxis(EAxis::X) * SightTargetDistance * 100 + EBarrel->GetRelativeLocation();
+		FVector SightRotation = CalculateSightRotation(StartLocation, HitLocation, FVector::ZeroVector);
+		SightComponent->CalibrateSightActor(HitLocation, SightRotation.Rotation());
 	}
 }
 
@@ -162,6 +164,21 @@ float ABaseWeapon::CalculateFlightTime(TSubclassOf<AEBBullet> BulletClass)
 		return (SightTargetDistance * 100)/ DefaultBullet->MuzzleVelocityMin;
 	}
 	else return 0.0f;
+}
+
+FVector ABaseWeapon::CalculateSightRotation(FVector StartLocation, FVector TargetLocation, FVector TargetVelocity)
+{
+	TSubclassOf<class AEBBullet> BulletClass = EBarrel->Ammo[0];
+	FVector TargetAimDirection;
+	FVector PredictedTargetLocation;
+	float PredictedFlightTime;
+	FVector PredictedIntersectionLocation;
+	float Error;
+	float Step = 0.1f;
+	float MaxTime = 10.0f;
+	int NumIterations = 4;
+	EBarrel->CalculateAimDirectionFromLocation(BulletClass, StartLocation, TargetLocation, TargetVelocity, TargetAimDirection, PredictedTargetLocation, PredictedIntersectionLocation, PredictedFlightTime, Error, MaxTime, Step, NumIterations);
+	return TargetAimDirection;
 }
 //END CUSTOMIZATION
 
@@ -373,18 +390,9 @@ void ABaseWeapon::SetupAim_Implementation(UObject* TargetObject)
 	if(TargetObject){
 		FVector TargetLocation = IITargetable::Execute_GetChestLocation(TargetObject);
 		FVector TargetVelocity = Cast<AActor>(TargetObject)->GetVelocity();
-		TSubclassOf<class AEBBullet> BulletClass = EBarrel->Ammo[0];
 		FVector StartLocation = EBarrel->GetComponentLocation();
 
-		FVector TargetAimDirection;
-		FVector PredictedTargetLocation;
-		float PredictedFlightTime;
-		FVector PredictedIntersectionLocation;
-		float Error;
-		float Step = 0.1f;
-		float MaxTime = 10.0f;
-		int NumIterations = 4;
-		EBarrel->CalculateAimDirectionFromLocation(BulletClass, StartLocation, TargetLocation, TargetVelocity, TargetAimDirection, PredictedTargetLocation, PredictedIntersectionLocation, PredictedFlightTime, Error, MaxTime, Step, NumIterations);
+		FVector TargetAimDirection = CalculateSightRotation(StartLocation, TargetLocation, TargetVelocity);
 		EBarrel->SetWorldRotation(TargetAimDirection.Rotation());
 		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), StartLocation, StartLocation + TargetAimDirection * 500000.0f, 10.0f, FColor::Blue, 0.5f, 2.0f);
 	}
@@ -429,4 +437,33 @@ bool ABaseWeapon::IsShooting_Implementation()
 void ABaseWeapon::GetWeaponCombatData_Implementation(FWeaponCombatDataStruct& OutWeaponCombatData)
 {
 	OutWeaponCombatData = WeaponCombatData;
+}
+
+float ABaseWeapon::GetWeaponFOV_Implementation()
+{
+	if (SightComponent->GetSightActor())
+	{
+		return SightComponent->GetSightActor()->GetSightFOV();
+	}
+	else
+	{
+		return 90.0f; // Default FOV if no sight is attached
+	}
+}
+
+void ABaseWeapon::SetSightMeshScale_Implementation(bool bIsAiming) 
+{
+	if (SightComponent->GetSightActor()) 
+	{
+		SightComponent->GetSightActor()->SetAimingMeshScale(bIsAiming);
+	}
+}
+
+bool ABaseWeapon::GetIsScoped_Implementation() 
+{
+	if (SightComponent->GetSightActor()) 
+	{
+		return SightComponent->GetSightActor()->GetIsScoped();
+	}
+	return false;
 }

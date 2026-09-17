@@ -293,11 +293,11 @@ bool AALSPlayerCameraManager::CustomCameraBehavior(float DeltaTime, FVector& Loc
 		Rotation = TargetTransform.Rotator();
 		if (ControlledCharacter->GetStationaryRole() == EALSStationaryRole::Gunner)
 		{
-			FOV = ControlledCharacter->GetCameraPOV();
+			FOV = ControlledCharacter->GetCameraFOV();
 		}
 		else 
 		{
-			FOV = ControlledCharacter->GetCameraPOV();
+			FOV = ControlledCharacter->GetCameraFOV();
 			//FOV = FMath::Lerp(TPFOV, FPFOV, GetCameraBehaviorParam(NAME_Weight_FirstPerson));
 		}
 	}

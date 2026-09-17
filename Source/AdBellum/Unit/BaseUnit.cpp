@@ -186,6 +186,30 @@ void ABaseUnit::PossessByAIController()
 }
 
 //INPUT INTERFACE
+void ABaseUnit::SprintAction_Implementation(bool bValue)
+{
+	if (bValue)
+	{
+		SetDesiredGait(EALSGait::Sprinting);
+		if (EALSRotationMode::Aiming == RotationMode)
+		{
+			if (!IIWeapon::Execute_GetIsScoped(ActiveWeaponActor)) 
+			{
+				CameraFOV = IIWeapon::Execute_GetWeaponFOV(ActiveWeaponActor);
+			}
+		}
+	}
+	else
+	{
+		SetDesiredGait(EALSGait::Running);
+		if (!IIWeapon::Execute_GetIsScoped(ActiveWeaponActor))
+		{
+			CameraFOV = 90.0f;
+		}
+		//CameraFOV = 90.0f;
+	}
+}
+
 void ABaseUnit::AimAction_Implementation(bool Value)
 {
 	if (StationaryRole == EALSStationaryRole::None)
@@ -229,12 +253,26 @@ void ABaseUnit::HandleNonStationaryAimAction(bool Value)
 	{
 		HandlePressedADS();
 		SetRotationMode(EALSRotationMode::Aiming);
+		if (IsPlayerControlled()) 
+		{
+			IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, true);
+			//set FOV
+			if (IIWeapon::Execute_GetIsScoped(ActiveWeaponActor)) 
+			{
+				CameraFOV = IIWeapon::Execute_GetWeaponFOV(ActiveWeaponActor);
+			}
+		}
 	}
 	else
 	{
 		if (TriggerActive)
 		{
 			HipFire = true;
+			if (IsPlayerControlled())
+			{
+				IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, false);
+				CameraFOV = 90.0f;
+			}
 		}
 		else if (ViewMode == EALSViewMode::ThirdPerson)
 		{
@@ -243,6 +281,11 @@ void ABaseUnit::HandleNonStationaryAimAction(bool Value)
 		else if (ViewMode == EALSViewMode::FirstPerson)
 		{
 			SetRotationMode(EALSRotationMode::LookingDirection);
+			if (IsPlayerControlled())
+			{
+				IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, false);
+				CameraFOV = 90.0f;
+			}
 		}
 	}
 }
@@ -265,11 +308,11 @@ void ABaseUnit::HandleStationaryAimAction(bool Value)
 	else if (StationaryRole == EALSStationaryRole::Gunner) {
 		if (Value)
 		{
-			CameraPOV = 45.0f;
+			CameraFOV = 45.0f;
 		}
 		else
 		{
-			CameraPOV = 90.0f;
+			CameraFOV = 90.0f;
 		}
 	}
 }
@@ -829,6 +872,7 @@ void ABaseUnit::HandleWeaponStatesOnPlayerDepossessed()
 		if (KeyValue)
 		{
 			IIWeapon::Execute_Trigger(KeyValue, false);
+			IIWeapon::Execute_SetSightMeshScale(KeyValue, false);
 		}
 	}
 }

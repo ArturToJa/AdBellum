@@ -114,6 +114,7 @@ public:
 	TObjectPtr<URecoilData> RecoilData;
 
 	float CalculateFlightTime(TSubclassOf<AEBBullet> BulletClass);
+	FVector CalculateSightRotation(FVector StartLocation, FVector TargetLocation, FVector TargetVelocity);
 
 	void CalibrateSight();
 
@@ -190,6 +191,9 @@ public:
 	virtual bool IsTriggerActive_Implementation() override;
 	virtual bool IsShooting_Implementation() override;
 	virtual void GetWeaponCombatData_Implementation(FWeaponCombatDataStruct& OutWeaponCombatData) override;
+	virtual float GetWeaponFOV_Implementation() override;
+	virtual void SetSightMeshScale_Implementation(bool bIsAiming) override;
+	virtual bool GetIsScoped_Implementation() override;
 
 	virtual void BeginPlay() override;
 	bool bIsReloading = false;

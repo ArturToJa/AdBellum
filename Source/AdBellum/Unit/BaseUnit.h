@@ -227,6 +227,8 @@ public:
 
 	virtual void TriggerActionCompleted_Implementation() override;
 
+	virtual void SprintAction_Implementation(bool bValue) override;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Input")
 	bool bIsReloading = false;
 

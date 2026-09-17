@@ -48,7 +48,11 @@ void AALSPlayerController::SetupInputComponent()
 		EnhancedInputComponent->ClearDebugKeyBindings();
 
 		BindActions(DefaultInputMappingContext);
-		BindActions(DebugInputMappingContext);
+
+		if(bEnableDebugInputs)
+		{
+			BindActions(DebugInputMappingContext);
+		}
 	}
 	else
 	{

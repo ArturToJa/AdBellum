@@ -35,7 +35,7 @@ public:
 	//for custom scopes save mesh mat id and apply render target?
 
 	//UFUNCTION(BlueprintCallable)
-	virtual void CalibrateSight(FVector TargetLocation) override;
+	virtual void CalibrateSight(FVector TargetLocation, FRotator Rotation) override;
 	virtual void NotifyAim(bool bIsAiming) override;
 
 protected:

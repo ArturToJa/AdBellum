@@ -32,7 +32,7 @@ void ABaseScope::BeginPlay()
 	ScreenCaptureComponent->SetActive(false);
 }
 
-void ABaseScope::CalibrateSight(FVector TargetLocation)
+void ABaseScope::CalibrateSight(FVector TargetLocation, FRotator Rotation)
 {
 	FRotator TargetRotation = UKismetMathLibrary::FindLookAtRotation(ScreenCaptureComponent->GetRelativeLocation(), TargetLocation);
 	ScreenCaptureComponent->AddRelativeRotation(FRotator(TargetRotation.Pitch, 0.0f, 0.0f), true, nullptr, ETeleportType::TeleportPhysics);

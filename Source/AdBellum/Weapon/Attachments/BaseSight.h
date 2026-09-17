@@ -34,13 +34,22 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UArrowComponent* SightArrow;
 
-	UPROPERTY(Replicated, EditDefaultsOnly, BlueprintReadWrite, Category = "Components")
+	UPROPERTY(Replicated, EditDefaultsOnly, BlueprintReadWrite, Category = "AimConfig")
 	float BaseMouseSensitivity = 0.15f;
-	
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AimConfig")
+	float SightFOV = 90.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AimConfig")
+	bool bIsScoped = false;
+
 	//UFUNCTION(BlueprintCallable)
-	virtual void CalibrateSight(FVector TargetLocation);
+	virtual void CalibrateSight(FVector TargetLocation, FRotator BarrelRotation);
 	virtual void NotifyAim(bool bIsAiming);
 	float GetBaseSensitivity();
+	float GetSightFOV() const;
+	bool GetIsScoped() const;
+	void SetAimingMeshScale(bool bIsAiming);
 protected:
 	// Called when the game starts or when spawned
 };
@@ -56,5 +65,5 @@ public:
 	//virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	ABaseSight* GetSightActor() const;
-	void CalibrateSightActor(FVector TargetLocation);
+	void CalibrateSightActor(FVector TargetLocation, FRotator BarrelRotation);
 };

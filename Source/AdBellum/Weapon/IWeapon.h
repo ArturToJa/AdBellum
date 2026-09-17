@@ -98,4 +98,13 @@ public:
 		bool IsShooting();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		void GetWeaponCombatData(FWeaponCombatDataStruct& OutWeaponCombatData);
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		float GetWeaponFOV();
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		void SetSightMeshScale(bool bIsAiming);
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		bool GetIsScoped();
+
 };
