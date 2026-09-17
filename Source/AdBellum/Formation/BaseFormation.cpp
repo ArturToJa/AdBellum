@@ -48,6 +48,9 @@ void ABaseFormation::BeginPlay()
 	{ 
 		GetWorldTimerManager().SetTimer(FormationUpdateTimerHandle, this, &ABaseFormation::UpdateFormationPosition, FormationUpdateInterval, true); 
 	} 
+
+	UOrdersManager* OrdersManagerComp = IOrderable::Execute_GetOrdersManagerComponent(GetController());
+	OrdersManagerComp->OverrideIsFinishedDelegate.BindUObject(this, &ABaseFormation::IsOrderFinished);
 }
 
 void ABaseFormation::Tick(float DeltaTime)
@@ -157,28 +160,28 @@ void ABaseFormation::Stop_Implementation(FVector TargetPosition)
 	}
 }
 
-void ABaseFormation::MoveOrder_Implementation(FVector TargetPosition)
+/*void ABaseFormation::MoveOrder_Implementation(FVector TargetPosition)
 {
 	for (APawn* Actor : ActorsInFormation)
 	{
 		TUniquePtr<GeneralOrder<OrderEnum::Move>::OrderType> OrderToPerform = MakeUnique<GeneralOrder<OrderEnum::Move>::OrderType>(nullptr, TargetPosition);
 		IOrderable::Execute_GetOrdersManagerComponent(Actor->GetController())->AddOrder(MoveTemp(OrderToPerform), false);
 	}
+}*/
+void ABaseFormation::MoveOrder_Implementation(FVector TargetPosition)
+{
+	TArray<APawn*> AliveUnitsToMove;
+
+	for (APawn* Unit : ActorsInFormation)
+	{
+		if (IsValid(Unit) && IITargetable::Execute_IsAlive(Unit))
+		{
+			AliveUnitsToMove.Add(Unit);
+		}
+	}
+
+	AssignFormationPositions(AliveUnitsToMove, TargetPosition);
 }
-//void ABaseFormation::MoveOrder_Implementation(FVector TargetPosition)
-//{
-//	TArray<APawn*> AliveUnitsToMove;
-//
-//	for (APawn* Unit : ActorsInFormation)
-//	{
-//		if (IsValid(Unit) && IITargetable::Execute_IsAlive(Unit))
-//		{
-//			AliveUnitsToMove.Add(Unit);
-//		}
-//	}
-//
-//	AssignFormationPositions(AliveUnitsToMove, TargetPosition);
-//}
 
 void ABaseFormation::AssignFormationPositions(const TArray<APawn*>& UnitsToOrder, FVector TargetPosition)
 {
@@ -305,7 +308,11 @@ APawn* ABaseFormation::GetUnitForPossesion()
 template<OrderEnum T>
 void ABaseFormation::PerformOrder(AActor* TargetUnit, FVector TargetPosition)
 {
-	
+	using OrderType = typename GeneralOrder<T>::OrderType;
+	TUniquePtr<OrderType> OrderToPerform = MakeUnique<OrderType>(TargetUnit, TargetPosition);
+	UOrdersManager* OrdersManagerComp = IOrderable::Execute_GetOrdersManagerComponent(GetController());
+	OrdersManagerComp->PerformSilentOrder(MoveTemp(OrderToPerform));
+
 	if (T == OrderEnum::Move)
 	{
 		TArray<APawn*> ActiveAliveUnits;
@@ -316,6 +323,7 @@ void ABaseFormation::PerformOrder(AActor* TargetUnit, FVector TargetPosition)
 				ActiveAliveUnits.Add(Unit);
 			}
 		}
+		
 		int TotalUnits = ActiveAliveUnits.Num();
 		for (int Index = 0; Index < TotalUnits; ++Index)
 		{
@@ -498,6 +506,21 @@ void ABaseFormation::OrderUnit(APawn* UnitToOrder, OrderEnum OrderType, AActor* 
 		PerformOrder<OrderEnum::OccupyAOI>(UnitToOrder, TargetUnit, TargetPosition);
 		break;
 	}
+}
+
+bool ABaseFormation::IsOrderFinished() const
+{
+	bool bResult = true;
+
+	for (APawn* Unit : ActorsInFormation)
+	{
+		UOrdersManager* OrdersManagerComp = IOrderable::Execute_GetOrdersManagerComponent(Unit->GetController());
+		if (OrdersManagerComp)
+		{
+			bResult = OrdersManagerComp->HasOrders();
+		}
+	}
+	return bResult;
 }
 
 void ABaseFormation::OnEnemyInSightChanged_Implementation(AActor* EnemyUnit, bool IsVisible)

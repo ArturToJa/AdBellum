@@ -16,6 +16,7 @@ public:
 
 	virtual void Execute() override
 	{
+		if (bSilent) return;
 		BaseOrder::Execute();
 		UVehicleAccessPoint* accessPoint = IEnterable::Execute_TryBookSeat(targetUnit, Cast<AALSBaseCharacter>(owningController->GetPawn()));
 		if (accessPoint)

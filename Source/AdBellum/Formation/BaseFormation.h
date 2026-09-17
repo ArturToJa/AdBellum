@@ -88,6 +88,8 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void OrderUnit(APawn* UnitToOrder, OrderEnum OrderType, AActor* TargetUnit, FVector TargetPosition);
 
+	bool IsOrderFinished() const;
+
 	UFUNCTION(BlueprintCallable)
 	void OnNoiseTimeout(AActor* NoiseSource);
 

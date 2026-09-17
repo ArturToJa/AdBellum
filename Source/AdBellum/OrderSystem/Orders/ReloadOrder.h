@@ -18,6 +18,7 @@ public:
 
 	virtual void Execute() override
 	{
+		if (bSilent) return;
 		BaseOrder::Execute();
 		WeaponObject = IArmedUnitInterface::Execute_GetWeapon(owningController->GetPawn());
 		if (WeaponObject)

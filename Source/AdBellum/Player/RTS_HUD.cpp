@@ -208,40 +208,26 @@ void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize)
 {
 	if (!LineVFX || !Pawn) return;
 
+	BaseOrder* Order = nullptr;
+	AController* Controller = Pawn->GetController();
 
-	UOrdersManager* TempOrdersManager = nullptr;
-	if (Pawn->GetClass()->ImplementsInterface(UFormationInterface::StaticClass()))
+	if (Controller && !Controller->IsPlayerController())
 	{
-		TArray<APawn*> Units = IFormationInterface::Execute_GetUnitsInFormation(Pawn);
-		for (APawn* CurrentUnit : Units) 
+		UOrdersManager* TempOrdersManager = IOrderable::Execute_GetOrdersManagerComponent(Controller);
+		if (Pawn->GetClass()->ImplementsInterface(UFormationInterface::StaticClass()))
 		{
-			AController* Controller = CurrentUnit->GetController();
-			if (Controller && !Controller->IsPlayerController())
-			{
-				//TempOrdersManager = IOrderable::Execute_GetOrdersManagerComponent(Controller);
-				break;
-			}
+			Order = TempOrdersManager->GetOrder();
 		}
-	}
-	else
-	{
-		AController* Controller = Pawn->GetController();
-		UE_LOG(LogTemp, Warning, TEXT("[DEBUG] DrawOrderLine: Pawn=%s Controller=%s IsPlayerController=%d HasAuthority=%d"),
-			*Pawn->GetName(), Controller ? *Controller->GetName() : TEXT("NULL"),
-			Controller ? Controller->IsPlayerController() : -1, Pawn->HasAuthority());
-		if (Controller &&!Controller->IsPlayerController())
+		else
 		{
-			TempOrdersManager = IOrderable::Execute_GetOrdersManagerComponent(Controller);
+			Order = TempOrdersManager->GetSubOrder();
 		}
-	}
-
-	if (!TempOrdersManager)
-	{
-		return; 
 	}
 	
-	BaseOrder* FormationOrder = TempOrdersManager->GetOrder();
-	if (!FormationOrder) return;
+	if (!Order)
+	{
+		return;
+	}
 
 	UNiagaraComponent* NiagaraComp = UNiagaraFunctionLibrary::SpawnSystemAttached(
 		LineVFX,
@@ -260,14 +246,14 @@ void ARTS_HUD::DrawOrderLine(APawn* Pawn, float MinSize)
 		return;
 	}
 
-	OrderLineMap.Add(FormationOrder, NiagaraComp);
-	//FormationOrder->OnHUDNotify.BindUObject(this, &ARTS_HUD::ResetOrderLineForFormations);
+	OrderLineMap.Add(Order, NiagaraComp);
+	//Order->OnHUDNotify.BindUObject(this, &ARTS_HUD::ResetOrderLineForFormations);
 
-	NiagaraComp->SetVariableObject("TargetObject", FormationOrder->GetTargetUnit());
-	NiagaraComp->SetVariableVec3("End", FormationOrder->GetTargetPosition());
+	NiagaraComp->SetVariableObject("TargetObject", Order->GetTargetUnit());
+	NiagaraComp->SetVariableVec3("End", Order->GetTargetPosition());
 	NiagaraComp->SetFloatParameter("MinSize", 7.0f);
 
-	switch (FormationOrder->GetOrderType())
+	switch (Order->GetOrderType())
 	{
 
 	case OrderEnum::Move:
