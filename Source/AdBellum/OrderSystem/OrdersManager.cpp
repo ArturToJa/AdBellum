@@ -123,9 +123,25 @@ void UOrdersManager::PerformOrder(TUniquePtr<BaseOrder> OrderToPerform)
 	OnHUDNotify.ExecuteIfBound();
 }
 
+void UOrdersManager::PerformSilentOrder(TUniquePtr<BaseOrder> OrderToPerform)
+{
+	OrderToPerform->SetSilent(true);
+	PerformOrder(MoveTemp(OrderToPerform));
+}
+
 void UOrdersManager::UpdateOrder()
 {
-	if (CurrentOrder->IsFinished())
+	bool bIsFinished = false;
+	if (OverrideIsFinishedDelegate.IsBound())
+	{
+		bIsFinished = OverrideIsFinishedDelegate.Execute();
+	}
+	else
+	{
+		bIsFinished = CurrentOrder->IsFinished();
+	}
+	
+	if (bIsFinished)
 	{
 		NotifyCurrentOrderCompleted();
 	}

@@ -16,6 +16,7 @@ public:
 
 	virtual void Execute() override
 	{
+		if (bSilent) return;
 		BaseOrder::Execute();
 		RunSubOrder(MakeUnique<MoveLocationOrder>(nullptr, targetPosition));
 		targetPosition = owningController->GetPawn()->GetActorLocation();

@@ -72,7 +72,9 @@ public:
 	virtual bool IsFinished() const
 	{
 		// If there's an active sub-order, check if it's finished
-		return !owningController || HasSubOrders() ? subOrder->IsFinished() : false;
+		bool bSubFinished = HasSubOrders() ? subOrder->IsFinished() : false;
+		
+		return !owningController || (bSubFinished && !bSilent);
 	}
 
 	void SetOwner(AAIController* inOwningController)
@@ -174,6 +176,11 @@ public:
 		}
 	}
 
+	void SetSilent(bool bInSilent)
+	{
+		bSilent = bInSilent;
+	}
+
 public:
 	FSimpleMulticastDelegate OnOrderCompleted;
 	FSimpleDelegate OnSubOrderStarted;
@@ -183,6 +190,7 @@ protected:
 	UObject* targetUnit;
 	FVector targetPosition;
 	bool bIsAggresive = true;
+	bool bSilent = false;
 	TUniquePtr<BaseOrder> subOrder;
 };
 

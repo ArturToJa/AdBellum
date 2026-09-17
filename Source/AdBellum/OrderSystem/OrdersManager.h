@@ -46,6 +46,8 @@ struct FOrdersParams
 	}
 };
 
+DECLARE_DELEGATE_RetVal(bool, FOverrideIsFinished);
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class ADBELLUM_API UOrdersManager : public UActorComponent
 {
@@ -82,6 +84,7 @@ public:
 	UFUNCTION(BlueprintCallable)
 		bool IsOrderOfType(OrderEnum Type);
 		void PerformOrder(TUniquePtr<BaseOrder> OrderToPerform);
+		void PerformSilentOrder(TUniquePtr<BaseOrder> OrderToPerform);
 		void AddOrder(TUniquePtr<BaseOrder> OrderToPerform, bool bIsQueued);
 	UFUNCTION(BlueprintCallable)
 		bool IsRunningSubOrders();
@@ -105,4 +108,5 @@ public:
 	BaseOrder* GetSubOrder();
 
 	FSimpleDelegate OnHUDNotify;
+	FOverrideIsFinished OverrideIsFinishedDelegate;
 };
