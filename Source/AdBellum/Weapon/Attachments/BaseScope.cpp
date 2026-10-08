@@ -1,10 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "BaseScope.h"
 #include "Kismet/KismetRenderingLibrary.h"
-#include "Kismet/KismetMathLibrary.h"
-#include <Kismet/KismetSystemLibrary.h>
 
 ABaseScope::ABaseScope(const FObjectInitializer& ObjectInitializer)
 {
@@ -30,13 +27,6 @@ void ABaseScope::BeginPlay()
 	UMaterialInstanceDynamic* ScopeMaterial = SightView->CreateDynamicMaterialInstance(0, SourceMaterial);
 	ScopeMaterial->SetTextureParameterValue("RenderTarget", ScreenCapture);
 	ScreenCaptureComponent->SetActive(false);
-}
-
-void ABaseScope::CalibrateSight(FVector TargetLocation, FRotator Rotation)
-{
-	FRotator TargetRotation = UKismetMathLibrary::FindLookAtRotation(ScreenCaptureComponent->GetRelativeLocation(), TargetLocation);
-	ScreenCaptureComponent->AddRelativeRotation(FRotator(TargetRotation.Pitch, 0.0f, 0.0f), true, nullptr, ETeleportType::TeleportPhysics);
-	//UKismetSystemLibrary::PrintString(GetWorld(), "SCOPE CALIBRATED", true, true);
 }
 
 void ABaseScope::NotifyAim(bool bIsAiming)

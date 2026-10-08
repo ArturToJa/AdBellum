@@ -76,7 +76,9 @@ void AALSPlayerController::BindActions(UInputMappingContext* Context)
 			}
 			for (const UInputAction* UniqueAction : UniqueActions)
 			{
-				EnhancedInputComponent->BindAction(UniqueAction, ETriggerEvent::Triggered, Cast<UObject>(this), UniqueAction->GetFName());
+				// Sight zero changes once per key press, other actions fire while triggered
+				const ETriggerEvent TriggerEvent = UniqueAction->GetFName().ToString().Contains("ScopeZero") ? ETriggerEvent::Started : ETriggerEvent::Triggered;
+				EnhancedInputComponent->BindAction(UniqueAction, TriggerEvent, Cast<UObject>(this), UniqueAction->GetFName());
 
 				if (UniqueAction->GetFName().ToString().Contains("ForwardMovementAction")) {
 					EnhancedInputComponent->BindAction(UniqueAction, ETriggerEvent::Completed, Cast<UObject>(this), "HandleForwardMovementActionCompleted");
@@ -348,6 +350,30 @@ void AALSPlayerController::CameraMouseRotateAction(const FInputActionValue& Valu
 	{
 		IALSInputInterface::Execute_CameraMouseRotateAction(PossessedCharacter, Value.Get<bool>());
 		//PossessedCharacter->LookingDirectionAction();
+	}
+}
+
+void AALSPlayerController::ScopeZeroUpAction(const FInputActionValue& Value)
+{
+	if (CurrentState != EALSState::None)
+	{
+		return;
+	}
+	if (PossessedCharacter)
+	{
+		IALSInputInterface::Execute_ScopeZeroUpAction(PossessedCharacter);
+	}
+}
+
+void AALSPlayerController::ScopeZeroDownAction(const FInputActionValue& Value)
+{
+	if (CurrentState != EALSState::None)
+	{
+		return;
+	}
+	if (PossessedCharacter)
+	{
+		IALSInputInterface::Execute_ScopeZeroDownAction(PossessedCharacter);
 	}
 }
 

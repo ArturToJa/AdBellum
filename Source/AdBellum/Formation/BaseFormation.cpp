@@ -49,8 +49,11 @@ void ABaseFormation::BeginPlay()
 		GetWorldTimerManager().SetTimer(FormationUpdateTimerHandle, this, &ABaseFormation::UpdateFormationPosition, FormationUpdateInterval, true); 
 	} 
 
-	UOrdersManager* OrdersManagerComp = IOrderable::Execute_GetOrdersManagerComponent(GetController());
-	OrdersManagerComp->OverrideIsFinishedDelegate.BindUObject(this, &ABaseFormation::IsOrderFinished);
+	if (HasAuthority())
+	{
+		UOrdersManager* OrdersManagerComp = IOrderable::Execute_GetOrdersManagerComponent(GetController());
+		OrdersManagerComp->OverrideIsFinishedDelegate.BindUObject(this, &ABaseFormation::IsOrderFinished);
+	}
 }
 
 void ABaseFormation::Tick(float DeltaTime)

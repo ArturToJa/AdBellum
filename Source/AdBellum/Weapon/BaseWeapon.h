@@ -19,6 +19,13 @@
 class UEBBarrel;
 //class UNetworkComponent;
 
+UENUM(BlueprintType)
+enum class ESightCalibrationMode : uint8
+{
+	Legacy		UMETA(DisplayName = "Legacy (Blueprint)"),
+	Ballistic	UMETA(DisplayName = "Ballistic (C++)")
+};
+
 UCLASS()
 class ADBELLUM_API ABaseWeapon : public AActor, public IIWeapon, public IALSADSInterface
 {
@@ -107,16 +114,69 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization|Sight")
 	float SightTargetDistance = 100.0f;
 
+	// Legacy - blueprint calibration, Ballistic - C++ calibration
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization|Sight")
+	ESightCalibrationMode SightCalibrationMode = ESightCalibrationMode::Legacy;
+
+	// EBarrel rotation relative to WeaponMeshComponent when not aimed by AI, used as reference for sight calibration
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization|Sight")
+	FRotator BaseBarrelRelativeRotation = FRotator(0.0f, 90.0f, 0.0f);
+
+	// Bullet used for sight calibration: chambered bullet, otherwise first bullet in EBarrel ammo, otherwise nullptr
+	UFUNCTION(BlueprintCallable, Category = "Customization|Sight")
+	TSubclassOf<AEBBullet> GetCalibrationBulletClass() const;
+
+	// Also correct sight yaw (for sights offset sideways from the barrel). Pitch is always corrected.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization|Sight")
+	bool bCalibrateSightYaw = true;
+
+	// Ballistic calibration: rotates the sight actor so the line of sight (ADS -> reticle) crosses
+	// the bullet trajectory at Distance (meters). Does nothing unless SightCalibrationMode is Ballistic.
+	// Local only: the rotation is applied to the non-replicated sight actor, never sent over the network.
+	UFUNCTION(BlueprintCallable, Category = "Customization|Sight")
+	bool CalibrateSight(float Distance);
+
+	// Zero distance (meters) a freshly attached sight should use: sight's default from ZeroDistances,
+	// or SightTargetDistance when the sight has no ZeroDistances configured
+	UFUNCTION(BlueprintCallable, Category = "Customization|Sight")
+	float GetDefaultSightZeroDistance() const;
+
+	// Called after player changed sight zero distance (HUD, sound)
+	UFUNCTION(BlueprintImplementableEvent, Category = "Customization|Sight")
+	void OnSightZeroChanged(float NewDistance);
+
+	// Simulates calibration bullet without collision in a level frame of the barrel (X downrange, Z up).
+	// OutRangePoint is the trajectory point at DistanceMeters, relative to the barrel, in that frame.
+	bool SimulateTrajectoryPoint(TSubclassOf<AEBBullet> BulletClass, float DistanceMeters, FVector& OutRangePoint,
+		float& OutFlightTime, TArray<FVector>* OutTrajectory = nullptr) const;
+
+	// EBarrel world transform with BaseBarrelRelativeRotation instead of its current (possibly AI aimed) rotation
+	FTransform GetBaseBarrelWorldTransform() const;
+
+	virtual void Tick(float DeltaTime) override;
+	void DrawSightCalibrationDebug() const;
+
+	// Client side aim: while a player controls the owning unit, the server shoots from the barrel transform
+	// reported by that player's machine (what the player sees through the sight) instead of its own pose.
+	// AI controlled weapons keep using the server pose. Disable to always use the server pose.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Barrel")
+	bool bUseClientSideAimForPlayers = true;
+
+	void UpdateClientSideAim();
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim")
 	float WeaponAimSensivity = 0.3f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
 	TObjectPtr<URecoilData> RecoilData;
 
-	float CalculateFlightTime(TSubclassOf<AEBBullet> BulletClass);
-	FVector CalculateSightRotation(FVector StartLocation, FVector TargetLocation, FVector TargetVelocity);
 
-	void CalibrateSight();
+	UFUNCTION(BlueprintCallable)
+	float CalculateFlightTime(TSubclassOf<AEBBullet> BulletClass);
+
+
+	UFUNCTION(BlueprintCallable)
+	FVector CalculateSightRotation(FVector StartLocation, FVector TargetLocation, FVector TargetVelocity);
 
 	UFUNCTION(BlueprintCallable)
 	void PrepareWeapon(const FWeaponCustomizationDataStruct& WeaponPrefab);
@@ -194,6 +254,8 @@ public:
 	virtual float GetWeaponFOV_Implementation() override;
 	virtual void SetSightMeshScale_Implementation(bool bIsAiming) override;
 	virtual bool GetIsScoped_Implementation() override;
+	virtual void ChangeSightZero_Implementation(int32 Direction) override;
+	virtual float GetSightZeroDistance_Implementation() override;
 
 	virtual void BeginPlay() override;
 	bool bIsReloading = false;
@@ -202,4 +264,22 @@ public:
 	bool GainMagazine();
 protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
+
+private:
+	// Sight actor root relative rotation before any ballistic calibration, calibration is applied on top of it.
+	// Captured again whenever the sight actor changes.
+	FRotator BaseSightRelativeRotation = FRotator::ZeroRotator;
+	TWeakObjectPtr<ABaseSight> BaseRotationSight;
+
+	// Last ballistic calibration result, kept for debug drawing (points in barrel range frame)
+	float CalibratedDistance = 0.0f;
+	FVector CalibrationZeroPoint = FVector::ZeroVector;
+	TArray<FVector> CalibrationTrajectory;
+
+	// Index of the current zero distance in sight's ZeroDistances, valid only for ZeroIndexSight
+	int32 CurrentZeroIndex = INDEX_NONE;
+	TWeakObjectPtr<ABaseSight> ZeroIndexSight;
+
+	// Player controller whose aim the barrel currently uses, null when client side aim is off
+	TWeakObjectPtr<AController> ClientSideAimController;
 };

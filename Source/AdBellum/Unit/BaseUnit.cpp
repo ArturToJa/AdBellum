@@ -167,6 +167,53 @@ void ABaseUnit::UnPossessed()
 	Super::UnPossessed();
 }
 
+void ABaseUnit::NotifyControllerChanged()
+{
+	Super::NotifyControllerChanged();
+
+	// Checks the controller itself: IsPlayerControlled() depends on PlayerState, which on clients
+	// may replicate later than the controller.
+	const bool bIsLocallyPlayerControlled = IsLocallyControlled() && Cast<APlayerController>(GetController()) != nullptr;
+	if (bWasLocallyPlayerControlled && !bIsLocallyPlayerControlled)
+	{
+		// Player left this unit (switched away or died). PossessedBy/UnPossessed only run on the server,
+		// so the owning client has to clean up its own aim state here.
+		ResetLocalAimState();
+	}
+	else if (!bWasLocallyPlayerControlled && bIsLocallyPlayerControlled)
+	{
+		// Server forces first person in PossessedBy, but ViewMode replicates with COND_SkipOwner,
+		// so the owning client has to apply the same default itself.
+		SetViewMode(EALSViewMode::FirstPerson);
+	}
+	bWasLocallyPlayerControlled = bIsLocallyPlayerControlled;
+}
+
+void ABaseUnit::ResetLocalAimState()
+{
+	GetWorldTimerManager().ClearTimer(CheckAimCollisionTimer);
+
+	UsingADS = false;
+	HipFire = false;
+	TriggerActive = false;
+	bReturnToThirdPersonAfterAim = false;
+	CameraFOV = 90.0f;
+	LookLeftRightRate = 1.25f;
+	LookUpDownRate = 1.25f;
+	RecoilAnimationComponent->SetAimingStatus(false);
+
+	for (ABaseWeapon* Weapon : WeaponArray)
+	{
+		if (Weapon)
+		{
+			IIWeapon::Execute_NotifyAim(Weapon, false);
+			IIWeapon::Execute_SetSightMeshScale(Weapon, false);
+		}
+	}
+	// In case no weapon was left to forward the call
+	SetBodyHiddenForScope_Implementation(false);
+}
+
 void ABaseUnit::PossessByAIController()
 {
 	if (IsAlive_Implementation())
@@ -193,7 +240,7 @@ void ABaseUnit::SprintAction_Implementation(bool bValue)
 		SetDesiredGait(EALSGait::Sprinting);
 		if (EALSRotationMode::Aiming == RotationMode)
 		{
-			if (!IIWeapon::Execute_GetIsScoped(ActiveWeaponActor)) 
+			if (ActiveWeaponActor && !IIWeapon::Execute_GetIsScoped(ActiveWeaponActor))
 			{
 				CameraFOV = IIWeapon::Execute_GetWeaponFOV(ActiveWeaponActor);
 			}
@@ -202,7 +249,7 @@ void ABaseUnit::SprintAction_Implementation(bool bValue)
 	else
 	{
 		SetDesiredGait(EALSGait::Running);
-		if (!IIWeapon::Execute_GetIsScoped(ActiveWeaponActor))
+		if (!ActiveWeaponActor || !IIWeapon::Execute_GetIsScoped(ActiveWeaponActor))
 		{
 			CameraFOV = 90.0f;
 		}
@@ -224,6 +271,7 @@ void ABaseUnit::AimAction_Implementation(bool Value)
 		{
 			GetWorld()->GetTimerManager().ClearTimer(CheckAimCollisionTimer);
 			HandleNonStationaryAimAction(false);
+			RestoreViewModeAfterAim();
 		}
 	}
 	else
@@ -247,19 +295,46 @@ void ABaseUnit::CheckAimCollision()
 	}
 }
 
+void ABaseUnit::RepairLocalActiveWeapon()
+{
+	// On a client, ActiveWeaponActor can be left empty after a weapon switch: the blueprint switch logic
+	// clears it locally and only the server assigns the new weapon. When no switch is in progress,
+	// take the weapon from the socket the unit is currently holding.
+	if (ActiveWeaponActor || HasAuthority() || !IsLocallyControlled() || StationaryRole != EALSStationaryRole::None
+		|| TargetWeaponSocket != EWeaponSocketEnum::NONE)
+	{
+		return;
+	}
+	const int32 SocketIndex = (int32)CurrentWeaponSocket;
+	if (WeaponArray.IsValidIndex(SocketIndex) && WeaponArray[SocketIndex])
+	{
+		ActiveWeaponActor = WeaponArray[SocketIndex];
+		UE_LOG(LogTemp, Warning, TEXT("ABaseUnit::RepairLocalActiveWeapon - %s: ActiveWeaponActor was empty on client, restored %s from socket %d"),
+			*GetName(), *GetNameSafe(ActiveWeaponActor), SocketIndex);
+	}
+}
+
 void ABaseUnit::HandleNonStationaryAimAction(bool Value)
 {
+	RepairLocalActiveWeapon();
+
 	if (Value && TargetWeaponSocket == EWeaponSocketEnum::NONE && ActiveWeaponActor)
 	{
+		// Aiming always goes through first person ADS, SetViewMode also tells the server
+		if (ViewMode == EALSViewMode::ThirdPerson && IsLocallyControlled() && IsPlayerControlled())
+		{
+			bReturnToThirdPersonAfterAim = true;
+			SetViewMode(EALSViewMode::FirstPerson);
+		}
 		HandlePressedADS();
 		SetRotationMode(EALSRotationMode::Aiming);
 		if (IsPlayerControlled()) 
 		{
-			IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, true);
 			//set FOV
 			if (IIWeapon::Execute_GetIsScoped(ActiveWeaponActor)) 
 			{
 				CameraFOV = IIWeapon::Execute_GetWeaponFOV(ActiveWeaponActor);
+				IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, true);
 			}
 		}
 	}
@@ -270,7 +345,10 @@ void ABaseUnit::HandleNonStationaryAimAction(bool Value)
 			HipFire = true;
 			if (IsPlayerControlled())
 			{
-				IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, false);
+				if (ActiveWeaponActor)
+				{
+					IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, false);
+				}
 				CameraFOV = 90.0f;
 			}
 		}
@@ -283,7 +361,10 @@ void ABaseUnit::HandleNonStationaryAimAction(bool Value)
 			SetRotationMode(EALSRotationMode::LookingDirection);
 			if (IsPlayerControlled())
 			{
-				IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, false);
+				if (ActiveWeaponActor)
+				{
+					IIWeapon::Execute_SetSightMeshScale(ActiveWeaponActor, false);
+				}
 				CameraFOV = 90.0f;
 			}
 		}
@@ -383,6 +464,7 @@ void ABaseUnit::HandleReleasedADS()
 
 void ABaseUnit::TriggerAction_Implementation(bool Value)
 {
+	RepairLocalActiveWeapon();
 	TriggerActive = Value;
 	if (StationaryRole == EALSStationaryRole::None)
 	{
@@ -409,10 +491,30 @@ void ABaseUnit::TriggerActionCompleted_Implementation()
 			if (HipFire)
 			{
 				HipFire = false;
-				SetRotationMode(EALSRotationMode::LookingDirection);
+				SetRotationMode(ViewMode == EALSViewMode::ThirdPerson ? DesiredRotationMode : EALSRotationMode::LookingDirection);
 			}
 		}
 	}
+}
+
+void ABaseUnit::RestoreViewModeAfterAim()
+{
+	if (bReturnToThirdPersonAfterAim)
+	{
+		bReturnToThirdPersonAfterAim = false;
+		// OnViewModeChanged puts the rotation mode back to DesiredRotationMode, unless still hip firing
+		SetViewMode(EALSViewMode::ThirdPerson);
+	}
+}
+
+void ABaseUnit::CameraHeldAction_Implementation()
+{
+	// View mode is driven by aiming while the aim button is held
+	if (UsingADS || bReturnToThirdPersonAfterAim)
+	{
+		return;
+	}
+	Super::CameraHeldAction_Implementation();
 }
 
 void ABaseUnit::HandleTriggerAction(bool Value)
@@ -485,7 +587,7 @@ void ABaseUnit::PrimarySelectionAction_Implementation()
 	}
 	else
 	{
-		if (WeaponArray[0] && !IIWeapon::Execute_IsReloading(ActiveWeaponActor))
+		if (WeaponArray[0] && !IsReloading_Implementation())
 		{
 			HandleWeaponSwitch(EWeaponSocketEnum::PRIMARY);
 		}
@@ -500,7 +602,7 @@ void ABaseUnit::SecondarySelectionAction_Implementation()
 	}
 	else
 	{
-		if (WeaponArray[1] && !IIWeapon::Execute_IsReloading(ActiveWeaponActor))
+		if (WeaponArray[1] && !IsReloading_Implementation())
 		{
 			HandleWeaponSwitch(EWeaponSocketEnum::SECONDARY);
 		}
@@ -514,7 +616,7 @@ void ABaseUnit::ThirdSelectionAction_Implementation()
 	}
 	else
 	{
-		if (WeaponArray[2] && !IIWeapon::Execute_IsReloading(ActiveWeaponActor))
+		if (WeaponArray[2] && !IsReloading_Implementation())
 		{
 			HandleWeaponSwitch(EWeaponSocketEnum::SPECIAL);
 		}
@@ -1165,7 +1267,7 @@ void ABaseUnit::OnWeaponUpdated_Implementation(AActor* Weapon)
 
 bool ABaseUnit::IsReloading_Implementation()
 {
-	return IIWeapon::Execute_IsReloading(ActiveWeaponActor);
+	return ActiveWeaponActor && IIWeapon::Execute_IsReloading(ActiveWeaponActor);
 }
 void ABaseUnit::GetUnitCombatDataStruct_Implementation(FUnitCombatDataStruct& CombatData)
 {
@@ -1246,3 +1348,64 @@ void ABaseUnit::SetIsSeenBy_Implementation(ABaseFormation* Formation, bool IsSee
 	}
 }
 //END ITARGETABBLE INTERAFCE
+void ABaseUnit::ScopeZeroUpAction_Implementation()
+{
+	if (ActiveWeaponActor && StationaryRole == EALSStationaryRole::None)
+	{
+		IIWeapon::Execute_ChangeSightZero(ActiveWeaponActor, 1);
+	}
+}
+
+void ABaseUnit::ScopeZeroDownAction_Implementation()
+{
+	if (ActiveWeaponActor && StationaryRole == EALSStationaryRole::None)
+	{
+		IIWeapon::Execute_ChangeSightZero(ActiveWeaponActor, -1);
+	}
+}
+
+void ABaseUnit::SetBodyHiddenForScope_Implementation(bool bHideBody)
+{
+	if (bHideBody == bBodyHiddenForScope)
+	{
+		return;
+	}
+
+	if (bHideBody)
+	{
+		// Only the player looking through the scope should lose the body
+		if (!IsLocallyControlled() || !IsPlayerControlled())
+		{
+			return;
+		}
+		bBodyHiddenForScope = true;
+
+		// Weapon is attached to the hand, so bones have to be refreshed even when the mesh is not rendered
+		ScopeSavedAnimTickOption = GetMesh()->VisibilityBasedAnimTickOption;
+		GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+
+		TInlineComponentArray<UMeshComponent*> MeshComponents(this);
+		for (UMeshComponent* MeshComponent : MeshComponents)
+		{
+			if (MeshComponent && !MeshComponent->bOwnerNoSee)
+			{
+				MeshComponent->SetOwnerNoSee(true);
+				ScopeHiddenComponents.Add(MeshComponent);
+			}
+		}
+	}
+	else
+	{
+		bBodyHiddenForScope = false;
+		GetMesh()->VisibilityBasedAnimTickOption = ScopeSavedAnimTickOption;
+
+		for (const TWeakObjectPtr<UPrimitiveComponent>& Component : ScopeHiddenComponents)
+		{
+			if (Component.IsValid())
+			{
+				Component->SetOwnerNoSee(false);
+			}
+		}
+		ScopeHiddenComponents.Reset();
+	}
+}

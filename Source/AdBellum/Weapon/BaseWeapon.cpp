@@ -1,6 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "BaseWeapon.h"
 #include "EBBarrel.h"
 #include "Kismet/GameplayStatics.h"
@@ -11,6 +10,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Unit/ArmedUnitInterface.h"
 #include "Interfaces/ITargetable.h"
+#include "DrawDebugHelpers.h"
+#include "Engine/Engine.h"
 
 // Sets default values
 ABaseWeapon::ABaseWeapon()
@@ -72,7 +73,6 @@ void ABaseWeapon::PrepareWeapon(const FWeaponCustomizationDataStruct& WeaponPref
 {
 	PrepareMaterials(WeaponPrefab);
 	PrepareSight(WeaponPrefab.SightClass);
-	CalibrateSight();
 }
 
 void ABaseWeapon::PrepareMaterials(const FWeaponCustomizationDataStruct& WeaponPrefab)
@@ -142,14 +142,330 @@ void ABaseWeapon::PrepareSight(FName SightClassName)
 	}
 }
 
-void ABaseWeapon::CalibrateSight()
+TSubclassOf<AEBBullet> ABaseWeapon::GetCalibrationBulletClass() const
 {
-	if (SightComponent->GetChildActor())
+	if (!EBarrel)
 	{
-		FVector StartLocation = EBarrel->GetComponentLocation();
-		FVector HitLocation = EBarrel->GetRelativeTransform().GetUnitAxis(EAxis::X) * SightTargetDistance * 100 + EBarrel->GetRelativeLocation();
-		FVector SightRotation = CalculateSightRotation(StartLocation, HitLocation, FVector::ZeroVector);
-		SightComponent->CalibrateSightActor(HitLocation, SightRotation.Rotation());
+		return nullptr;
+	}
+	if (EBarrel->ChamberedBullet)
+	{
+		return EBarrel->ChamberedBullet;
+	}
+	if (EBarrel->Ammo.Num() > 0)
+	{
+		return EBarrel->Ammo[0];
+	}
+	return nullptr;
+}
+
+void ABaseWeapon::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	UpdateClientSideAim();
+	DrawSightCalibrationDebug();
+}
+
+void ABaseWeapon::UpdateClientSideAim()
+{
+	if (!EBarrel)
+	{
+		return;
+	}
+
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	AController* OwnerController = OwnerPawn ? OwnerPawn->GetController() : nullptr;
+	const bool bPlayerControlled = Cast<APlayerController>(OwnerController) != nullptr;
+
+	// ClientSideAim is not replicated, every machine decides for itself:
+	// - server: accept aim from the player's machine
+	// - controlling player's machine: send aim to the server
+	// - everybody else (other clients, AI controlled units): off
+	const bool bEnable = bUseClientSideAimForPlayers && bPlayerControlled && (HasAuthority() || OwnerPawn->IsLocallyControlled());
+	AController* AimController = bEnable ? OwnerController : nullptr;
+
+	if (ClientSideAimController != AimController || EBarrel->ClientSideAim != bEnable)
+	{
+		// Also resets aim received from the previous player
+		ClientSideAimController = AimController;
+		EBarrel->SetClientSideAim(bEnable);
+	}
+}
+
+void ABaseWeapon::DrawSightCalibrationDebug() const
+{
+	const int32 DebugMode = ABaseSight::GetCalibrationDebugMode();
+	if (DebugMode <= 0 || GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	if (DebugMode == 1)
+	{
+		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+		if (!OwnerPawn || !OwnerPawn->IsLocallyControlled() || !OwnerPawn->IsPlayerControlled())
+		{
+			return;
+		}
+	}
+	const ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	if (!Sight)
+	{
+		return;
+	}
+
+	const float DrawDistance = FMath::Max(SightTargetDistance, CalibratedDistance * 1.5f) * 100.0f;
+	Sight->DrawSightLineDebug(DrawDistance);
+
+#if ENABLE_DRAW_DEBUG
+	if (CalibrationTrajectory.Num() > 1)
+	{
+		UWorld* World = GetWorld();
+		const FTransform BarrelTransform = GetBaseBarrelWorldTransform();
+		for (int32 Index = 1; Index < CalibrationTrajectory.Num(); ++Index)
+		{
+			DrawDebugLine(World,
+				BarrelTransform.TransformPosition(CalibrationTrajectory[Index - 1]),
+				BarrelTransform.TransformPosition(CalibrationTrajectory[Index]),
+				FColor::Orange, false, -1.0f, 0, 0.0f);
+		}
+		DrawDebugSphere(World, BarrelTransform.TransformPosition(CalibrationZeroPoint), 5.0f, 8, FColor::White, false, -1.0f);
+	}
+#endif
+}
+
+FTransform ABaseWeapon::GetBaseBarrelWorldTransform() const
+{
+	if (!EBarrel)
+	{
+		return GetActorTransform();
+	}
+	const USceneComponent* Parent = EBarrel->GetAttachParent();
+	const FTransform ParentTransform = Parent ? Parent->GetSocketTransform(EBarrel->GetAttachSocketName()) : FTransform::Identity;
+	FTransform Result = FTransform(BaseBarrelRelativeRotation, EBarrel->GetRelativeLocation()) * ParentTransform;
+	Result.SetScale3D(FVector::OneVector);
+	return Result;
+}
+
+bool ABaseWeapon::SimulateTrajectoryPoint(TSubclassOf<AEBBullet> BulletClass, float DistanceMeters, FVector& OutRangePoint,
+	float& OutFlightTime, TArray<FVector>* OutTrajectory) const
+{
+	UWorld* World = GetWorld();
+	const AEBBullet* Bullet = BulletClass ? BulletClass->GetDefaultObject<AEBBullet>() : nullptr;
+	if (!World || !Bullet || !EBarrel || DistanceMeters <= 0.0f)
+	{
+		return false;
+	}
+
+	constexpr float TimeStep = 0.001f;
+	constexpr float MaxTime = 10.0f;
+	constexpr int32 TrajectorySampleInterval = 10;
+
+	const float TargetX = DistanceMeters * 100.0f;
+	// When collecting trajectory for debug, continue past the zero point to show the drop behind it
+	const float EndX = OutTrajectory ? TargetX * 1.5f : TargetX;
+
+	// Same muzzle velocity as EBBarrel prediction functions use
+	const float MuzzleSpeed = FMath::Lerp(EBarrel->MuzzleVelocityMultiplierMin, EBarrel->MuzzleVelocityMultiplierMax, 0.5f)
+		* FMath::Lerp(Bullet->MuzzleVelocityMin, Bullet->MuzzleVelocityMax, 0.5f);
+	if (MuzzleSpeed <= 0.0f)
+	{
+		return false;
+	}
+
+	// Virtual level frame: real barrel location (air density depends on altitude), shooting along world +X,
+	// so gravity (world -Z) acts as if the weapon was held level. Range frame X = downrange, Z = up.
+	const FVector Start = GetBaseBarrelWorldTransform().GetLocation();
+	FVector Location = Start;
+	FVector Velocity(MuzzleSpeed, 0.0f, 0.0f);
+	float Time = 0.0f;
+	int32 StepIndex = 0;
+	bool bFound = false;
+
+	if (OutTrajectory)
+	{
+		OutTrajectory->Reset();
+		OutTrajectory->Add(FVector::ZeroVector);
+	}
+
+	while (Time < MaxTime)
+	{
+		const FVector PreviousVelocity = Velocity;
+		Velocity = Bullet->UpdateVelocity(World, Location, Velocity, TimeStep);
+		const FVector NewLocation = Location + (PreviousVelocity + Velocity) * 0.5f * TimeStep;
+
+		if (!bFound && NewLocation.X - Start.X >= TargetX)
+		{
+			const float Alpha = (TargetX - (Location.X - Start.X)) / (NewLocation.X - Location.X);
+			OutRangePoint = FMath::Lerp(Location, NewLocation, Alpha) - Start;
+			OutFlightTime = Time + Alpha * TimeStep;
+			bFound = true;
+		}
+
+		Location = NewLocation;
+		Time += TimeStep;
+
+		const bool bEnd = Location.X - Start.X >= EndX || Velocity.X <= KINDA_SMALL_NUMBER;
+		if (OutTrajectory && (++StepIndex % TrajectorySampleInterval == 0 || bEnd))
+		{
+			OutTrajectory->Add(Location - Start);
+		}
+		if (bEnd)
+		{
+			break;
+		}
+	}
+	return bFound;
+}
+
+// Signed angle (radians) rotating From to To around Axis, both projected onto the plane perpendicular to Axis
+static float SignedAngleAroundAxis(const FVector& From, const FVector& To, const FVector& Axis)
+{
+	const FVector FromProjected = FVector::VectorPlaneProject(From, Axis).GetSafeNormal();
+	const FVector ToProjected = FVector::VectorPlaneProject(To, Axis).GetSafeNormal();
+	if (FromProjected.IsNearlyZero() || ToProjected.IsNearlyZero())
+	{
+		return 0.0f;
+	}
+	return FMath::Atan2(FVector::DotProduct(Axis, FVector::CrossProduct(FromProjected, ToProjected)),
+		FVector::DotProduct(FromProjected, ToProjected));
+}
+
+bool ABaseWeapon::CalibrateSight(float Distance)
+{
+	if (SightCalibrationMode != ESightCalibrationMode::Ballistic)
+	{
+		return false;
+	}
+
+	ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	if (!Sight || !EBarrel)
+	{
+		return false;
+	}
+
+	const TSubclassOf<AEBBullet> BulletClass = GetCalibrationBulletClass();
+	if (!BulletClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ABaseWeapon::CalibrateSight - %s: no bullet class in EBarrel"), *GetName());
+		return false;
+	}
+
+	FVector ZeroPointRange;
+	float FlightTime = 0.0f;
+	TArray<FVector> Trajectory;
+	if (!SimulateTrajectoryPoint(BulletClass, Distance, ZeroPointRange, FlightTime, &Trajectory))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ABaseWeapon::CalibrateSight - %s: bullet %s does not reach %.1f m"),
+			*GetName(), *BulletClass->GetName(), Distance);
+		return false;
+	}
+
+	Sight->ValidateSightSetup();
+
+	// Calibration rotates the sight actor's root, not SightComponent: SightComponent is replicated,
+	// the sight actor is not, so the rotation stays local to this machine.
+	USceneComponent* SightRoot = Sight->GetRootComponent();
+	if (!SightRoot)
+	{
+		return false;
+	}
+
+	// Always start from the uncalibrated rotation, so calibration result does not depend on previous calls
+	if (BaseRotationSight != Sight)
+	{
+		BaseSightRelativeRotation = SightRoot->GetRelativeRotation();
+		BaseRotationSight = Sight;
+	}
+	SightRoot->SetRelativeRotation(BaseSightRelativeRotation, false, nullptr, ETeleportType::TeleportPhysics);
+
+	const FTransform BarrelTransform = GetBaseBarrelWorldTransform();
+	const FVector ZeroPoint = BarrelTransform.TransformPosition(ZeroPointRange);
+	const FVector PitchAxis = BarrelTransform.GetUnitAxis(EAxis::Y);
+	const FVector YawAxis = BarrelTransform.GetUnitAxis(EAxis::Z);
+
+	// Rotating around the sight root also moves ADS, so repeat until the line of sight hits the zero point
+	constexpr int32 MaxIterations = 4;
+	for (int32 Iteration = 0; Iteration < MaxIterations; ++Iteration)
+	{
+		const FVector CurrentDirection = Sight->GetSightLineDirection();
+		const FVector DesiredDirection = (ZeroPoint - Sight->GetSightLineOrigin()).GetSafeNormal();
+
+		FQuat Delta(PitchAxis, SignedAngleAroundAxis(CurrentDirection, DesiredDirection, PitchAxis));
+		if (bCalibrateSightYaw)
+		{
+			const FVector PitchedDirection = Delta.RotateVector(CurrentDirection);
+			Delta = FQuat(YawAxis, SignedAngleAroundAxis(PitchedDirection, DesiredDirection, YawAxis)) * Delta;
+		}
+		if (Delta.GetAngle() < 1.0e-7f)
+		{
+			break;
+		}
+		SightRoot->SetWorldRotation(Delta * SightRoot->GetComponentQuat(), false, nullptr, ETeleportType::TeleportPhysics);
+	}
+
+	const FVector FinalDirection = Sight->GetSightLineDirection();
+	const FVector FinalDesired = (ZeroPoint - Sight->GetSightLineOrigin()).GetSafeNormal();
+	const float RemainingErrorCm = FVector::CrossProduct(FinalDirection, FinalDesired).Size() * Distance * 100.0f;
+	const float CorrectionMrad = (BaseSightRelativeRotation.Quaternion().Inverse() * SightRoot->GetRelativeRotation().Quaternion()).GetAngle() * 1000.0f;
+
+	CalibratedDistance = Distance;
+	CalibrationZeroPoint = ZeroPointRange;
+	CalibrationTrajectory = MoveTemp(Trajectory);
+
+	// Keep zero stepping in sync when calibrated to one of the sight's configured distances
+	ZeroIndexSight = Sight;
+	CurrentZeroIndex = Sight->ZeroDistances.IndexOfByPredicate([Distance](float ZeroDistance)
+	{
+		return FMath::IsNearlyEqual(ZeroDistance, Distance, 0.01f);
+	});
+
+	UE_LOG(LogTemp, Log, TEXT("ABaseWeapon::CalibrateSight - %s: %s zeroed at %.1f m, drop %.1f cm, flight %.3f s, correction %.2f mrad, remaining error %.2f cm"),
+		*GetName(), *BulletClass->GetName(), Distance, -ZeroPointRange.Z, FlightTime, CorrectionMrad, RemainingErrorCm);
+	return true;
+}
+
+float ABaseWeapon::GetDefaultSightZeroDistance() const
+{
+	const ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	if (Sight && Sight->ZeroDistances.Num() > 0)
+	{
+		return Sight->ZeroDistances[FMath::Clamp(Sight->DefaultZeroDistanceIndex, 0, Sight->ZeroDistances.Num() - 1)];
+	}
+	return SightTargetDistance;
+}
+
+float ABaseWeapon::GetSightZeroDistance_Implementation()
+{
+	return CalibratedDistance > 0.0f ? CalibratedDistance : GetDefaultSightZeroDistance();
+}
+
+void ABaseWeapon::ChangeSightZero_Implementation(int32 Direction)
+{
+	ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	if (!Sight || Sight->ZeroDistances.Num() == 0 || Direction == 0)
+	{
+		return;
+	}
+
+	const int32 LastIndex = Sight->ZeroDistances.Num() - 1;
+	const bool bHasIndex = ZeroIndexSight == Sight && CurrentZeroIndex != INDEX_NONE;
+	const int32 Index = bHasIndex ? CurrentZeroIndex : FMath::Clamp(Sight->DefaultZeroDistanceIndex, 0, LastIndex);
+	const int32 NewIndex = FMath::Clamp(Index + FMath::Sign(Direction), 0, LastIndex);
+	if (bHasIndex && NewIndex == Index)
+	{
+		return;
+	}
+
+	const float NewDistance = Sight->ZeroDistances[NewIndex];
+	if (CalibrateSight(NewDistance))
+	{
+		OnSightZeroChanged(NewDistance);
+#if !UE_BUILD_SHIPPING
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage((uint64)GetUniqueID(), 2.0f, FColor::White, FString::Printf(TEXT("Sight zero: %.0f m"), NewDistance));
+		}
+#endif
 	}
 }
 
@@ -447,7 +763,7 @@ float ABaseWeapon::GetWeaponFOV_Implementation()
 	}
 	else
 	{
-		return 90.0f; // Default FOV if no sight is attached
+		return 67.5f; // Default FOV if no sight is attached
 	}
 }
 
@@ -457,13 +773,26 @@ void ABaseWeapon::SetSightMeshScale_Implementation(bool bIsAiming)
 	{
 		SightComponent->GetSightActor()->SetAimingMeshScale(bIsAiming);
 	}
+	if (bIsAiming)
+	{
+		WeaponMeshComponent->SetVisibility(false, false);
+	}
+	else
+	{
+		WeaponMeshComponent->SetVisibility(true, false);
+	}
+	// Hide the unit's own meshes together with the weapon mesh
+	if (GetOwner() && GetOwner()->GetClass()->ImplementsInterface(UArmedUnitInterface::StaticClass()))
+	{
+		IArmedUnitInterface::Execute_SetBodyHiddenForScope(GetOwner(), bIsAiming);
+	}
 }
 
 bool ABaseWeapon::GetIsScoped_Implementation() 
 {
-	if (SightComponent->GetSightActor()) 
+	if (SightComponent->GetSightActor())
 	{
 		return SightComponent->GetSightActor()->GetIsScoped();
 	}
-	return false;
+	else return false;
 }

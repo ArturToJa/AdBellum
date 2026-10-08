@@ -32,4 +32,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ArmedUnitInterface")
 	void GetUnitCombatDataStruct(FUnitCombatDataStruct& OutCombatData);
+
+	// Hides unit meshes for its own player while aiming through a scope that uses camera FOV
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ArmedUnitInterface")
+	void SetBodyHiddenForScope(bool bHideBody);
 };

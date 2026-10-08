@@ -107,4 +107,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		bool GetIsScoped();
 
+	// Steps sight zero distance to the next (Direction > 0) or previous (Direction < 0) distance configured on the sight
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		void ChangeSightZero(int32 Direction);
+
+	// Current sight zero distance in meters
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		float GetSightZeroDistance();
+
 };

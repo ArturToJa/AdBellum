@@ -420,7 +420,7 @@ void ARTSPlayer::CalculateHeightAboveLandscape()
 void ARTSPlayer::ScrollAction_Implementation(bool bScrollUp)
 {
 	// Scroll moves camera toward point under mouse on landscape
-	//GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("ScrollAction: %s"), bScrollUp ? TEXT("Up") : TEXT("Down")));
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("ScrollAction: %s"), bScrollUp ? TEXT("Up") : TEXT("Down")));
 
 	APlayerController* PC = GetController<APlayerController>();
 	if (!PC) return;

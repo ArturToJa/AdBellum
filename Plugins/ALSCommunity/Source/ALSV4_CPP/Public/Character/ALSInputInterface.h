@@ -114,6 +114,13 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 		void CameraMouseRotateAction(bool bValue);
 
+	//SIGHT ZERO DISTANCE
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
+		void ScopeZeroUpAction();
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
+		void ScopeZeroDownAction();
+
 	//RECOIL
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 		void AddRecoil();

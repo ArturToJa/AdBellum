@@ -82,6 +82,12 @@ protected:
 	UFUNCTION()
 	void CameraMouseRotateAction(const FInputActionValue& Value);
 
+	UFUNCTION()
+	void ScopeZeroUpAction(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void ScopeZeroDownAction(const FInputActionValue& Value);
+
 	// Debug actions
 	UFUNCTION()
 	void DebugToggleHudAction(const FInputActionValue& Value);

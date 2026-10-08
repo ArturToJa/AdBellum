@@ -202,6 +202,17 @@ public:
 
 	void HandleNonStationaryAimAction(bool Value);
 
+	// Aiming always uses first person ADS. Set when aim started in third person,
+	// so the view goes back to third person when the aim button is released. Local only.
+	bool bReturnToThirdPersonAfterAim = false;
+
+	void RestoreViewModeAfterAim();
+
+	// Client safety net: restores ActiveWeaponActor from the currently held socket when it was left empty
+	void RepairLocalActiveWeapon();
+
+	virtual void CameraHeldAction_Implementation() override;
+
 	void HandleStationaryAimAction(bool Value);
 
 	FTimerHandle CheckAimCollisionTimer;
@@ -228,6 +239,10 @@ public:
 	virtual void TriggerActionCompleted_Implementation() override;
 
 	virtual void SprintAction_Implementation(bool bValue) override;
+
+	virtual void ScopeZeroUpAction_Implementation() override;
+
+	virtual void ScopeZeroDownAction_Implementation() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Input")
 	bool bIsReloading = false;
@@ -269,6 +284,12 @@ public:
 	virtual void OnWeaponUpdated_Implementation(AActor* Weapon) override;
 	virtual bool IsReloading_Implementation() override;
 	virtual void GetUnitCombatDataStruct_Implementation(FUnitCombatDataStruct& CombatData) override;
+	virtual void SetBodyHiddenForScope_Implementation(bool bHideBody) override;
+
+	// Components hidden by SetBodyHiddenForScope, restored when the scope is lowered
+	TArray<TWeakObjectPtr<UPrimitiveComponent>> ScopeHiddenComponents;
+	bool bBodyHiddenForScope = false;
+	EVisibilityBasedAnimTickOption ScopeSavedAnimTickOption;
 
 	//ITargetable
 	virtual FVector GetHeadLocation_Implementation() override;
@@ -308,6 +329,14 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void UnPossessed() override;
+	// Called on server and on clients (through controller replication), unlike PossessedBy/UnPossessed
+	virtual void NotifyControllerChanged() override;
+
+	// Resets aim state that exists only on the machine of the controlling player (ADS, FOV, hidden meshes).
+	// Does not replicate anything.
+	void ResetLocalAimState();
+
+	bool bWasLocallyPlayerControlled = false;
 
 	// Helpers for possession transitions
 	void HandleServerPlayerPossessed();
