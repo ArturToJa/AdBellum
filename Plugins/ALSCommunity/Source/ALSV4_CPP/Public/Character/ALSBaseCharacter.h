@@ -361,6 +361,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ALS|Camera System")
 	virtual FRotator GetFirstPersonCameraRotationADS();
 
+	UFUNCTION(BlueprintCallable, Category = "ALS|Camera System")
+	virtual FRotator GetFirstPersonCameraCalibrationRotationADS();
+
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite, Category = "ALS|Camera System")
 	bool bRecenterCamera = false;
 

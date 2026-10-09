@@ -135,6 +135,15 @@ FRotator AALSCharacter::GetFirstPersonCameraRotationADS() {
 	else return FRotator::ZeroRotator;
 }
 
+FRotator AALSCharacter::GetFirstPersonCameraCalibrationRotationADS() {
+	// Same conditions as the hand held weapon case of GetFirstPersonCameraTargetADS
+	if (!ControlledInputInterceptor && ActiveWeaponActor && OverlayState != EALSOverlayState::Default
+		&& ActiveWeaponActor->GetClass()->ImplementsInterface(UALSADSInterface::StaticClass())) {
+		return IALSADSInterface::Execute_getADSCalibrationRotation(ActiveWeaponActor);
+	}
+	return FRotator::ZeroRotator;
+}
+
 void AALSCharacter::OnOverlayStateChanged(EALSOverlayState PreviousState)
 {
 	Super::OnOverlayStateChanged(PreviousState);

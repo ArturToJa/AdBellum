@@ -23,6 +23,11 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ALS|ADS")
 	FRotator getADSRotation();
 
+	// World space rotation that sight calibration applied to the sight (and its ADS point).
+	// The ADS camera applies the same rotation on top of its own, zero when there is nothing to correct.
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ALS|ADS")
+	FRotator getADSCalibrationRotation();
+
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ALS|Vehicle camera")
 	FTransform getCameraTransform(EALSStationaryRole Role);
 };

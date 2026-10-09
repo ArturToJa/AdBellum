@@ -81,6 +81,10 @@ FRotator AALSBaseCharacter::GetFirstPersonCameraRotationADS() {
 	return FRotator::ZeroRotator;
 }
 
+FRotator AALSBaseCharacter::GetFirstPersonCameraCalibrationRotationADS() {
+	return FRotator::ZeroRotator;
+}
+
 void AALSBaseCharacter::OnBreakfall_Implementation()
 {
 	Replicated_PlayMontage(GetRollAnimation(), 1.35);

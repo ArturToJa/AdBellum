@@ -121,6 +121,10 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 		void ScopeZeroDownAction();
 
+	//SIGHT ZOOM
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
+		void ZoomAction();
+
 	//RECOIL
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 		void AddRecoil();

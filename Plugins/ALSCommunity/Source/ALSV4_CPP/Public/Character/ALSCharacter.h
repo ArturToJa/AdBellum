@@ -45,6 +45,8 @@ public:
 
 	virtual FRotator GetFirstPersonCameraRotationADS() override;
 
+	virtual FRotator GetFirstPersonCameraCalibrationRotationADS() override;
+
 	virtual EALSGait GetGait_Implementation() override;
 
 	virtual EALSStance GetStance_Implementation() override;

@@ -187,6 +187,24 @@ void ABaseUnit::NotifyControllerChanged()
 		SetViewMode(EALSViewMode::FirstPerson);
 	}
 	bWasLocallyPlayerControlled = bIsLocallyPlayerControlled;
+
+	// Weapons only poll their owner on a slow timer, tell them about the new controller right away.
+	// WeaponArray is filled on clients, Children (actors owned by this unit) is what the server has.
+	for (ABaseWeapon* Weapon : WeaponArray)
+	{
+		if (Weapon)
+		{
+			Weapon->RefreshOwnerDependentState();
+		}
+	}
+	for (AActor* Child : Children)
+	{
+		ABaseWeapon* Weapon = Cast<ABaseWeapon>(Child);
+		if (Weapon && !WeaponArray.Contains(Weapon))
+		{
+			Weapon->RefreshOwnerDependentState();
+		}
+	}
 }
 
 void ABaseUnit::ResetLocalAimState()
@@ -1350,7 +1368,8 @@ void ABaseUnit::SetIsSeenBy_Implementation(ABaseFormation* Formation, bool IsSee
 //END ITARGETABBLE INTERAFCE
 void ABaseUnit::ScopeZeroUpAction_Implementation()
 {
-	if (ActiveWeaponActor && StationaryRole == EALSStationaryRole::None)
+	// Zero is only adjusted while the sight is not being aimed through
+	if (ActiveWeaponActor && StationaryRole == EALSStationaryRole::None && !UsingADS)
 	{
 		IIWeapon::Execute_ChangeSightZero(ActiveWeaponActor, 1);
 	}
@@ -1358,10 +1377,35 @@ void ABaseUnit::ScopeZeroUpAction_Implementation()
 
 void ABaseUnit::ScopeZeroDownAction_Implementation()
 {
-	if (ActiveWeaponActor && StationaryRole == EALSStationaryRole::None)
+	if (ActiveWeaponActor && StationaryRole == EALSStationaryRole::None && !UsingADS)
 	{
 		IIWeapon::Execute_ChangeSightZero(ActiveWeaponActor, -1);
 	}
+}
+
+void ABaseUnit::ZoomAction_Implementation()
+{
+	if (!ActiveWeaponActor || StationaryRole != EALSStationaryRole::None)
+	{
+		return;
+	}
+	// The weapon reports every step of the zoom transition through RefreshSightZoom
+	IIWeapon::Execute_ChangeSightZoom(ActiveWeaponActor);
+}
+
+void ABaseUnit::RefreshSightZoom_Implementation(AActor* Weapon)
+{
+	// Only while looking through that scope, otherwise the zoom is applied on the next aim
+	if (!Weapon || Weapon != ActiveWeaponActor || !UsingADS || !IsLocallyControlled() || !IIWeapon::Execute_GetIsScoped(Weapon))
+	{
+		return;
+	}
+	CameraFOV = IIWeapon::Execute_GetWeaponFOV(Weapon);
+	IIWeapon::Execute_SetSightMeshScale(Weapon, true);
+
+	const float CameraMovementRate = IIWeapon::Execute_GetCameraSensitivity(Weapon);
+	LookLeftRightRate = CameraMovementRate;
+	LookUpDownRate = CameraMovementRate;
 }
 
 void ABaseUnit::SetBodyHiddenForScope_Implementation(bool bHideBody)

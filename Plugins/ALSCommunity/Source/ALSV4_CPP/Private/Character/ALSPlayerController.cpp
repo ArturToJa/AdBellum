@@ -377,6 +377,18 @@ void AALSPlayerController::ScopeZeroDownAction(const FInputActionValue& Value)
 	}
 }
 
+void AALSPlayerController::ZoomAction(const FInputActionValue& Value)
+{
+	if (CurrentState != EALSState::None)
+	{
+		return;
+	}
+	if (PossessedCharacter && Value.Get<bool>())
+	{
+		IALSInputInterface::Execute_ZoomAction(PossessedCharacter);
+	}
+}
+
 void AALSPlayerController::DebugToggleHudAction(const FInputActionValue& Value)
 {
 	if (PossessedCharacter && Value.Get<bool>())

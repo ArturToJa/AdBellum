@@ -115,4 +115,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		float GetSightZeroDistance();
 
+	// Switches the sight to its next zoom level (wraps around)
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		void ChangeSightZoom();
+
+	// Current sight magnification (2 = 2x), 1 when there is no sight
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		float GetSightMagnification();
+
 };

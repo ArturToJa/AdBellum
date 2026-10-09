@@ -244,6 +244,8 @@ public:
 
 	virtual void ScopeZeroDownAction_Implementation() override;
 
+	virtual void ZoomAction_Implementation() override;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Input")
 	bool bIsReloading = false;
 
@@ -285,6 +287,7 @@ public:
 	virtual bool IsReloading_Implementation() override;
 	virtual void GetUnitCombatDataStruct_Implementation(FUnitCombatDataStruct& CombatData) override;
 	virtual void SetBodyHiddenForScope_Implementation(bool bHideBody) override;
+	virtual void RefreshSightZoom_Implementation(AActor* Weapon) override;
 
 	// Components hidden by SetBodyHiddenForScope, restored when the scope is lowered
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> ScopeHiddenComponents;

@@ -91,4 +91,8 @@ protected:
 private:
 	UPROPERTY()
 	TObjectPtr<UALSDebugComponent> ALSDebugComponent = nullptr;
+
+	// Control rotation after RotationLagSpeed smoothing, before any ADS correction is applied
+	FRotator SmoothedControlRotation = FRotator::ZeroRotator;
+	bool bHasSmoothedControlRotation = false;
 };

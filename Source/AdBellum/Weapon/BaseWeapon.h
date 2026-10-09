@@ -145,6 +145,21 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Customization|Sight")
 	void OnSightZeroChanged(float NewDistance);
 
+	// Called after player switched sight zoom level (HUD, sound)
+	UFUNCTION(BlueprintImplementableEvent, Category = "Customization|Sight")
+	void OnSightZoomChanged(float NewMagnification);
+
+	// Plays one of the sight's adjust sounds for the player who made the change (immediately, no network
+	// delay) and through the server for every other player near the weapon
+	void PlaySightAdjustSound(ESightAdjustSound Sound);
+	void PlaySightAdjustSoundLocal(ESightAdjustSound Sound);
+
+	UFUNCTION(Server, Unreliable)
+	void Server_PlaySightAdjustSound(ESightAdjustSound Sound);
+
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlaySightAdjustSound(ESightAdjustSound Sound);
+
 	// Simulates calibration bullet without collision in a level frame of the barrel (X downrange, Z up).
 	// OutRangePoint is the trajectory point at DistanceMeters, relative to the barrel, in that frame.
 	bool SimulateTrajectoryPoint(TSubclassOf<AEBBullet> BulletClass, float DistanceMeters, FVector& OutRangePoint,
@@ -153,8 +168,12 @@ public:
 	// EBarrel world transform with BaseBarrelRelativeRotation instead of its current (possibly AI aimed) rotation
 	FTransform GetBaseBarrelWorldTransform() const;
 
-	virtual void Tick(float DeltaTime) override;
 	void DrawSightCalibrationDebug() const;
+
+	// Re-evaluates everything that depends on who controls the owning unit and on the attached sight:
+	// client side aim, first calibration of a new sight, debug/diagnostic hooks.
+	// Runs on a slow timer; the owning unit also calls it right away when its controller changes.
+	void RefreshOwnerDependentState();
 
 	// Client side aim: while a player controls the owning unit, the server shoots from the barrel transform
 	// reported by that player's machine (what the player sees through the sight) instead of its own pose.
@@ -163,6 +182,14 @@ public:
 	bool bUseClientSideAimForPlayers = true;
 
 	void UpdateClientSideAim();
+
+	// Calibrates a sight that has not been calibrated yet (new weapon, new sight actor) to its default
+	// zero distance, as soon as a local player controls the unit. Zero keys keep working on top of it.
+	void EnsureSightCalibrated();
+
+	// Steps the sight's zoom transition and makes the owning unit apply the intermediate zoom.
+	// Schedules itself for the next frame only while a transition is running.
+	void StepSightZoomTransition();
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim")
 	float WeaponAimSensivity = 0.3f;
@@ -227,6 +254,7 @@ public:
 	virtual void Trigger_Implementation(bool trigger) override;
 	virtual AdBellumWeaponTypeEnum GetWeaponType_Implementation() override;
 	virtual FVector getADSTarget_Implementation() override;
+	virtual FRotator getADSCalibrationRotation_Implementation() override;
 	virtual bool IsReloading_Implementation() override;
 	virtual bool HasAmmoToReload_Implementation() override;
 	virtual float GetEffectiveRange_Implementation() override;
@@ -256,6 +284,8 @@ public:
 	virtual bool GetIsScoped_Implementation() override;
 	virtual void ChangeSightZero_Implementation(int32 Direction) override;
 	virtual float GetSightZeroDistance_Implementation() override;
+	virtual void ChangeSightZoom_Implementation() override;
+	virtual float GetSightMagnification_Implementation() override;
 
 	virtual void BeginPlay() override;
 	bool bIsReloading = false;
@@ -280,6 +310,27 @@ private:
 	int32 CurrentZeroIndex = INDEX_NONE;
 	TWeakObjectPtr<ABaseSight> ZeroIndexSight;
 
+	// Sight EnsureSightCalibrated already tried to calibrate
+	TWeakObjectPtr<ABaseSight> CalibrationAttemptedSight;
+
 	// Player controller whose aim the barrel currently uses, null when client side aim is off
 	TWeakObjectPtr<AController> ClientSideAimController;
+
+	// Optional sight diagnostics (ADS camera vs calibrated sight), implemented in SightDiagnostics.cpp.
+	// Writes Saved/Logs/SightDiagnostics.csv while adb.Sight.DiagnosticsFile is 1 and the local player aims.
+	void WriteSightDiagnostics(UWorld* World, ELevelTick TickType, float DeltaSeconds);
+	static bool IsSightDiagnosticsEnabled();
+	FDelegateHandle SightDiagnosticsHandle;
+
+	// Slow polling of RefreshOwnerDependentState
+	FTimerHandle OwnerStateTimer;
+	// Per frame work exists only while it is needed
+	bool bZoomTransitionStepScheduled = false;
+	bool bDebugDrawStepScheduled = false;
+	void UpdateDebugHooks();
+	void StepDebugDraw();
+
+	float LastShotWorldTime = -1000.0f;
+	float SightDiagnosticsTimer = 0.0f;
+	TWeakObjectPtr<ABaseSight> SightDiagnosticsLoggedSight;
 };

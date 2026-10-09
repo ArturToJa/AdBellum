@@ -65,6 +65,54 @@ void ABaseWeapon::OnConstruction(const FTransform& Transform)
 void ABaseWeapon::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Nothing here needs to run every frame. A slow timer catches late arriving state (owner, sight actor,
+	// replicated bullet class), the random first delay spreads many weapons over different frames.
+	constexpr float OwnerStateInterval = 0.25f;
+	GetWorldTimerManager().SetTimer(OwnerStateTimer, this, &ABaseWeapon::RefreshOwnerDependentState,
+		OwnerStateInterval, true, FMath::FRandRange(0.0f, OwnerStateInterval));
+}
+
+void ABaseWeapon::RefreshOwnerDependentState()
+{
+	UpdateClientSideAim();
+	EnsureSightCalibrated();
+	UpdateDebugHooks();
+}
+
+void ABaseWeapon::UpdateDebugHooks()
+{
+#if !UE_BUILD_SHIPPING
+	// Debug drawing needs every frame, but only while adb.Sight.DebugCalibration is on
+	if (ABaseSight::GetCalibrationDebugMode() > 0 && !bDebugDrawStepScheduled && GetNetMode() != NM_DedicatedServer)
+	{
+		bDebugDrawStepScheduled = true;
+		GetWorldTimerManager().SetTimerForNextTick(this, &ABaseWeapon::StepDebugDraw);
+	}
+
+	// Sight diagnostics are sampled after the camera update, registered only while adb.Sight.DiagnosticsFile is on
+	const bool bDiagnostics = IsSightDiagnosticsEnabled() && GetNetMode() != NM_DedicatedServer;
+	if (bDiagnostics && !SightDiagnosticsHandle.IsValid())
+	{
+		SightDiagnosticsHandle = FWorldDelegates::OnWorldPostActorTick.AddUObject(this, &ABaseWeapon::WriteSightDiagnostics);
+	}
+	else if (!bDiagnostics && SightDiagnosticsHandle.IsValid())
+	{
+		FWorldDelegates::OnWorldPostActorTick.Remove(SightDiagnosticsHandle);
+		SightDiagnosticsHandle.Reset();
+	}
+#endif
+}
+
+void ABaseWeapon::StepDebugDraw()
+{
+	bDebugDrawStepScheduled = false;
+	if (ABaseSight::GetCalibrationDebugMode() > 0)
+	{
+		DrawSightCalibrationDebug();
+		bDebugDrawStepScheduled = true;
+		GetWorldTimerManager().SetTimerForNextTick(this, &ABaseWeapon::StepDebugDraw);
+	}
 }
 
 //CUSTOMIZATION
@@ -159,11 +207,56 @@ TSubclassOf<AEBBullet> ABaseWeapon::GetCalibrationBulletClass() const
 	return nullptr;
 }
 
-void ABaseWeapon::Tick(float DeltaTime)
+void ABaseWeapon::StepSightZoomTransition()
 {
-	Super::Tick(DeltaTime);
-	UpdateClientSideAim();
-	DrawSightCalibrationDebug();
+	bZoomTransitionStepScheduled = false;
+
+	ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	const UWorld* World = GetWorld();
+	// True only for the frames between pressing ZoomAction and reaching the new zoom level
+	if (!Sight || !World || !Sight->TickZoomTransition(World->GetDeltaSeconds()))
+	{
+		return;
+	}
+
+	if (GetOwner() && GetOwner()->GetClass()->ImplementsInterface(UArmedUnitInterface::StaticClass()))
+	{
+		IArmedUnitInterface::Execute_RefreshSightZoom(GetOwner(), this);
+	}
+	bZoomTransitionStepScheduled = true;
+	GetWorldTimerManager().SetTimerForNextTick(this, &ABaseWeapon::StepSightZoomTransition);
+}
+
+void ABaseWeapon::EnsureSightCalibrated()
+{
+	if (SightCalibrationMode != ESightCalibrationMode::Ballistic)
+	{
+		return;
+	}
+
+	// ZeroIndexSight is the sight of the last successful calibration
+	ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	if (!Sight || Sight == ZeroIndexSight || Sight == CalibrationAttemptedSight)
+	{
+		return;
+	}
+
+	// Calibration is only visible to the player looking through the sight
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (!OwnerPawn || !OwnerPawn->IsLocallyControlled() || !Cast<APlayerController>(OwnerPawn->GetController()))
+	{
+		return;
+	}
+
+	// Bullet class is replicated, wait until it is known on this machine
+	if (!GetCalibrationBulletClass())
+	{
+		return;
+	}
+
+	// One attempt per sight actor, so a failing calibration does not repeat every frame
+	CalibrationAttemptedSight = Sight;
+	CalibrateSight(GetDefaultSightZeroDistance());
 }
 
 void ABaseWeapon::UpdateClientSideAim()
@@ -439,6 +532,83 @@ float ABaseWeapon::GetSightZeroDistance_Implementation()
 	return CalibratedDistance > 0.0f ? CalibratedDistance : GetDefaultSightZeroDistance();
 }
 
+float ABaseWeapon::GetSightMagnification_Implementation()
+{
+	const ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	return Sight ? Sight->GetCurrentMagnification() : 1.0f;
+}
+
+void ABaseWeapon::PlaySightAdjustSoundLocal(ESightAdjustSound Sound)
+{
+	// The sight actor exists separately on every machine, each one plays its own copy of the sound
+	const ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	if (USoundBase* SoundAsset = Sight ? Sight->GetAdjustSound(Sound) : nullptr)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, SoundAsset, Sight->GetActorLocation());
+	}
+}
+
+void ABaseWeapon::PlaySightAdjustSound(ESightAdjustSound Sound)
+{
+	PlaySightAdjustSoundLocal(Sound);
+	if (GetNetMode() != NM_Standalone)
+	{
+		Server_PlaySightAdjustSound(Sound);
+	}
+}
+
+void ABaseWeapon::Server_PlaySightAdjustSound_Implementation(ESightAdjustSound Sound)
+{
+	Multicast_PlaySightAdjustSound(Sound);
+}
+
+void ABaseWeapon::Multicast_PlaySightAdjustSound_Implementation(ESightAdjustSound Sound)
+{
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	// The player who adjusted the sight already heard it in PlaySightAdjustSound
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (OwnerPawn && OwnerPawn->IsLocallyControlled())
+	{
+		return;
+	}
+	PlaySightAdjustSoundLocal(Sound);
+}
+
+void ABaseWeapon::ChangeSightZoom_Implementation()
+{
+	ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	const float PreviousMagnification = Sight ? Sight->GetCurrentMagnification() : 0.0f;
+	if (!Sight || !Sight->CycleZoomLevel())
+	{
+		return;
+	}
+
+	// Covers an instant switch (ZoomTransitionTime 0); a timed one keeps refreshing every frame until it ends
+	if (GetOwner() && GetOwner()->GetClass()->ImplementsInterface(UArmedUnitInterface::StaticClass()))
+	{
+		IArmedUnitInterface::Execute_RefreshSightZoom(GetOwner(), this);
+	}
+	if (!bZoomTransitionStepScheduled)
+	{
+		bZoomTransitionStepScheduled = true;
+		GetWorldTimerManager().SetTimerForNextTick(this, &ABaseWeapon::StepSightZoomTransition);
+	}
+
+	const float NewMagnification = Sight->GetCurrentMagnification();
+	// Wrapping from the highest level back to the lowest counts as zooming out
+	PlaySightAdjustSound(NewMagnification > PreviousMagnification ? ESightAdjustSound::ZoomIn : ESightAdjustSound::ZoomOut);
+	OnSightZoomChanged(NewMagnification);
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage((uint64)GetUniqueID() + 1, 2.0f, FColor::White, FString::Printf(TEXT("Sight zoom: %gx"), NewMagnification));
+	}
+#endif
+}
+
 void ABaseWeapon::ChangeSightZero_Implementation(int32 Direction)
 {
 	ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
@@ -459,6 +629,7 @@ void ABaseWeapon::ChangeSightZero_Implementation(int32 Direction)
 	const float NewDistance = Sight->ZeroDistances[NewIndex];
 	if (CalibrateSight(NewDistance))
 	{
+		PlaySightAdjustSound(ESightAdjustSound::ZeroChange);
 		OnSightZeroChanged(NewDistance);
 #if !UE_BUILD_SHIPPING
 		if (GEngine)
@@ -499,8 +670,9 @@ FVector ABaseWeapon::CalculateSightRotation(FVector StartLocation, FVector Targe
 //END CUSTOMIZATION
 
 //SHOOTING LOGIC
-void ABaseWeapon::HandleBarrelShotFired() 
+void ABaseWeapon::HandleBarrelShotFired()
 {
+	LastShotWorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : LastShotWorldTime;
 	if (FireSound) 
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, FireSound, EBarrel->GetComponentLocation());
@@ -547,6 +719,25 @@ void ABaseWeapon::Client_StopRecoil_Implementation()
 void ABaseWeapon::OnWeaponUpdate()
 {
 	IArmedUnitInterface::Execute_OnWeaponUpdated(GetOwner(), this);
+}
+
+FRotator ABaseWeapon::getADSCalibrationRotation_Implementation()
+{
+	const ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	const USceneComponent* SightRoot = Sight ? Sight->GetRootComponent() : nullptr;
+	// BaseSightRelativeRotation is only known for the sight that was calibrated
+	if (!SightRoot || BaseRotationSight != Sight)
+	{
+		return FRotator::ZeroRotator;
+	}
+
+	// World rotation the sight root would have without calibration, in the weapon's current pose
+	const USceneComponent* Parent = SightRoot->GetAttachParent();
+	const FQuat ParentRotation = Parent ? Parent->GetSocketQuaternion(SightRoot->GetAttachSocketName()) : FQuat::Identity;
+	const FQuat UncalibratedRotation = ParentRotation * BaseSightRelativeRotation.Quaternion();
+
+	// Rotation that takes the uncalibrated sight to the calibrated one
+	return (SightRoot->GetComponentQuat() * UncalibratedRotation.Inverse()).Rotator();
 }
 
 FVector ABaseWeapon::getADSTarget_Implementation()

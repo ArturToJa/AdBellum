@@ -36,4 +36,9 @@ public:
 	// Hides unit meshes for its own player while aiming through a scope that uses camera FOV
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ArmedUnitInterface")
 	void SetBodyHiddenForScope(bool bHideBody);
+
+	// The zoom of Weapon's sight changed (new zoom level or a step of the transition between two levels):
+	// apply its FOV, scope scale and mouse sensitivity again if the unit is aiming through it
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "ArmedUnitInterface")
+	void RefreshSightZoom(AActor* Weapon);
 };

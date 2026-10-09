@@ -7,6 +7,17 @@
 #include "Components/ArrowComponent.h" 
 #include "BaseSight.generated.h"
 
+class USoundBase;
+
+// Sounds a sight makes when the player adjusts it
+UENUM(BlueprintType)
+enum class ESightAdjustSound : uint8
+{
+	ZoomIn,
+	ZoomOut,
+	ZeroChange
+};
+
 UCLASS()
 class ADBELLUM_API ABaseSight : public AActor 
 {
@@ -43,11 +54,86 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "AimConfig")
 	bool bIsScoped = false;
 
+	// Played at the sight when zoom switched to a higher magnification. Give the sound an attenuation
+	// to limit how far other players hear it.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Sound")
+	TObjectPtr<USoundBase> ZoomInSound;
+
+	// Played at the sight when zoom switched to a lower magnification
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Sound")
+	TObjectPtr<USoundBase> ZoomOutSound;
+
+	// Played at the sight when the zero distance was changed
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Sound")
+	TObjectPtr<USoundBase> ZeroChangeSound;
+
+	USoundBase* GetAdjustSound(ESightAdjustSound Sound) const;
+
 	virtual void NotifyAim(bool bIsAiming);
 	float GetBaseSensitivity();
 	float GetSightFOV() const;
 	bool GetIsScoped() const;
 	void SetAimingMeshScale(bool bIsAiming);
+
+	// Magnifications the player can switch between with ZoomAction, e.g. 2, 4, 8, 16 for 2x, 4x, 8x, 16x.
+	// 1x is the unmagnified view (UnmagnifiedFOV). Empty - fixed zoom given by SightFOV.
+	// Only used by scoped sights (bIsScoped), which zoom with the camera FOV. SightFOV stays the FOV the
+	// sight mesh is authored for: at that zoom the mesh has its authored size, at other zooms it is scaled
+	// so the scope keeps the same size on screen.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom")
+	TArray<float> ZoomLevels;
+
+	// Index in ZoomLevels the sight starts at
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom", meta = (ClampMin = "0"))
+	int32 DefaultZoomLevelIndex = 0;
+
+	// Camera FOV of the unmagnified (1x) view, magnification is measured against it
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom", meta = (ClampMin = "1.0", ClampMax = "170.0"))
+	float UnmagnifiedFOV = 90.0f;
+
+	// True when the player can switch zoom on this sight
+	UFUNCTION(BlueprintCallable, Category = "Sight|Zoom")
+	bool HasZoomLevels() const;
+
+	// Current magnification: selected zoom level, or the one SightFOV corresponds to when there are no zoom levels
+	UFUNCTION(BlueprintCallable, Category = "Sight|Zoom")
+	float GetCurrentMagnification() const;
+
+	// Selects the next zoom level, wraps around after the last one. Returns false when there is nothing to switch.
+	bool CycleZoomLevel();
+
+	// Seconds a switch between two zoom levels takes, 0 switches instantly
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom", meta = (ClampMin = "0.0", Units = "s"))
+	float ZoomTransitionTime = 0.2f;
+
+	// Scales BaseMouseSensitivity with the visible FOV (BaseMouseSensitivity then applies at SightFOV).
+	// Leave OFF while the look actions in the input mapping context have a FOV Scaling modifier (IMC_Default
+	// does): that modifier already scales mouse input with the camera FOV, enabling both scales it twice.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom")
+	bool bScaleSensitivityWithZoom = false;
+
+	// Advances the transition between zoom levels. Returns true while the visible zoom is still changing
+	// (FOV, mesh scale and sensitivity have to be applied again).
+	bool TickZoomTransition(float DeltaTime);
+
+	// Scalar parameters of the SightView (reticle) material that are adjusted with zoom.
+	// While aiming: parameter = authored value * MeshZoomScale ^ exponent, where MeshZoomScale is how much
+	// the scope mesh is enlarged at the current zoom (1 at SightFOV, 2 at half that magnification, ...).
+	// Exponent 0 leaves the parameter alone. NAME_None or a parameter the material does not have is skipped.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom|Reticle Material")
+	FName ReticleParallaxParameter = TEXT("ParalaxDistance");
+
+	// -1 cancels the effect the enlarged reticle plane has on a BumpOffset parallax reticle,
+	// so the reticle looks the same at every zoom
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom|Reticle Material")
+	float ReticleParallaxZoomExponent = -1.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom|Reticle Material")
+	FName ReticleScaleParameter = TEXT("Scale");
+
+	// 0 keeps the reticle the same size on screen at every zoom. 1 or -1 makes it grow or shrink with zoom.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom|Reticle Material")
+	float ReticleScaleZoomExponent = 0.0f;
 
 	// Max angle between SightArrow direction and the line of sight before setup is reported as invalid
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Calibration")
@@ -95,6 +181,36 @@ public:
 
 private:
 	mutable bool bSetupWarningLogged = false;
+
+	float MagnificationToFOV(float Magnification) const;
+	int32 GetZoomLevelIndex() const;
+
+	// Selected entry of ZoomLevels, INDEX_NONE until first used (then DefaultZoomLevelIndex)
+	int32 CurrentZoomLevelIndex = INDEX_NONE;
+
+	// Magnification currently shown, moves towards the selected zoom level during a transition
+	float GetDisplayedMagnification() const;
+	// How much wider the visible FOV is than SightFOV: tan(FOV / 2) / tan(SightFOV / 2)
+	float GetZoomFOVScale() const;
+	float ZoomTransitionFrom = 0.0f;
+	float ZoomTransitionAlpha = 1.0f;
+
+	// Authored transforms of the parts SetAimingMeshScale changes, captured before the first change
+	void CacheAuthoredSightTransforms();
+	bool bAuthoredSightTransformsCached = false;
+	FVector AuthoredSightMeshLocation = FVector::ZeroVector;
+	FVector AuthoredSightMeshScale = FVector::OneVector;
+	FVector AuthoredSightViewScale = FVector::OneVector;
+
+	// Reticle material of SightView (slot 0) and its authored parameter values, only for sights with zoom levels
+	void ApplyZoomToReticleMaterial(float MeshZoomScale);
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> ReticleMaterial;
+	bool bReticleMaterialCached = false;
+	bool bHasReticleParallaxParameter = false;
+	bool bHasReticleScaleParameter = false;
+	float AuthoredReticleParallax = 0.0f;
+	float AuthoredReticleScale = 0.0f;
 };
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))

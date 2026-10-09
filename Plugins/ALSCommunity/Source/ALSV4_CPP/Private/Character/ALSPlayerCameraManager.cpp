@@ -72,6 +72,7 @@ void AALSPlayerCameraManager::OnPossess(APawn* NewPawn)
 
 		ALSDebugComponent = ControlledCharacter->FindComponentByClass<UALSDebugComponent>();
 		castedNewCharacter = Cast<AALSCharacter>(ControlledCharacter);
+		bHasSmoothedControlRotation = false;
 	}
 	else
 	{
@@ -163,6 +164,8 @@ bool AALSPlayerCameraManager::CustomCameraBehavior(float DeltaTime, FVector& Loc
 	// Step 2: Calculate Target Camera Rotation. Use the Control Rotation and interpolate for smooth camera rotation.
 
 	if (castedNewCharacter->GetMovementState() == EALSMovementState::Stationary && castedNewCharacter->GetRecenterCamera()) {
+		// Stationary cameras smooth from the camera itself, restart control rotation smoothing afterwards
+		bHasSmoothedControlRotation = false;
 
 		if ((castedNewCharacter->GetRotationMode() == EALSRotationMode::Aiming && castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner_Standing)
 			|| castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner && castedNewCharacter->GetUseMainCameraTransform()) {
@@ -187,8 +190,13 @@ bool AALSPlayerCameraManager::CustomCameraBehavior(float DeltaTime, FVector& Loc
 	}
 	else {
 
-		const FRotator& InterpResult = FMath::RInterpTo(GetCameraRotation(),GetOwningPlayerController()->GetControlRotation(), DeltaTime,
+		// Smooth from the previous smoothed value, not from the final camera rotation: the final rotation
+		// can contain the ADS calibration rotation added below, which would then feed back into itself.
+		const FRotator InterpSource = bHasSmoothedControlRotation ? SmoothedControlRotation : GetCameraRotation();
+		const FRotator& InterpResult = FMath::RInterpTo(InterpSource, GetOwningPlayerController()->GetControlRotation(), DeltaTime,
 			GetCameraBehaviorParam(NAME_RotationLagSpeed));
+		SmoothedControlRotation = InterpResult;
+		bHasSmoothedControlRotation = true;
 
 		TargetCameraRotation = UKismetMathLibrary::RLerp(InterpResult, DebugViewRotation,
 			GetCameraBehaviorParam(TEXT("Override_Debug")), true);
@@ -274,7 +282,11 @@ bool AALSPlayerCameraManager::CustomCameraBehavior(float DeltaTime, FVector& Loc
 	FTransform TargetCameraTransform(TargetCameraRotation, TargetCameraLocation, FVector::OneVector);
 	FTransform FPTargetCameraTransform(TargetCameraRotation, FPTarget, FVector::OneVector);
 
-	FTransform ADSTargetCameraTransform(TargetCameraRotation, ADS, FVector::OneVector);
+	// A calibrated sight is turned away from the weapon axis and the ADS point turns with it.
+	// Give the ADS camera the same (world space) rotation, so it looks through the middle of the sight.
+	// It is constant between calibrations, recoil still moves the reticle on screen.
+	const FQuat ADSCalibrationRotation = castedNewCharacter->GetFirstPersonCameraCalibrationRotationADS().Quaternion();
+	FTransform ADSTargetCameraTransform(ADSCalibrationRotation * TargetCameraRotation.Quaternion(), ADS, FVector::OneVector);
 
 	//check overlay state and apply ADS only if rifle or pistol 2h 
 	if (castedNewCharacter->GetUsingADS() || castedNewCharacter->GetUseStationaryADS()) {
