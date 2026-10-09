@@ -91,6 +91,11 @@ protected:
 	UFUNCTION()
 	void ZoomAction(const FInputActionValue& Value);
 
+	// Mouse wheel from the default mapping context (RTS camera zoom, gunner zoom).
+	// DebugOverlayMenuCycleAction is the same thing bound from the debug mapping context.
+	UFUNCTION()
+	void ScrollAction(const FInputActionValue& Value);
+
 	// Debug actions
 	UFUNCTION()
 	void DebugToggleHudAction(const FInputActionValue& Value);

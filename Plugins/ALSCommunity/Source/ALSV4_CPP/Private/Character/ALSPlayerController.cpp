@@ -389,6 +389,20 @@ void AALSPlayerController::ZoomAction(const FInputActionValue& Value)
 	}
 }
 
+void AALSPlayerController::ScrollAction(const FInputActionValue& Value)
+{
+	if (CurrentState != EALSState::None)
+	{
+		return;
+	}
+	const float ScrollValue = Value.GetMagnitude();
+	if (PossessedCharacter && ScrollValue != 0.0f)
+	{
+		// true - wheel up
+		IALSInputInterface::Execute_ScrollAction(PossessedCharacter, ScrollValue > 0.0f);
+	}
+}
+
 void AALSPlayerController::DebugToggleHudAction(const FInputActionValue& Value)
 {
 	if (PossessedCharacter && Value.Get<bool>())
