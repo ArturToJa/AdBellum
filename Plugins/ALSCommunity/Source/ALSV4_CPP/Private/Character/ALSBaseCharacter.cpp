@@ -1488,16 +1488,27 @@ void AALSBaseCharacter::Server_RightMovementActionCompleted_Implementation()
 	//}
 }
 
+void AALSBaseCharacter::SetAimLookRate(float NewAimLookRate)
+{
+	AimLookRate = NewAimLookRate;
+	bAimLookRateActive = true;
+}
+
+void AALSBaseCharacter::ClearAimLookRate()
+{
+	bAimLookRateActive = false;
+}
+
 void AALSBaseCharacter::CameraUpAction_Implementation(float Value)
 {
 	if ((StationaryRole == EALSStationaryRole::Gunner_Standing && bRecenterCamera) || StationaryRole == EALSStationaryRole::Gunner)
 	{
 		if (StationaryRole == EALSStationaryRole::Gunner_Standing && bRecenterCamera)
 		{
-			AddControllerPitchInput(LookUpDownRate * Value);
+			AddControllerPitchInput(GetEffectiveLookUpDownRate() * Value);
 			if (RotationMode == EALSRotationMode::Aiming) 
 			{
-				Server_CameraUpAction(LookUpDownRate * Value);
+				Server_CameraUpAction(GetEffectiveLookUpDownRate() * Value);
 			}
 		}
 		else if (StationaryRole == EALSStationaryRole::Gunner)
@@ -1509,7 +1520,7 @@ void AALSBaseCharacter::CameraUpAction_Implementation(float Value)
 		if (GetMovementState() == EALSMovementState::Stationary) {
 			bRecenterCamera = false;
 		}
-		AddControllerPitchInput(LookUpDownRate * Value);
+		AddControllerPitchInput(GetEffectiveLookUpDownRate() * Value);
 	}
 }
 
@@ -1528,9 +1539,9 @@ void AALSBaseCharacter::CameraRightAction_Implementation(float Value)
 	{
 		if (StationaryRole == EALSStationaryRole::Gunner_Standing && bRecenterCamera)
 		{
-			AddControllerYawInput(LookLeftRightRate * Value);
+			AddControllerYawInput(GetEffectiveLookLeftRightRate() * Value);
 			//IALSInputInterface::Execute_CameraRightAction(ControlledInputInterceptor, LookLeftRightRate * Value);
-			Server_CameraRightAction(LookLeftRightRate * Value);
+			Server_CameraRightAction(GetEffectiveLookLeftRightRate() * Value);
 		}
 		else if (StationaryRole == EALSStationaryRole::Gunner)
 		{ // && bBlockCameraRotation
@@ -1542,7 +1553,7 @@ void AALSBaseCharacter::CameraRightAction_Implementation(float Value)
 		if (GetMovementState() == EALSMovementState::Stationary) {
 			bRecenterCamera = false;
 		}
-		AddControllerYawInput(LookLeftRightRate * Value);
+		AddControllerYawInput(GetEffectiveLookLeftRightRate() * Value);
 	}
 }
 

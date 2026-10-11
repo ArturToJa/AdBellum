@@ -216,8 +216,7 @@ void ABaseUnit::ResetLocalAimState()
 	TriggerActive = false;
 	bReturnToThirdPersonAfterAim = false;
 	CameraFOV = 90.0f;
-	LookLeftRightRate = 1.25f;
-	LookUpDownRate = 1.25f;
+	ClearAimLookRate();
 	RecoilAnimationComponent->SetAimingStatus(false);
 
 	for (ABaseWeapon* Weapon : WeaponArray)
@@ -449,9 +448,8 @@ void ABaseUnit::HandlePressedADS()
 	if (ActiveWeaponActor)
 	{
 		IIWeapon::Execute_NotifyAim(ActiveWeaponActor, true);
-		float CameraMovementRate = IIWeapon::Execute_GetCameraSensitivity(ActiveWeaponActor);
-		LookLeftRightRate = CameraMovementRate;
-		LookUpDownRate = CameraMovementRate;
+		// Sight / weapon sensitivity replaces the configured look rates only while aiming
+		SetAimLookRate(IIWeapon::Execute_GetCameraSensitivity(ActiveWeaponActor));
 		if (HipFire)
 		{
 			HipFire = false;
@@ -471,8 +469,7 @@ void ABaseUnit::HandleReleasedADS()
 	{
 		IIWeapon::Execute_NotifyAim(ActiveWeaponActor, false);
 	}
-	LookLeftRightRate = 1.25f;
-	LookUpDownRate = 1.25f;
+	ClearAimLookRate();
 	if (EALSStationaryRole::None == StationaryRole)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, SoundADSReleased, HeldObjectRoot->GetComponentLocation());
@@ -750,6 +747,27 @@ void ABaseUnit::Multicast_WeaponArrayUpdate_Implementation(ABaseWeapon* Weapon, 
 	{
 		SocketWeapon(Weapon, SocketEnum);
 	}
+}
+
+void ABaseUnit::Multicast_ClearWeaponSlot_Implementation(EWeaponSocketEnum SocketEnum)
+{
+	const int32 SlotIndex = (int32)SocketEnum;
+	if (!WeaponArray.IsValidIndex(SlotIndex))
+	{
+		return;
+	}
+
+	ABaseWeapon* Weapon = WeaponArray[SlotIndex];
+	if (Weapon && ActiveWeaponActor == Weapon)
+	{
+		// Still valid here, so the player's aim state (ADS, FOV, hidden meshes) can be reset through it
+		if (IsLocallyControlled())
+		{
+			ResetLocalAimState();
+		}
+		ActiveWeaponActor = nullptr;
+	}
+	WeaponArray[SlotIndex] = nullptr;
 }
 
 void ABaseUnit::SocketWeapon(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum)
@@ -1403,9 +1421,7 @@ void ABaseUnit::RefreshSightZoom_Implementation(AActor* Weapon)
 	CameraFOV = IIWeapon::Execute_GetWeaponFOV(Weapon);
 	IIWeapon::Execute_SetSightMeshScale(Weapon, true);
 
-	const float CameraMovementRate = IIWeapon::Execute_GetCameraSensitivity(Weapon);
-	LookLeftRightRate = CameraMovementRate;
-	LookUpDownRate = CameraMovementRate;
+	SetAimLookRate(IIWeapon::Execute_GetCameraSensitivity(Weapon));
 }
 
 void ABaseUnit::SetBodyHiddenForScope_Implementation(bool bHideBody)

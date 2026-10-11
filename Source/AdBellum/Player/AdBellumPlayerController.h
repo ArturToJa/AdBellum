@@ -144,6 +144,19 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_OnWeaponCreated(const TArray<AActor*>& Weapons, const TArray<FUnitWeaponDataStruct>& WeaponPrefabs);
 
+	// Development console commands (adb.Weapon.*, see WeaponDebugCommands.cpp). Do nothing in shipping builds.
+	// Target is the possessed unit, or the selected unit while in the RTS camera.
+	UFUNCTION(Server, Reliable)
+	void Server_DebugSetWeapon(EWeaponSocketEnum Slot, FName WeaponRow, FName SightRow);
+
+	UFUNCTION(Server, Reliable)
+	void Server_DebugListWeapons();
+
+	UFUNCTION(Client, Reliable)
+	void Client_DebugMessage(const FString& Message);
+
+	class ABaseUnit* GetDebugTargetUnit() const;
+
 	UFUNCTION(Client, Reliable)
 	void Client_OnHUDNotify(FNotifyHUDData NotifyData);
 

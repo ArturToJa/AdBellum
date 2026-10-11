@@ -586,6 +586,25 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "ALS|Input", BlueprintReadWrite)
 	float LookLeftRightRate = 1.25f;
 
+	/** Look rate used instead of LookUpDownRate / LookLeftRightRate while aiming (sight or weapon sensitivity).
+	 *  Runtime state: the two configured rates above are never overwritten by it. */
+	UFUNCTION(BlueprintCallable, Category = "ALS|Input")
+	void SetAimLookRate(float NewAimLookRate);
+
+	/** Back to the configured LookUpDownRate / LookLeftRightRate */
+	UFUNCTION(BlueprintCallable, Category = "ALS|Input")
+	void ClearAimLookRate();
+
+	/** Rate currently applied to look input: the aim rate while aiming, the configured rate otherwise */
+	UFUNCTION(BlueprintPure, Category = "ALS|Input")
+	float GetEffectiveLookUpDownRate() const { return bAimLookRateActive ? AimLookRate : LookUpDownRate; }
+
+	UFUNCTION(BlueprintPure, Category = "ALS|Input")
+	float GetEffectiveLookLeftRightRate() const { return bAimLookRateActive ? AimLookRate : LookLeftRightRate; }
+
+	bool bAimLookRateActive = false;
+	float AimLookRate = 1.0f;
+
 	UPROPERTY(EditDefaultsOnly, Category = "ALS|Input", BlueprintReadOnly)
 	float RollDoubleTapTimeout = 0.3f;
 

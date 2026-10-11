@@ -146,6 +146,14 @@ public:
 	void SpawnFormationForPlayer(AActor* Player, int TeamId, int PlayerId, TArray<FMeshCreatorPrefabStruct>& UnitPrefabs, ABaseSpawnArea* SpawnArea = nullptr);
 	void SpawnWeaponsForUnit(AActor* Unit, TArray<FWeaponPrefabDataStruct> WeaponPrefabData);
 
+	// Replaces the weapon in one slot of a unit at runtime (used by the adb.Weapon.* console commands).
+	// WeaponRow / SightRow are row names of the weapon and sight data tables, WeaponRow None only removes
+	// the current weapon. OutMessage describes the result or why it was refused.
+	bool ReplaceUnitWeapon(class ABaseUnit* Unit, EWeaponSocketEnum Slot, FName WeaponRow, FName SightRow, FString& OutMessage);
+
+	// Row names of the weapon data table
+	void GetWeaponRowNames(TArray<FName>& OutRowNames) const;
+
 private:
 	// Everything the GameMode needs to track for one in-flight replication
 	// batch: its actors, when/how it should flush, and which players are

@@ -793,6 +793,10 @@ void AAdBellumGameMode::SpawnWeaponsForUnit(AActor* Unit, TArray<FWeaponPrefabDa
 				AActor* SpawnedWeapon = GetWorld()->SpawnActor<AActor>(WeaponClass, SpawnInfoWeapon);
 				if (SpawnedWeapon)
 				{
+					if (ABaseWeapon* BaseWeapon = Cast<ABaseWeapon>(SpawnedWeapon))
+					{
+						BaseWeapon->AssignedSocket = WeaponPrefab.WeaponSocketType;
+					}
 					FWeaponDataStruct WeaponDataStruct;
 					WeaponDataStruct.WeaponSocketType = WeaponPrefab.WeaponSocketType;
 					WeaponDataStruct.WeaponCustomizationData = WeaponPrefab.WeaponCustomizationData;
@@ -812,6 +816,118 @@ void AAdBellumGameMode::SpawnWeaponsForUnit(AActor* Unit, TArray<FWeaponPrefabDa
 			}
 		}
 	}
+}
+
+void AAdBellumGameMode::GetWeaponRowNames(TArray<FName>& OutRowNames) const
+{
+	OutRowNames.Reset();
+	if (WeaponData.DataTable)
+	{
+		OutRowNames = WeaponData.DataTable->GetRowNames();
+	}
+}
+
+bool AAdBellumGameMode::ReplaceUnitWeapon(ABaseUnit* Unit, EWeaponSocketEnum Slot, FName WeaponRow, FName SightRow, FString& OutMessage)
+{
+	const int32 SlotIndex = (int32)Slot;
+	if (!Unit || !Unit->WeaponArray.IsValidIndex(SlotIndex))
+	{
+		OutMessage = TEXT("no unit to change, possess a unit or select one first");
+		return false;
+	}
+
+	// Validate everything before touching the unit's current weapon
+	const bool bRemoveOnly = WeaponRow.IsNone();
+	if (!bRemoveOnly)
+	{
+		const FWeaponPrefabData* WeaponRowData = WeaponData.DataTable
+			? WeaponData.DataTable->FindRow<FWeaponPrefabData>(WeaponRow, TEXT("ReplaceUnitWeapon"), false) : nullptr;
+		const TSubclassOf<ABaseWeapon> WeaponClass = WeaponRowData ? WeaponRowData->WeaponClass.LoadSynchronous() : nullptr;
+		if (!WeaponClass)
+		{
+			OutMessage = FString::Printf(TEXT("unknown weapon '%s', see adb.Weapon.List"), *WeaponRow.ToString());
+			return false;
+		}
+		if (!SightRow.IsNone())
+		{
+			const UDataTable* SightTable = WeaponClass.GetDefaultObject()->SightPrefabData.DataTable;
+			if (!SightTable || !SightTable->FindRow<FSightPrefabData>(SightRow, TEXT("ReplaceUnitWeapon"), false))
+			{
+				OutMessage = FString::Printf(TEXT("unknown sight '%s' for weapon '%s', see adb.Sight.List"), *SightRow.ToString(), *WeaponRow.ToString());
+				return false;
+			}
+		}
+	}
+
+	// Current weapon of that slot: the unit's array where it is filled on the server, otherwise the weapons it owns
+	ABaseWeapon* OldWeapon = Unit->WeaponArray[SlotIndex];
+	if (!IsValid(OldWeapon))
+	{
+		OldWeapon = nullptr;
+		for (AActor* Child : Unit->Children)
+		{
+			ABaseWeapon* ChildWeapon = Cast<ABaseWeapon>(Child);
+			if (IsValid(ChildWeapon) && ChildWeapon->AssignedSocket == Slot)
+			{
+				OldWeapon = ChildWeapon;
+				break;
+			}
+		}
+	}
+
+	const bool bWasActive = OldWeapon && Unit->ActiveWeaponActor == OldWeapon;
+	if (OldWeapon)
+	{
+		IIWeapon::Execute_Trigger(OldWeapon, false);
+		// Every machine drops its references (and leaves ADS) before the actor disappears
+		Unit->Multicast_ClearWeaponSlot(Slot);
+		OldWeapon->Destroy();
+	}
+
+	if (bRemoveOnly)
+	{
+		OutMessage = OldWeapon ? TEXT("weapon removed") : TEXT("slot was already empty");
+		return true;
+	}
+
+	// Same path as the initial loadout: spawn on the server, each client configures the weapon
+	// (socket, materials, sight) once it has received it
+	FWeaponPrefabDataStruct Prefab;
+	Prefab.WeaponSocketType = Slot;
+	Prefab.WeaponClass = WeaponRow;
+	Prefab.WeaponCustomizationData.PaintMode = EWeaponPaintMode::EMPTY;
+	Prefab.WeaponCustomizationData.SightClass = SightRow;
+	TArray<FWeaponPrefabDataStruct> Prefabs;
+	Prefabs.Add(Prefab);
+	SpawnWeaponsForUnit(Unit, Prefabs);
+
+	ABaseWeapon* NewWeapon = nullptr;
+	for (AActor* Child : Unit->Children)
+	{
+		ABaseWeapon* ChildWeapon = Cast<ABaseWeapon>(Child);
+		if (IsValid(ChildWeapon) && ChildWeapon != OldWeapon && ChildWeapon->AssignedSocket == Slot)
+		{
+			NewWeapon = ChildWeapon;
+			break;
+		}
+	}
+	if (!NewWeapon)
+	{
+		OutMessage = FString::Printf(TEXT("failed to spawn weapon '%s'"), *WeaponRow.ToString());
+		return false;
+	}
+
+	// Server side references. Clients set their own when they configure the weapon.
+	Unit->WeaponArray[SlotIndex] = NewWeapon;
+	if (bWasActive)
+	{
+		// The weapon in hand was replaced: the new one takes its place, same slot so the same overlay state
+		Unit->ActiveWeaponActor = NewWeapon;
+	}
+
+	OutMessage = FString::Printf(TEXT("%s%s"), *WeaponRow.ToString(),
+		SightRow.IsNone() ? TEXT("") : *FString::Printf(TEXT(" with %s"), *SightRow.ToString()));
+	return true;
 }
 
 void AAdBellumGameMode::CountPendingConnections()

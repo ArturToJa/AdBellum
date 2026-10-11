@@ -501,6 +501,11 @@ bool ABaseWeapon::CalibrateSight(float Distance)
 	const float RemainingErrorCm = FVector::CrossProduct(FinalDirection, FinalDesired).Size() * Distance * 100.0f;
 	const float CorrectionMrad = (BaseSightRelativeRotation.Quaternion().Inverse() * SightRoot->GetRelativeRotation().Quaternion()).GetAngle() * 1000.0f;
 
+	// The solved rotation is only shown while the player aims through the sight. The root was turned above
+	// just to solve it; outside ADS it goes straight back, within this same call, so nothing is seen.
+	CalibratedSightRelativeRotation = SightRoot->GetRelativeRotation();
+	ApplySightCalibrationRotation();
+
 	CalibratedDistance = Distance;
 	CalibrationZeroPoint = ZeroPointRange;
 	CalibrationTrajectory = MoveTemp(Trajectory);
@@ -828,12 +833,29 @@ EFireMode ABaseWeapon::GetFireMode_Implementation()
 	return EBarrel->FireMode;
 }
 
-void ABaseWeapon::NotifyAim_Implementation(bool AimValue) 
+void ABaseWeapon::NotifyAim_Implementation(bool AimValue)
 {
 	if (SightComponent->GetSightActor())
 	{
 		SightComponent->GetSightActor()->NotifyAim(AimValue);
 	}
+	bSightAimed = AimValue;
+	ApplySightCalibrationRotation();
+}
+
+void ABaseWeapon::ApplySightCalibrationRotation()
+{
+	ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
+	USceneComponent* SightRoot = Sight ? Sight->GetRootComponent() : nullptr;
+	// Both rotations are only known for the sight that was calibrated
+	if (!SightRoot || BaseRotationSight != Sight)
+	{
+		return;
+	}
+	// Aiming: the sight is turned to its zero and the ADS camera follows it (getADSCalibrationRotation).
+	// Not aiming: the sight sits straight on the weapon. The ADS camera transition covers the switch.
+	SightRoot->SetRelativeRotation(bSightAimed ? CalibratedSightRelativeRotation : BaseSightRelativeRotation,
+		false, nullptr, ETeleportType::TeleportPhysics);
 }
 
 float ABaseWeapon::GetCameraSensitivity_Implementation()

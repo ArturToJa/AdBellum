@@ -702,6 +702,59 @@ void AAdBellumPlayerController::Client_OnWeaponCreated_Implementation(const TArr
 	ConfigureWeaponsWithRetry(Weapons, WeaponPrefabs);
 }
 
+ABaseUnit* AAdBellumPlayerController::GetDebugTargetUnit() const
+{
+	if (ABaseUnit* PossessedUnit = Cast<ABaseUnit>(GetPawn()))
+	{
+		return PossessedUnit;
+	}
+	return Cast<ABaseUnit>(SelectionPawn);
+}
+
+void AAdBellumPlayerController::Server_DebugSetWeapon_Implementation(EWeaponSocketEnum Slot, FName WeaponRow, FName SightRow)
+{
+#if !UE_BUILD_SHIPPING
+	AAdBellumGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AAdBellumGameMode>() : nullptr;
+	if (!GameMode)
+	{
+		return;
+	}
+	FString Message;
+	const bool bSuccess = GameMode->ReplaceUnitWeapon(GetDebugTargetUnit(), Slot, WeaponRow, SightRow, Message);
+	static const TCHAR* SlotNames[] = { TEXT("Primary"), TEXT("Secondary"), TEXT("Special") };
+	const TCHAR* SlotName = (int32)Slot < UE_ARRAY_COUNT(SlotNames) ? SlotNames[(int32)Slot] : TEXT("?");
+	Client_DebugMessage(FString::Printf(TEXT("%s weapon: %s%s"), SlotName, bSuccess ? TEXT("") : TEXT("FAILED - "), *Message));
+#endif
+}
+
+void AAdBellumPlayerController::Server_DebugListWeapons_Implementation()
+{
+#if !UE_BUILD_SHIPPING
+	TArray<FName> RowNames;
+	if (const AAdBellumGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AAdBellumGameMode>() : nullptr)
+	{
+		GameMode->GetWeaponRowNames(RowNames);
+	}
+	TArray<FString> Names;
+	for (const FName& RowName : RowNames)
+	{
+		Names.Add(RowName.ToString());
+	}
+	Client_DebugMessage(FString::Printf(TEXT("Weapons (%d): %s"), Names.Num(), *FString::Join(Names, TEXT(", "))));
+#endif
+}
+
+void AAdBellumPlayerController::Client_DebugMessage_Implementation(const FString& Message)
+{
+	UE_LOG(LogTemp, Display, TEXT("%s"), *Message);
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Cyan, Message);
+	}
+#endif
+}
+
 void AAdBellumPlayerController::ConfigureWeaponsWithRetry(TArray<AActor*> Weapons, TArray<FUnitWeaponDataStruct> WeaponPrefabs, int32 Attempts)
 {
 	TArray<AActor*> PendingWeapons;

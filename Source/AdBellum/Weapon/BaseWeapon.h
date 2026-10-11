@@ -130,9 +130,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization|Sight")
 	bool bCalibrateSightYaw = true;
 
-	// Ballistic calibration: rotates the sight actor so the line of sight (ADS -> reticle) crosses
+	// Ballistic calibration: finds the sight actor rotation that makes the line of sight (ADS -> reticle) cross
 	// the bullet trajectory at Distance (meters). Does nothing unless SightCalibrationMode is Ballistic.
-	// Local only: the rotation is applied to the non-replicated sight actor, never sent over the network.
+	// The rotation is applied to the sight only while its player aims through it (NotifyAim), otherwise the
+	// sight sits straight on the weapon. Local only: the sight actor is not replicated.
 	UFUNCTION(BlueprintCallable, Category = "Customization|Sight")
 	bool CalibrateSight(float Distance);
 
@@ -221,6 +222,9 @@ public:
 	bool bIsPlayerControlled;
 	void SetbIsPlayerControlled(bool bIsPlayerControlled);
 
+	// Slot this weapon was spawned for. Server side bookkeeping set by the game mode, not replicated.
+	EWeaponSocketEnum AssignedSocket = EWeaponSocketEnum::NONE;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ammo")
 	int MaxMagazineCount;
 
@@ -300,6 +304,11 @@ private:
 	// Captured again whenever the sight actor changes.
 	FRotator BaseSightRelativeRotation = FRotator::ZeroRotator;
 	TWeakObjectPtr<ABaseSight> BaseRotationSight;
+
+	// Sight actor root relative rotation solved by the last calibration, shown only while aiming
+	FRotator CalibratedSightRelativeRotation = FRotator::ZeroRotator;
+	bool bSightAimed = false;
+	void ApplySightCalibrationRotation();
 
 	// Last ballistic calibration result, kept for debug drawing (points in barrel range frame)
 	float CalibratedDistance = 0.0f;

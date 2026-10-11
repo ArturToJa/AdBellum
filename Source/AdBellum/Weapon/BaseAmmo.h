@@ -52,4 +52,11 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	UMaterial* DecalMaterial;
+
+	virtual void Tick(float DeltaSeconds) override;
+
+	// DebugEnabled as this bullet should currently use it: the console command adb.Ballistics.Debug
+	// (true / false) overrides the class default, "default" hands control back to the class default
+	UFUNCTION(BlueprintPure, Category = "Debug")
+	bool IsBallisticsDebugEnabled() const;
 };

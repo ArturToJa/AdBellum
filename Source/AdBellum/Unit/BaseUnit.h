@@ -104,6 +104,10 @@ public:
 	UFUNCTION(BlueprintCallable,NetMulticast, Reliable)
 	void Multicast_WeaponArrayUpdate(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum);
 
+	// The weapon in this slot is about to be destroyed: every machine forgets it and stops aiming with it
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_ClearWeaponSlot(EWeaponSocketEnum SocketEnum);
+
 	UFUNCTION(BlueprintCallable)
 	void SocketWeapon(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum);
 

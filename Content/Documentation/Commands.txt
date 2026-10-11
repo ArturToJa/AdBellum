@@ -1,0 +1,81 @@
+Ad Bellum - Console Commands
+
+Open the console in game (~ key) and type the command. Names are not case sensitive.
+None of these are available in shipping builds, except where noted.
+
+
+1. WEAPON COMMANDS
+
+Target: the unit you control, or the selected unit while in the RTS camera.
+Row names come from the data tables in Content/AdBellum/Blueprints/Weapon/Data
+(GunCollectionData for weapons, SightData for sights). The result or the reason for
+a refusal is printed on screen and in the log.
+Work as a client too: the command is sent to the server, which makes the change.
+
+adb.Weapon.List
+    Prints the weapon row names that can be given to a unit.
+
+adb.Sight.List
+    Prints the sight row names usable on the weapon currently in hand.
+
+adb.Weapon.Primary <WeaponRow> [SightRow]
+adb.Weapon.Secondary <WeaponRow> [SightRow]
+adb.Weapon.Special <WeaponRow> [SightRow]
+    Replaces the weapon in that slot. SightRow is optional, without it the weapon has no sight.
+    WeaponRow "None" only removes the weapon of that slot.
+    The new weapon appears after a short delay (up to about half a second).
+    Paint is reset to default.
+    Examples:
+        adb.Weapon.Primary AK15 SVS
+        adb.Weapon.Secondary PR9
+        adb.Weapon.Special None
+
+
+2. BALLISTICS
+
+adb.Ballistics.Debug true | false | default
+    Bullet debug (trajectory lines drawn by EasyBallistics).
+    true / false  - force debug on or off for every ammo class, ignoring class defaults
+    default       - each ammo blueprint uses its own DebugEnabled class default again
+    no argument   - prints the current state
+    Also accepts on/off and 1/0. Class defaults are never modified by the command.
+    The setting is per running process. Lines are drawn by the world that simulates the bullet,
+    so test in standalone or as listen server host if nothing shows as a client.
+    Blueprint debug drawing can follow the command by branching on IsBallisticsDebugEnabled (BaseAmmo).
+
+
+3. SIGHT DEBUG (console variables: type the name and a value)
+
+adb.Sight.DebugCalibration 0 | 1 | 2
+    Draws sight calibration debug.
+    0 - off (default)
+    1 - only the weapon of the locally controlled player
+    2 - every weapon
+    Yellow point - ADS (eye position). Green line - line of sight (red when the sight setup is invalid,
+    reason is in the log). Cyan line - direction of SightArrow. Orange line - bullet trajectory.
+    White sphere - zero point. The line of sight only meets the zero point while aiming, because the
+    calibration rotation is applied to the sight only in ADS.
+    Takes up to 0.25 s to switch on or off.
+
+adb.Sight.DiagnosticsFile 0 | 1
+    1 - while the local player aims down sights, writes camera / sight alignment data to
+        Saved/Logs/SightDiagnostics.csv (20 rows per second, file is restarted each editor session).
+    0 - off (default)
+    Values are in milliradians, pitch up and yaw right are positive. Main columns:
+        SightVsCam_P/Y   - calibrated line of sight relative to the camera (0 = reticle centered)
+        UncalVsCtrl_P/Y  - weapon pose relative to the view direction, calibration removed
+        CamVsCtrl_P/Y    - camera relative to control rotation
+        CalibAngleMrad   - how far calibration turned the sight
+        CamToADS_cm      - camera distance from the ADS point (should be 0)
+        W_ADS, W_FP, LagSpeed, SmoothAlpha - camera blend weights and smoothing
+    Also writes one "SIGHT DIAGNOSTICS" line per sight to the log with the attach parents of its parts.
+    Takes up to 0.25 s to switch on or off.
+
+
+4. RELATED KEYS (input actions in IMC_Default, not console commands)
+
+ScopeZeroUpAction / ScopeZeroDownAction (num + / num -)
+    Step the sight zero distance through ZeroDistances of the sight. Only while not aiming.
+
+ZoomAction
+    Cycles the zoom levels (ZoomLevels) of a scoped sight.

@@ -16,9 +16,59 @@
 #include "Perception/AISense_Damage.h"
 #include <Kismet/KismetStringLibrary.h>
 
+namespace
+{
+	// -1: every ammo class uses its own DebugEnabled class default, 0: forced off, 1: forced on
+	int32 GBallisticsDebugOverride = -1;
+
+	FAutoConsoleCommand GBallisticsDebugCommand(
+		TEXT("adb.Ballistics.Debug"),
+		TEXT("Bullet debug (trajectory lines): adb.Ballistics.Debug true | false | default. ")
+		TEXT("true / false override DebugEnabled of every ammo class, default returns to the class defaults. No argument prints the current state."),
+		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+		{
+			if (Args.Num() > 0)
+			{
+				const FString& Value = Args[0];
+				if (Value.Equals(TEXT("default"), ESearchCase::IgnoreCase) || Value == TEXT("-1"))
+				{
+					GBallisticsDebugOverride = -1;
+				}
+				else
+				{
+					// Accepts true/false, on/off, yes/no, 1/0
+					GBallisticsDebugOverride = (Value.ToBool() || Value.Equals(TEXT("on"), ESearchCase::IgnoreCase)) ? 1 : 0;
+				}
+			}
+			const TCHAR* State = GBallisticsDebugOverride < 0 ? TEXT("class defaults") : (GBallisticsDebugOverride > 0 ? TEXT("ON for all ammo") : TEXT("OFF for all ammo"));
+			UE_LOG(LogTemp, Display, TEXT("adb.Ballistics.Debug: %s"), State);
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan, FString::Printf(TEXT("Ballistics debug: %s"), State));
+			}
+		}));
+}
+
 ABaseAmmo::ABaseAmmo(const FObjectInitializer& ObjectInitializer)
 {
 	InitialLifeSpan = 10.0f;
+}
+
+bool ABaseAmmo::IsBallisticsDebugEnabled() const
+{
+	if (GBallisticsDebugOverride >= 0)
+	{
+		return GBallisticsDebugOverride > 0;
+	}
+	return GetClass()->GetDefaultObject<AEBBullet>()->DebugEnabled;
+}
+
+void ABaseAmmo::Tick(float DeltaSeconds)
+{
+	// The plugin reads DebugEnabled while it traces this step. Set on the instance only, class defaults
+	// are never modified, so nothing can end up saved into an ammo blueprint.
+	DebugEnabled = IsBallisticsDebugEnabled();
+	Super::Tick(DeltaSeconds);
 }
 
 void ABaseAmmo::OnImpact_Implementation(bool Ricochet, bool PassedThrough, FVector Location, FVector IncomingVelocity,
