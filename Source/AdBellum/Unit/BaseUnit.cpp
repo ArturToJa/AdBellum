@@ -2,7 +2,6 @@
 
 
 #include "BaseUnit.h"
-#include "OptimizationComponent.h"
 #include "Character/RecoilComponent.h"
 #include "OrderSystem/OrdersManager.h"
 #include "Math/UnrealMathUtility.h"
@@ -40,7 +39,6 @@ ABaseUnit::ABaseUnit(const FObjectInitializer& ObjectInitializer)
 	// player at all, so that player's ReplicationReporter can never reach the
 	// batch's expected actor count and ReadyToStartMatch blocks forever.
 	bAlwaysRelevant = true;
-	//OptimizationComponent = CreateDefaultSubobject<UOptimizationProxyComponent>(TEXT("Optimization Component"));
 	AIPerception = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("AIPerception"));
 	AIPerception->SetIsReplicated(true);
 	//init empty weapon array

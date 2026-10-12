@@ -950,7 +950,7 @@ APlayerController* AAdBellumGameMode::SpawnPlayerController(ENetRole InRemoteRol
 	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	if (Options.Contains(FString(TEXT("SpectatorOnly=1"))) && ReplaySpectatorPlayerControllerClass != nullptr)
 	{
-		return SpawnReplayPlayerController(InRemoteRole, FVector::ZeroVector, FRotator::ZeroRotator);
+		return SpawnPlayerControllerCommon(InRemoteRole, FVector::ZeroVector, FRotator::ZeroRotator, ReplaySpectatorPlayerControllerClass);
 	}
 
 	if (Options.Contains(FString(TEXT("Android"))))

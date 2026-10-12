@@ -39,7 +39,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components")
 	TObjectPtr<USceneComponent> ADS;
 
+	// By default the weapon picks the socket from bIsScoped (ABaseWeapon::GetSightSocketName).
+	// Enable to attach this sight to SocketName instead.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Socket")
+	bool bOverrideSocket = false;
+
+	// Weapon mesh socket this sight is attached to, only used while bOverrideSocket is enabled
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Socket", meta = (EditCondition = "bOverrideSocket"))
 	FName SocketName;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")

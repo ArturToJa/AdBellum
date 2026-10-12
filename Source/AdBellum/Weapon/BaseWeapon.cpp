@@ -179,15 +179,44 @@ void ABaseWeapon::PrepareSight(FName SightClassName)
 			{
 				SightComponent->AttachToComponent(WeaponMeshComponent,
 					FAttachmentTransformRules(EAttachmentRule::SnapToTarget, EAttachmentRule::SnapToTarget, EAttachmentRule::KeepRelative, false),
-					SightComponent->GetSightActor()->SocketName);
+					GetSightSocketName(SightComponent->GetSightActor()));
 				IRS->SetVisibility(false);
 			}
 		}
 	}
-	else if (IRS->GetStaticMesh() != nullptr) 
+	else if (IRS->GetStaticMesh() != nullptr)
 	{
 		IRS->SetVisibility(true);
 	}
+}
+
+FName ABaseWeapon::GetSightSocketName(const ABaseSight* Sight) const
+{
+	// A sight can name its own socket, for the ones that do not follow the bIsScoped rule
+	if (Sight && Sight->bOverrideSocket && !Sight->SocketName.IsNone())
+	{
+		if (!WeaponMeshComponent || WeaponMeshComponent->DoesSocketExist(Sight->SocketName))
+		{
+			return Sight->SocketName;
+		}
+		UE_LOG(LogTemp, Warning, TEXT("ABaseWeapon::GetSightSocketName - %s: mesh has no socket '%s' requested by sight %s (bOverrideSocket), using the bIsScoped rule instead"),
+			*GetClass()->GetName(), *Sight->SocketName.ToString(), *Sight->GetClass()->GetName());
+	}
+
+	const bool bScoped = Sight && Sight->GetIsScoped();
+	const FName PreferredSocket = bScoped ? ScopedSightSocketName : SightSocketName;
+	if (!WeaponMeshComponent || WeaponMeshComponent->DoesSocketExist(PreferredSocket))
+	{
+		return PreferredSocket;
+	}
+
+	// The weapon pack is not consistent, use the other sight socket if this mesh only has that one
+	const FName OtherSocket = bScoped ? SightSocketName : ScopedSightSocketName;
+	const bool bHasOtherSocket = WeaponMeshComponent->DoesSocketExist(OtherSocket);
+	UE_LOG(LogTemp, Warning, TEXT("ABaseWeapon::GetSightSocketName - %s: mesh has no socket '%s' for %s sight %s, %s"),
+		*GetClass()->GetName(), *PreferredSocket.ToString(), bScoped ? TEXT("scoped") : TEXT("non scoped"), *GetNameSafe(Sight ? Sight->GetClass() : nullptr),
+		bHasOtherSocket ? *FString::Printf(TEXT("using '%s' instead"), *OtherSocket.ToString()) : TEXT("and no other sight socket either, sight is attached to the mesh origin"));
+	return bHasOtherSocket ? OtherSocket : PreferredSocket;
 }
 
 TSubclassOf<AEBBullet> ABaseWeapon::GetCalibrationBulletClass() const

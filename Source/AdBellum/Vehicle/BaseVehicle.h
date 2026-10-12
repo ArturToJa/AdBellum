@@ -8,7 +8,7 @@
 #include "Interfaces/Customizable.h"
 #include "Vehicle/Vehicle.h"
 #include "Interfaces/Selectable.h"
-#include "VehicleSystemBase.h"
+#include "_Core/AVS_Vehicle.h"
 #include "VehicleSeatComponent.h"
 #include "Library/ALSADSInterface.h"
 #include "Weapon/BaseWeapon.h"
@@ -19,7 +19,7 @@ class UNetworkComponent;
 class ABaseWeapon;
 
 UCLASS()
-class ADBELLUM_API ABaseVehicle : public AVehicleSystemBase, public IEnterable, public IFormable, public ISelectable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface
+class ADBELLUM_API ABaseVehicle : public AAVS_Vehicle, public IEnterable, public IFormable, public ISelectable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface
 {
 	GENERATED_BODY()
 public:

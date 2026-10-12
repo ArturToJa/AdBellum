@@ -6,7 +6,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogMeshMergeLibrary, All, All);
 
-USkeletalMesh* UMeshMergeFunctionLibrary::MergeMeshes(const FSkeletalMeshMergeParams& Params)
+USkeletalMesh* UMeshMergeFunctionLibrary::MergeMeshes(const FADBSkeletalMeshMergeParams& Params)
 {
 	TArray<USkeletalMesh*> MeshesToMergeCopy = Params.MeshesToMerge;
 	MeshesToMergeCopy.RemoveAll([](USkeletalMesh* InMesh)

@@ -126,6 +126,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Customization|Sight")
 	TSubclassOf<AEBBullet> GetCalibrationBulletClass() const;
 
+	// Weapon mesh socket for sights with bIsScoped set
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Customization|Sight")
+	FName ScopedSightSocketName = TEXT("Sniper");
+
+	// Weapon mesh socket for all other sights (red dot, reflex, holo ...)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Customization|Sight")
+	FName SightSocketName = TEXT("Scope");
+
+	// Socket a sight is attached to: the sight's own SocketName when it has bOverrideSocket set, otherwise
+	// decided by the sight's bIsScoped. Falls back (with a warning in the log) when this weapon's mesh does
+	// not have the wanted socket: override -> bIsScoped rule -> the other sight socket.
+	UFUNCTION(BlueprintCallable, Category = "Customization|Sight")
+	FName GetSightSocketName(const ABaseSight* Sight) const;
+
 	// Also correct sight yaw (for sights offset sideways from the barrel). Pitch is always corrected.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization|Sight")
 	bool bCalibrateSightYaw = true;

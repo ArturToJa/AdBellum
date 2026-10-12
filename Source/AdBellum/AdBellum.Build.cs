@@ -11,8 +11,8 @@ public class AdBellum : ModuleRules
 
         PublicDependencyModuleNames.AddRange(new string[] { "Core","PhysicsCore", "CoreUObject", "Engine", "InputCore","AdvancedSessions",
             "AIModule", "ALSV4_CPP", "EnhancedInput", "NavigationSystem", "Chaos","ChaosVehicles", "DragonIKPlugin", "EasyBallistics",
-            "Niagara", "NetCore", "Networking", "VehicleSystemPlugin", "RecoilAnimation","WorldDirectorPRO", "UMG", "UBSplineStructureCreator",
-            "NPC_Optimizator", "StateTreeModule", "GameplayStateTreeModule", "CommonUI", "SmartModularUI_Plugin"});
+            "Niagara", "NetCore", "Networking", "VehicleSystemPlugin", "RecoilAnimation", "UMG", "UBSplineStructureCreator",
+            "StateTreeModule", "GameplayStateTreeModule", "CommonUI", "SmartModularUI_Plugin"});
 
         if (Target.Type == TargetRules.TargetType.Editor)
 		{

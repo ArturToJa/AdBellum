@@ -24,7 +24,7 @@ struct ADBELLUM_API FSkelMeshMergeMeshUVTransforms_BP
 };
 
 USTRUCT(BlueprintType)
-struct ADBELLUM_API FSkeletalMeshMergeParams
+struct ADBELLUM_API FADBSkeletalMeshMergeParams
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -57,7 +57,7 @@ class ADBELLUM_API UMeshMergeFunctionLibrary : public UBlueprintFunctionLibrary
 
 public:
 	UFUNCTION(BlueprintCallable, Category = "Mesh Merge")
-	static USkeletalMesh* MergeMeshes(const FSkeletalMeshMergeParams& Params);
+	static USkeletalMesh* MergeMeshes(const FADBSkeletalMeshMergeParams& Params);
 
 private:
 	static void ToMergeParams(const TArray<FSkelMeshMergeSectionMapping_BP>& InSectionMappings, TArray<FSkelMeshMergeSectionMapping>& OutSectionMappings)
