@@ -96,17 +96,6 @@ void AAdBellumGameMode::CreateRTSCameraForPlayer(APlayerController* PC, const FT
 	}
 	// Immediately flush this small per-player batch so the owner is told about it
 	ForceFlushBatch(BatchId);
-
-	// Schedule the same client timer behavior as before
-	// Uses its own handle - AdPC->RTSSpawnTimerHandle is claimed by the
-	// unrelated TryInitializeRTSHUD retry-poll and must not be shared,
-	// or whichever timer is armed last silently blocks the other.
-	FTransform TransformCopy = SpawnTransform;
-	FTimerHandle CameraManagerTimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(CameraManagerTimerHandle, [AdPC, TransformCopy]() {
-		AdPC->Client_SetPlayerCameraManager(TransformCopy.GetRotation());
-	}, 1.0f, false);
-
 }
 
 void AAdBellumGameMode::OnReporterReady(const FString& PlayerNetId)

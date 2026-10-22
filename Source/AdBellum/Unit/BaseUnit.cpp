@@ -115,7 +115,6 @@ void ABaseUnit::PossessedBy(AController* NewController)
 		if (HasAuthority())
 		{
 			UE_LOG(LogTemp, Log, TEXT("ABaseUnit::PossessedBy - server: player possession, clearing AI timers and stopping weapon"));
-			IIWeapon::Execute_ResetAim(ActiveWeaponActor);
 			if (BackupAIController)
 			{
 				BackupAIController->OrdersManagerComponent->SetStopOrder();
@@ -125,6 +124,7 @@ void ABaseUnit::PossessedBy(AController* NewController)
 			// Ensure AI stops shooting and weapon is safe
 			if (ActiveWeaponActor)
 			{
+				IIWeapon::Execute_ResetAim(ActiveWeaponActor);
 				IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
 				IIWeapon::Execute_NotifyAim(ActiveWeaponActor, false);
 			}
@@ -980,7 +980,18 @@ void ABaseUnit::NotifyDeath()
 
 	//RecoilAnimationComponent->Stop();
 	//StopRecoil_Implementation();
-	IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+	if (ActiveWeaponActor)
+	{
+		IIWeapon::Execute_Trigger(ActiveWeaponActor, false);
+	}
+	else
+	{
+		// Diagnostic: a unit should always hold a weapon here (HandleWeaponStatesOnPlayerDepossessed
+		// below still turns every weapon's trigger off)
+		UE_LOG(LogTemp, Warning, TEXT("ABaseUnit::NotifyDeath - %s died without ActiveWeaponActor (CurrentWeaponSocket=%d, TargetWeaponSocket=%d, Controller=%s)"),
+			*GetName(), (int32)CurrentWeaponSocket, (int32)TargetWeaponSocket,
+			GetController() ? (GetController()->IsPlayerController() ? TEXT("Player") : TEXT("AI")) : TEXT("None"));
+	}
 	BackupAIController->OrdersManagerComponent->SetStopOrder();
 
 	//RecoilComponent->Deactivate();
@@ -1104,6 +1115,31 @@ void ABaseUnit::RespawnUnit_Implementation(FTransform RespawnTransform)
 		{
 			BackupAIController->Activate();
 		}
+	}
+
+	// A unit that died during a weapon switch can be left without an active weapon on the server
+	// (the switch clears it and assigns the new weapon only when the switch finishes).
+	// Give it back the weapon of the socket it holds, or the first weapon it has.
+	if (HasAuthority() && !ActiveWeaponActor)
+	{
+		const int32 SocketIndex = (int32)CurrentWeaponSocket;
+		if (WeaponArray.IsValidIndex(SocketIndex) && WeaponArray[SocketIndex])
+		{
+			ActiveWeaponActor = WeaponArray[SocketIndex];
+		}
+		else
+		{
+			for (ABaseWeapon* Weapon : WeaponArray)
+			{
+				if (Weapon)
+				{
+					ActiveWeaponActor = Weapon;
+					break;
+				}
+			}
+		}
+		UE_LOG(LogTemp, Warning, TEXT("ABaseUnit::RespawnUnit - %s had no ActiveWeaponActor, restored %s"),
+			*GetName(), *GetNameSafe(ActiveWeaponActor));
 	}
 
 	SetActorTransform(RespawnTransform);

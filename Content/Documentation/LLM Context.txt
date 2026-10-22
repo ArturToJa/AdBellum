@@ -2,7 +2,7 @@ Ad Bellum — LLM Context
 1. Project Overview
 
 Name: Undecided
-Engine: Unreal Engine 5.7.4
+Engine: Unreal Engine 5.8.0
 Platform: PC initially; other platforms possible later
 Genre: FPS + RTS / tactical wargame
 Multiplayer: Up to 8 players, server authoritative
@@ -287,7 +287,7 @@ Formation movement	Planned
 React to being shot	Needs testing
 Retreat	Planned
 Suppression	Planned
-Vehicles	Implemented, currently on hold
+Vehicles	In progress
 12. Combat
 
 Weapons currently include:

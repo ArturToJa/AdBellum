@@ -7,6 +7,8 @@
 #include "Library/ALSMathLibrary.h"
 #include "Components/ALSDebugComponent.h"
 
+#include "Animation/AnimClassInterface.h"
+#include "Animation/AnimStateMachineTypes.h"
 #include "Curves/CurveVector.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -39,6 +41,61 @@ static const FName NAME_VB___foot_target_l(TEXT("VB foot_target_l"));
 static const FName NAME_VB___foot_target_r(TEXT("VB foot_target_r"));
 static const FName NAME_W_Gait(TEXT("W_Gait"));
 static const FName NAME__ALSCharacterAnimInstance__root(TEXT("root"));
+static const FName NAME_Feet_Position(TEXT("Feet_Position"));
+static const FName NAME_Feet_Crossing(TEXT("Feet_Crossing"));
+static const FName NAME_HipOrientation_Bias(TEXT("HipOrientation_Bias"));
+
+DEFINE_LOG_CATEGORY_STATIC(LogALSTransitionRules, Log, All);
+
+namespace ALSTransitionRules
+{
+	// Baked state machine names (state machine graph names in the anim BP), indexed by EALSAnimMachine
+	static const FName MachineNames[] = {
+		TEXT("Look Towards Camera States"),
+		TEXT("Aim Offset Behavior States"),
+		TEXT("(N) Locomotion Detail"),
+		TEXT("(N) Locomotion States"),
+		TEXT("Main Grounded States"),
+		TEXT("(CLF) Locomotion States"),
+		TEXT("(Crawl CLF) States"),
+		TEXT("(N) Directional States"),
+		TEXT("CLF_Directional States"),
+		TEXT("Rifle States"),
+		TEXT("Rifle States_1"),
+		TEXT("Pistol 1H States"),
+		TEXT("Pistol 2H States"),
+		TEXT("Pistol 2H States_1"),
+		TEXT("Bow States"),
+		TEXT("RPG States"),
+		TEXT("RPG States_1"),
+	};
+	static_assert(UE_ARRAY_COUNT(MachineNames) == static_cast<int32>(EALSAnimMachine::Count), "MachineNames must match EALSAnimMachine");
+
+	struct FStateDef
+	{
+		EALSAnimMachine Machine;
+		FName StateName;
+	};
+
+	// Indexed by EALSAnimState
+	static const FStateDef StateDefs[] = {
+		{EALSAnimMachine::Count, NAME_None},
+		{EALSAnimMachine::LookTowardsCamera, TEXT("Looking Right and Back")},
+		{EALSAnimMachine::LookTowardsCamera, TEXT("Looking Left and Back")},
+		{EALSAnimMachine::LookTowardsCamera, TEXT("Looking Forwards")},
+		{EALSAnimMachine::CLFLocomotion, TEXT("(CLF) Moving")},
+		{EALSAnimMachine::CLFLocomotion, TEXT("(CLF) Stop")},
+		{EALSAnimMachine::CrawlCLF, TEXT("(CLF) Moving")},
+		{EALSAnimMachine::CrawlCLF, TEXT("(CLF) Stop")},
+		{EALSAnimMachine::NLocomotionStates, TEXT("(N) Moving")},
+		{EALSAnimMachine::NLocomotionStates, TEXT("(N) Stop")},
+		{EALSAnimMachine::NDirectional, TEXT("Move LB")},
+		{EALSAnimMachine::NDirectional, TEXT("Move RB")},
+		{EALSAnimMachine::CLFDirectional, TEXT("Move RB")},
+		{EALSAnimMachine::CLFDirectional, TEXT("Move LF")},
+	};
+	static_assert(UE_ARRAY_COUNT(StateDefs) == static_cast<int32>(EALSAnimState::Count), "StateDefs must match EALSAnimState");
+}
 
 
 void UALSCharacterAnimInstance::NativeInitializeAnimation()
@@ -49,6 +106,8 @@ void UALSCharacterAnimInstance::NativeInitializeAnimation()
 	{
 		Character->OnJumpedDelegate.AddUniqueDynamic(this, &UALSCharacterAnimInstance::OnJumped);
 	}
+
+	ResolveTransitionRuleIndices();
 }
 
 void UALSCharacterAnimInstance::NativeBeginPlay()
@@ -153,6 +212,8 @@ void UALSCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		// Do While Ragdolling
 		UpdateRagdollValues();
 	}
+
+	UpdateTransitionRules();
 }
 
 void UALSCharacterAnimInstance::PlayTransition(const FALSDynamicMontageParams& Parameters)
@@ -940,4 +1001,234 @@ void UALSCharacterAnimInstance::OnPivot()
 	Grounded.bPivot = CharacterInformation.Speed < Config.TriggerPivotSpeedLimit;
 	GetWorld()->GetTimerManager().SetTimer(OnPivotTimer, this,
 	                                  &UALSCharacterAnimInstance::OnPivotDelay, 0.1f, false);
+}
+
+void UALSCharacterAnimInstance::UpdateTransitionRules()
+{
+	FALSAnimGraphTransitionRules& Rules = TransitionRules;
+
+	// Character state
+	const bool bRotating = Grounded.bRotateL || Grounded.bRotateR;
+	Rules.bIsCrawling = MovementState == EALSMovementState::Crawl;
+	Rules.bIsOverlayRPG = OverlayState == EALSOverlayState::RPG;
+	Rules.bNotGroundedOrNotStanding = !MovementState.Grounded() || !Stance.Standing();
+	Rules.bHasInputOrRotating = CharacterInformation.bHasMovementInput || bRotating;
+	Rules.bHasInputOrRotatingOrFast = Rules.bHasInputOrRotating || CharacterInformation.Speed > 650.0f;
+	Rules.bShouldMoveOrRotating = Grounded.bShouldMove || bRotating;
+	Rules.bInAirOrSprinting = MovementState.InAir() || Gait.Sprinting();
+
+	// Aim offset
+	const float AimYaw = SmoothedAimingAngle.X;
+	Rules.bAimLeftBack = AimYaw >= -180.0f && AimYaw <= -130.0f;
+	Rules.bAimRightBack = AimYaw >= 130.0f && AimYaw <= 180.0f;
+	Rules.bAimForward = AimYaw >= -125.0f && AimYaw <= 125.0f;
+
+	// Curves (values from the last evaluated pose, same as the anim graph reads them)
+	const float FeetPosition = GetCurveValue(NAME_Feet_Position);
+	const float HipBias = GetCurveValue(NAME_HipOrientation_Bias);
+	const bool bNoFeetCrossing = GetCurveValue(NAME_Feet_Crossing) == 0.0f;
+	Rules.bFeetPositionNegative = FeetPosition < 0.0f;
+	Rules.bFeetPositionPositive = FeetPosition > 0.0f;
+	Rules.bFeetPositionFar = FMath::Abs(FeetPosition) >= 0.5f;
+	Rules.bBasePoseCLFLow = GetCurveValue(NAME_BasePose_CLF) < 0.5f;
+	Rules.bWalkingWithLowGaitCurve = Gait.Walking() && GetCurveValue(NAME_W_Gait) < 1.2f;
+	Rules.bHipBiasLeftNoCrossing = HipBias < -0.5f && bNoFeetCrossing;
+	Rules.bHipBiasRightNoCrossing = HipBias > 0.5f && bNoFeetCrossing;
+
+	// Rules below read state machine time and weights. Each one is only true when the machine that owns
+	// the transition was active last frame; a machine that is being re-entered resets its time and weights
+	// during this frame's graph update, so values read now would be stale. Exact float compares match
+	// the original Blueprint rules.
+	using M = EALSAnimMachine;
+	using S = EALSAnimState;
+
+	// Look Towards Camera States
+	const bool bLookCamera = WasMachineActive(M::LookTowardsCamera);
+	Rules.bNoOffsetDelayDone = bLookCamera && GetMachineTime(M::AimOffsetBehavior) > 2.0f;
+	Rules.bAimForwardRightBackNotFull = bLookCamera && Rules.bAimForward && GetStateWeight(S::LookingRightBack) != 1.0f;
+	Rules.bAimRightBackForwardsNotFull = bLookCamera && Rules.bAimRightBack && GetStateWeight(S::LookingForwards) != 1.0f;
+	Rules.bAimForwardLeftBackNotFull = bLookCamera && Rules.bAimForward && GetStateWeight(S::LookingLeftBack) != 1.0f;
+	Rules.bAimLeftBackForwardsNotFull = bLookCamera && Rules.bAimLeftBack && GetStateWeight(S::LookingForwards) != 1.0f;
+
+	// (N) Locomotion Detail
+	const bool bLocomotionDetail = WasMachineActive(M::NLocomotionDetail);
+	Rules.bPivotAfterMinTime = bLocomotionDetail && Grounded.bPivot && GetMachineTime(M::NLocomotionStates) > 0.1f;
+	Rules.bNotWalkingGroundedFull = bLocomotionDetail && !Gait.Walking() && GetMachineWeight(M::MainGrounded) == 1.0f;
+	Rules.bNotWalkingGroundedPartial = bLocomotionDetail && !Gait.Walking() && GetMachineWeight(M::MainGrounded) != 1.0f;
+	Rules.bNLocomotionFull = bLocomotionDetail && GetMachineWeight(M::NLocomotionStates) == 1.0f;
+
+	// Stops
+	const bool bNLocomotion = WasMachineActive(M::NLocomotionStates);
+	Rules.bNStopFromMoving = bNLocomotion && !Grounded.bShouldMove && GetStateWeight(S::NMoving) == 1.0f;
+	Rules.bNStopDone = bNLocomotion && GetStateWeight(S::NStop) == 1.0f;
+	const bool bCLFLocomotion = WasMachineActive(M::CLFLocomotion);
+	Rules.bCLFStopFromMoving = bCLFLocomotion && !Grounded.bShouldMove && GetStateWeight(S::CLFMoving) == 1.0f;
+	Rules.bCLFStopDone = bCLFLocomotion && GetStateWeight(S::CLFStop) == 1.0f;
+	const bool bCrawl = WasMachineActive(M::CrawlCLF);
+	Rules.bCrawlStopFromMoving = bCrawl && !Grounded.bShouldMove && GetStateWeight(S::CrawlMoving) == 1.0f;
+	Rules.bCrawlStopDone = bCrawl && GetStateWeight(S::CrawlStop) == 1.0f;
+
+	// Directional cycles
+	const bool bHipCentered = FMath::Abs(HipBias) < 0.5f && bNoFeetCrossing;
+	const bool bNDirectional = WasMachineActive(M::NDirectional);
+	Rules.bNDirCenteredFromLB = bNDirectional && bHipCentered && GetStateWeight(S::NDirMoveLB) == 1.0f;
+	Rules.bNDirCenteredFromRB = bNDirectional && bHipCentered && GetStateWeight(S::NDirMoveRB) == 1.0f;
+	const bool bCLFDirectional = WasMachineActive(M::CLFDirectional);
+	Rules.bCLFDirCenteredFromRB = bCLFDirectional && bHipCentered && GetStateWeight(S::CLFDirMoveRB) == 1.0f;
+	Rules.bCLFDirCenteredFromLF = bCLFDirectional && bHipCentered && GetStateWeight(S::CLFDirMoveLF) == 1.0f;
+
+	// Weapon overlays
+	const bool bEnableTransitionFull = GetCurveValue(NAME_Enable_Transition) >= 0.99f;
+	const bool bLowRotation = GetCurveValue(NAME__ALSCharacterAnimInstance__RotationAmount) <= 0.01f;
+	Rules.bRifleReadyMinTimeOrAiming = WasMachineActive(M::Rifle)
+		&& (GetMachineTime(M::Rifle) > OverlayRelax.RifleReadyMinTime || RotationMode.Aiming());
+	UpdateOverlayRelaxRule(M::Rifle, bEnableTransitionFull, Rules.bRifleRelaxByCurve, Rules.bRifleRelaxByMoving);
+	UpdateOverlayRelaxRule(M::Rifle_1, bEnableTransitionFull, Rules.bRifle1RelaxByCurve, Rules.bRifle1RelaxByMoving);
+	UpdateOverlayRelaxRule(M::Pistol1H, bEnableTransitionFull, Rules.bPistol1HRelaxByCurve, Rules.bPistol1HRelaxByMoving);
+	UpdateOverlayRelaxRule(M::Pistol2H, bEnableTransitionFull, Rules.bPistol2HRelaxByCurve, Rules.bPistol2HRelaxByMoving);
+	UpdateOverlayRelaxRule(M::Pistol2H_1, bEnableTransitionFull, Rules.bPistol2H1RelaxByCurve, Rules.bPistol2H1RelaxByMoving);
+	UpdateOverlayRelaxRule(M::Bow, bLowRotation, Rules.bBowRelaxByRotation, Rules.bBowRelaxByMoving);
+	UpdateOverlayRelaxRule(M::RPG, bEnableTransitionFull, Rules.bRPGRelaxByCurve, Rules.bRPGRelaxByMoving);
+	UpdateOverlayRelaxRule(M::RPG_1, bEnableTransitionFull, Rules.bRPG1RelaxByCurve, Rules.bRPG1RelaxByMoving);
+}
+
+void UALSCharacterAnimInstance::UpdateOverlayRelaxRule(EALSAnimMachine Machine, bool bCurveAllows,
+                                                       bool& bOutByCurve, bool& bOutByMoving)
+{
+	// A relax delay <= 0 disables relaxing for that machine
+	const float RelaxDelay = GetOverlayRelaxDelay(Machine);
+	const bool bDelayPassed = RelaxDelay > 0.0f && WasMachineActive(Machine) && GetMachineTime(Machine) > RelaxDelay;
+	bOutByCurve = bDelayPassed && bCurveAllows;
+	bOutByMoving = bDelayPassed && CharacterInformation.bIsMoving;
+}
+
+void UALSCharacterAnimInstance::ResolveTransitionRuleIndices()
+{
+	using namespace ALSTransitionRules;
+
+	TArray<FString> Problems;
+
+	for (int32 Index = 0; Index < static_cast<int32>(EALSAnimMachine::Count); ++Index)
+	{
+		MachineIndices[Index] = GetStateMachineIndex(MachineNames[Index]);
+		if (MachineIndices[Index] == INDEX_NONE)
+		{
+			Problems.Add(FString::Printf(TEXT("state machine '%s' not found"), *MachineNames[Index].ToString()));
+		}
+	}
+
+	for (int32 Index = 0; Index < static_cast<int32>(EALSAnimState::Count); ++Index)
+	{
+		StateIndices[Index] = INDEX_NONE;
+		const FStateDef& Def = StateDefs[Index];
+		if (Def.Machine == EALSAnimMachine::Count)
+		{
+			continue;
+		}
+		const FName MachineName = MachineNames[static_cast<int32>(Def.Machine)];
+		if (const FBakedAnimationStateMachine* MachineDesc = GetStateMachineInstanceDesc(MachineName))
+		{
+			StateIndices[Index] = MachineDesc->FindStateIndex(Def.StateName);
+		}
+		if (StateIndices[Index] == INDEX_NONE)
+		{
+			Problems.Add(FString::Printf(TEXT("state '%s' not found in machine '%s'"),
+			                             *Def.StateName.ToString(), *MachineName.ToString()));
+		}
+	}
+
+	bTransitionRuleIndicesResolved = true;
+
+	// Only anim BPs that contain the ALS graph are checked, and each class is reported once
+	static TSet<FName> ReportedClasses;
+	const UClass* AnimClass = GetClass();
+	const bool bHasALSGraph = MachineIndices[static_cast<int32>(EALSAnimMachine::NLocomotionStates)] != INDEX_NONE;
+	if (bHasALSGraph && Problems.Num() > 0 && AnimClass && !ReportedClasses.Contains(AnimClass->GetFName()))
+	{
+		ReportedClasses.Add(AnimClass->GetFName());
+		for (const FString& Problem : Problems)
+		{
+			UE_LOG(LogALSTransitionRules, Warning, TEXT("%s: transition rule %s"), *AnimClass->GetName(), *Problem);
+		}
+		LogBakedStateMachines();
+	}
+}
+
+void UALSCharacterAnimInstance::LogBakedStateMachines() const
+{
+	const IAnimClassInterface* AnimClassInterface = IAnimClassInterface::GetFromClass(GetClass());
+	if (!AnimClassInterface)
+	{
+		return;
+	}
+	for (const FBakedAnimationStateMachine& Machine : AnimClassInterface->GetBakedStateMachines())
+	{
+		UE_LOG(LogALSTransitionRules, Log, TEXT("Machine '%s'"), *Machine.MachineName.ToString());
+		for (const FAnimationTransitionBetweenStates& Transition : Machine.Transitions)
+		{
+			const FName From = Machine.States.IsValidIndex(Transition.PreviousState)
+				                   ? Machine.States[Transition.PreviousState].StateName
+				                   : NAME_None;
+			const FName To = Machine.States.IsValidIndex(Transition.NextState)
+				                 ? Machine.States[Transition.NextState].StateName
+				                 : NAME_None;
+			UE_LOG(LogALSTransitionRules, Log, TEXT("    '%s' -> '%s'"), *From.ToString(), *To.ToString());
+		}
+	}
+}
+
+bool UALSCharacterAnimInstance::WasMachineActive(EALSAnimMachine Machine)
+{
+	return GetMachineWeight(Machine) > 0.0f;
+}
+
+float UALSCharacterAnimInstance::GetMachineTime(EALSAnimMachine Machine)
+{
+	const int32 MachineIndex = bTransitionRuleIndicesResolved && Machine != EALSAnimMachine::Count
+		                           ? MachineIndices[static_cast<int32>(Machine)]
+		                           : INDEX_NONE;
+	return MachineIndex != INDEX_NONE ? GetInstanceCurrentStateElapsedTime(MachineIndex) : 0.0f;
+}
+
+float UALSCharacterAnimInstance::GetMachineWeight(EALSAnimMachine Machine)
+{
+	const int32 MachineIndex = bTransitionRuleIndicesResolved && Machine != EALSAnimMachine::Count
+		                           ? MachineIndices[static_cast<int32>(Machine)]
+		                           : INDEX_NONE;
+	return MachineIndex != INDEX_NONE ? GetInstanceMachineWeight(MachineIndex) : 0.0f;
+}
+
+float UALSCharacterAnimInstance::GetStateWeight(EALSAnimState State)
+{
+	if (!bTransitionRuleIndicesResolved)
+	{
+		return 0.0f;
+	}
+	const int32 StateSlot = static_cast<int32>(State);
+	const EALSAnimMachine Machine = ALSTransitionRules::StateDefs[StateSlot].Machine;
+	if (Machine == EALSAnimMachine::Count)
+	{
+		return 0.0f;
+	}
+	const int32 MachineIndex = MachineIndices[static_cast<int32>(Machine)];
+	const int32 StateIndex = StateIndices[StateSlot];
+	return MachineIndex != INDEX_NONE && StateIndex != INDEX_NONE
+		       ? GetInstanceStateWeight(MachineIndex, StateIndex)
+		       : 0.0f;
+}
+
+float UALSCharacterAnimInstance::GetOverlayRelaxDelay(EALSAnimMachine Machine) const
+{
+	switch (Machine)
+	{
+	case EALSAnimMachine::Rifle: return OverlayRelax.RifleStates;
+	case EALSAnimMachine::Rifle_1: return OverlayRelax.RifleStates_1;
+	case EALSAnimMachine::Pistol1H: return OverlayRelax.Pistol1HStates;
+	case EALSAnimMachine::Pistol2H: return OverlayRelax.Pistol2HStates;
+	case EALSAnimMachine::Pistol2H_1: return OverlayRelax.Pistol2HStates_1;
+	case EALSAnimMachine::Bow: return OverlayRelax.BowStates;
+	case EALSAnimMachine::RPG: return OverlayRelax.RPGStates;
+	case EALSAnimMachine::RPG_1: return OverlayRelax.RPGStates_1;
+	default: return 0.0f;
+	}
 }

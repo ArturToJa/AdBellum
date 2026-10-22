@@ -97,9 +97,6 @@ public:
 	void Client_NotifyHUDRole(EALSStationaryRole StationaryRole, AActor* ControlledActor);
 
 	UFUNCTION(Client, Reliable)
-	void Client_SetPlayerCameraManager(FQuat NewRotation);
-
-	UFUNCTION(Client, Reliable)
 	void Client_SetSelectionCircle(AActor* SelectedActor, bool IsVisible);
 
 	// Pointer to the per-client ReplicationReporter actor. Replicated to the
@@ -183,7 +180,6 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerNotifyActorReplicated(AActor* ReplicatedActor);
 
-	TObjectPtr<AALSPlayerCameraManager> PlayerCameraManager;
 private:
 	bool IsEnemyUnit(AActor* TargetUnit);
 	void PerformSmartOrder(AActor* TargetUnit);

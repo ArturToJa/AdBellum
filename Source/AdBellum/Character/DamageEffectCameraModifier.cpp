@@ -8,15 +8,19 @@ UDamageEffectCameraModifier::UDamageEffectCameraModifier()
 
 void UDamageEffectCameraModifier::AddedToCamera(APlayerCameraManager* Camera)
 {
-	if (!BlurEffectMaterial || !VignetteEffectMaterial) return;
+	Super::AddedToCamera(Camera);
+	CreateMaterialInstances();
+}
 
-	// Create dynamic instance if not already
-	if (!BlurMaterialDynamicInstance)
+void UDamageEffectCameraModifier::CreateMaterialInstances()
+{
+	// Each material is optional; a missing one only disables that effect
+	if (!BlurMaterialDynamicInstance && BlurEffectMaterial)
 	{
 		BlurMaterialDynamicInstance = UMaterialInstanceDynamic::Create(BlurEffectMaterial, this);
 	}
 
-	if (!VignetteMaterialDynamicInstance)
+	if (!VignetteMaterialDynamicInstance && VignetteEffectMaterial)
 	{
 		VignetteMaterialDynamicInstance = UMaterialInstanceDynamic::Create(VignetteEffectMaterial, this);
 	}
@@ -26,6 +30,9 @@ void UDamageEffectCameraModifier::ModifyPostProcess(float DeltaTime, float& Post
 {
 	PostProcessBlendWeight = 1.0f; // Ensure the modifier applies
 
+	// Materials may be assigned after the modifier was added to the camera
+	CreateMaterialInstances();
+
 	float TempVignetteStrength = FMath::FInterpTo(PrevVignetteStrength, VignetteStrength, DeltaTime, InterpSpeed);
 	float TempBlurStrength = FMath::FInterpTo(PrevBlurStrength, BlurStrength, DeltaTime, InterpSpeed);
 
@@ -33,11 +40,17 @@ void UDamageEffectCameraModifier::ModifyPostProcess(float DeltaTime, float& Post
 	PrevVignetteStrength = TempVignetteStrength;
 	PrevBlurStrength = TempBlurStrength;
 
-	BlurMaterialDynamicInstance->SetScalarParameterValue("BlurStrength", TempBlurStrength);
-	PPSettings.WeightedBlendables.Array.Add(FWeightedBlendable(1.0f, BlurMaterialDynamicInstance));
+	if (BlurMaterialDynamicInstance)
+	{
+		BlurMaterialDynamicInstance->SetScalarParameterValue("BlurStrength", TempBlurStrength);
+		PPSettings.WeightedBlendables.Array.Add(FWeightedBlendable(1.0f, BlurMaterialDynamicInstance));
+	}
 
-	VignetteMaterialDynamicInstance->SetScalarParameterValue("VignetteStrength", TempVignetteStrength);
-	PPSettings.WeightedBlendables.Array.Add(FWeightedBlendable(1.0f, VignetteMaterialDynamicInstance));
+	if (VignetteMaterialDynamicInstance)
+	{
+		VignetteMaterialDynamicInstance->SetScalarParameterValue("VignetteStrength", TempVignetteStrength);
+		PPSettings.WeightedBlendables.Array.Add(FWeightedBlendable(1.0f, VignetteMaterialDynamicInstance));
+	}
 }
 void UDamageEffectCameraModifier::CalculateEffectValues(float HPRatio)
 {

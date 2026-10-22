@@ -49,10 +49,6 @@ void ARTSPlayer::InitializePlayableAreaFromBox()
 void ARTSPlayer::BeginPlay()
 {
 	Super::BeginPlay();
-	if (AAdBellumPlayerController* PC = Cast<AAdBellumPlayerController>(GetOwner()))
-	{
-		PC->PlayerCameraManager = Cast<AALSPlayerCameraManager>(UGameplayStatics::GetPlayerCameraManager(GetWorld(), PC->PlayerIndex));
-	}
 
 	CalculateHeightAboveLandscape();
 	CalculateSpeedMultiplier();
@@ -162,7 +158,17 @@ void ARTSPlayer::PossessedBy(AController* NewController)
 
 void ARTSPlayer::UnPossessed()
 {
+	AController* const OldController = GetController();
 	Super::UnPossessed();
+
+	// APawn::UnPossessed clears the owner. This pawn is only relevant to its owner, so without an
+	// owner it would be destroyed on the client and spawned again (BeginPlay, HUD, camera position)
+	// every time the player switches back from a unit. Keep the player controller as owner.
+	if (HasAuthority() && OldController && OldController->IsPlayerController())
+	{
+		SetOwner(OldController);
+	}
+
 	bFreeCameraRotationEnabled = false;
 	SetActorTickEnabled(false);
 }

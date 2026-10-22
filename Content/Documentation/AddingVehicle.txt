@@ -1,0 +1,129 @@
+ADDING A VEHICLE (child of BP_BaseVehicle)
+
+Base blueprint: /Game/AdBellum/Vehicles/_Reworked/_Shared/BP_BaseVehicle (parent C++ class ABaseVehicle, which is an AVS_Vehicle).
+Status: the C++ side builds and wheel creation was checked on the M923 skeleton. Driving, gunner aim and animation
+have not been tested in game yet - treat the first vehicle as the test of this guide.
+
+WHAT THE MODEL NEEDS
+- Skeletal mesh with the standard bone names:
+    wheels:  lf_wheel_N_jnt / rt_wheel_N_jnt   (N = axle number, 1 is the front axle)
+    turret:  turret_jnt   (yaw)
+    gun:     gun_jnt      (pitch, should be a child of turret_jnt)
+- A static mesh used only for collision (SM_<Vehicle>_Collision). It is the physics body of the vehicle.
+  No suitable mesh: copy any static mesh, and copy the chassis collision primitives from the skeletal mesh's
+  physics asset into its Collision > Primitives.
+
+1. CREATE THE BLUEPRINT
+   1. Right click BP_BaseVehicle -> Create Child Blueprint Class. Name it BP_<Type>_<Name>, put it in
+      Content/AdBellum/Vehicles/_Reworked/<Type>_<Name>/.
+
+2. BODY AND MESH
+   1. Select VehicleMesh (root). Set Static Mesh to the collision mesh. Rendering: Visible off (or Hidden In Game).
+   2. Set its mass (Physics > Mass Override) to the real vehicle mass in kg.
+   3. Select "Vehicle Skeletal Mesh". Set Skeletal Mesh Asset to the vehicle model.
+      Rotate / move it so the model sits on the collision mesh and faces +X of the vehicle.
+   4. Leave Anim Class as BaseVehicleAnimInstance. No anim blueprint is needed: wheel, turret and gun bones
+      are animated in C++.
+   5. Optional: add an AVS_CenterOfMass component under VehicleMesh and place it low between the axles.
+
+   6. Hiding parts of the model (Class Defaults, category "Mesh" > Hidden Bones): list the bones that should
+      not be drawn. A hidden bone hides the bones below it too (turret_jnt also hides the gun).
+      Only drawing is switched off, the bone still moves and attached components keep their place and size.
+      Replacing a low detail weapon: add its bone to Hidden Bones, then attach the detailed weapon
+      (WeaponChildActorComponent, see step 7) to the same bone.
+      Hidden bones are applied when the game starts; the blueprint viewport may still show them.
+
+3. WHEELS (Class Defaults, category "Wheels")
+   Wheels are created automatically on every lf_wheel_N_jnt / rt_wheel_N_jnt bone when the blueprint is constructed.
+   Do NOT add AVS_Wheel components by hand for those bones.
+   1. Default Wheel Config:
+        Wheel Radius      - radius of the tire in cm. Not measured from the model, always set it.
+        Spring Length     - suspension travel in cm (the wheel bone moves +/- half of it).
+        Spring Strength / Spring Damping - start from the defaults, raise strength for heavy vehicles.
+        Brake Torque, Tire Friction - tune after the first drive.
+        Keep Wheel Mode = Raycast and Auto Wheel Radius = off.
+   2. Auto Detect:
+        Steerable Axles  - axle numbers that steer (default: 1).
+        Driven Axles     - axle numbers that get torque, empty = all.
+        Handbrake Axles  - axle numbers held by the handbrake, empty = the last axle.
+   3. Only when the standard roles are not enough (rear axle steering against the front, one odd wheel):
+      fill Wheel Setups with one row per wheel (bone name + flags). A filled list replaces auto detection.
+   4. Tracked vehicles: every *_wheel_N_jnt bone becomes a wheel. Clear Steerable Axles for now,
+      skid steering is not implemented yet.
+   5. To see the suspension range in the viewport enable Default Wheel Config > Editor Preview.
+
+4. ENGINE AND GEARS (Class Defaults, category "Advanced Vehicle System")
+   1. Transmission > Gears: index 0 is reverse, 1+ are forward gears. Set speeds and torque per gear.
+   2. General > Speed Units: the unit all gear speeds are given in.
+   3. Leave Automatic Transmission and Automatic Shifter Position on: forward / backward input then
+      drives and reverses without a shifter.
+   4. Leave Start With Engine Running off. The engine starts when a player takes the driver seat.
+
+5. SEATS
+   One seat component per place in the vehicle, as a child of "Vehicle Skeletal Mesh" (pick the bone
+   as parent socket if the seat should move with a turret).
+   1. Driver: the DriverSeat component already exists on every vehicle (Seat Role = Driver), select it in the
+      component list and place it. Do not add a second driver seat.
+      Use Main Camera Transform = on puts the driver camera at the seat.
+   2. Passengers: BP_VehicleSeatComponent, Seat Role = Passenger.
+   3. Gunners: BP_GunnerSeatComponent, one per gunner (see step 7).
+   4. Place and rotate each seat where the character should sit. The character is attached to the seat
+      about one second after entering.
+
+6. ACCESS POINTS
+   1. Add BP_VehicleAccessPoint (a box) where the crew enters, e.g. at a door.
+   2. Seat Array: add every seat reachable from this point. One access point can serve several seats;
+      the first free seat in the list is taken, so order the list by priority.
+   3. A seat can be listed in more than one access point (left and right door).
+   4. Units leave the vehicle at the access point they entered through, keep it outside the collision mesh.
+
+7. GUNNER SEAT AND WEAPONS
+   For every gunner:
+   1. Add a WeaponChildActorComponent under "Vehicle Skeletal Mesh" and set Parent Socket to the bone the
+      weapon moves with (gun_jnt for the main gun). Child Actor Class = a blueprint of SimpleWeapon (step 8).
+   2. In the gunner seat:
+        Seat Role          - Gunner (inside, looks only through the sight) or Gunner_Standing (open mount).
+                             Both always aim: the mouse always turns the turret and gun and the camera turns
+                             with the weapon. For Gunner_Standing the aim button moves the view from the
+                             unit's head onto the weapon's ADS point.
+        Weapon Array       - the weapon components this gunner controls (index 0 = key 1, 1 = key 2, 2 = key 3).
+        Use ADS            - on.
+        Use Main Camera Transform - on for Gunner.
+        Turret Bone Name / Gun Bone Name - turret_jnt / gun_jnt by default.
+        Yaw Rate / Pitch Rate - degrees per unit of mouse input.
+        Min Pitch / Max Pitch, Limit Yaw + Min Yaw / Max Yaw - limits of the mount.
+        Max Aim Speed      - fastest turn the server accepts, degrees per second.
+   3. SECOND GUNNER: give that seat its own bones (or None when its weapon does not turn a bone).
+      Two seats with the same bone names fight over the same turret.
+   4. A weapon with one bone doing both turns (pintle machine gun): set only Gun Bone Name, Turret Bone Name = None.
+
+8. WEAPON BLUEPRINT (child of SimpleWeapon)
+   1. Create a blueprint with parent class SimpleWeapon (or reuse BP_50cal / BP_Coax and check the barrel placement).
+   2. EBarrel: place at the muzzle, X pointing along the barrel. Set ammo, fire mode and rate as for other weapons.
+   3. StaticMesh / SkeletalMesh: optional visuals. Leave both empty when the gun is part of the vehicle model.
+   4. ADS: place where the gunner's eye is, X pointing forward. This is the gunner camera.
+   5. ADS > Calibration:
+        Zero Distances            - list of distances in meters, ascending. Empty = sight is never zeroed.
+        Default Zero Distance Index - which entry is used when a gunner sits down.
+        Calibrate ADS Yaw         - on when ADS is placed sideways from the barrel.
+   6. Weapon Reticle Texture: reticle drawn in the middle of the screen.
+   In game the gunner changes zero with the Scope Zero Up / Down keys. The camera then looks at the point
+   where the shot lands at that distance.
+
+9. TEST IN ORDER
+   1. Drop the vehicle in a level and press Play: it should rest on its wheels without sinking or bouncing.
+      Sinking - raise Spring Strength. Bouncing - raise Spring Damping. Wheels in the body - check Wheel Radius.
+   2. Enter as driver: W/S drive and reverse, A/D steer, jump key holds the handbrake.
+      Wheel bones should follow suspension, spin and steering.
+   3. Leave the vehicle: it stays parked (handbrake on, engine off).
+   4. Enter as gunner: mouse turns the turret and gun, the camera sits at the weapon's ADS, fire works,
+      zero keys change the zero distance.
+   5. Repeat 2-4 with a second player as client. Check the turret also turns for the player who is not the gunner.
+
+KNOWN LIMITS
+- AI cannot drive these vehicles yet (orders and path following are a later step).
+- Tracked vehicles have no skid steering and no track animation yet.
+- Vehicle movement is owner authoritative (AVS): the driver's machine simulates the vehicle. Not to be changed
+  without a team decision.
+- An anim blueprint derived from BaseVehicleAnimInstance does not run its graph, the pose is made in C++.
+- Old vehicle blueprints (children of Vehicle_TankBase / Vehicle_DemoBaseDEP) are not compatible, build new ones.

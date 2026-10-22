@@ -81,11 +81,6 @@ void AAdBellumPlayerController::ServerNotifyActorReplicated_Implementation(AActo
 	}
 }
 
-void AAdBellumPlayerController::Client_SetPlayerCameraManager_Implementation(FQuat NewRotation)
-{
-	PlayerCameraManager = Cast<AALSPlayerCameraManager>(UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0));
-}
-
 void AAdBellumPlayerController::OnRep_RTSPlayerSpawned()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[DEBUG] OnRep_RTSPlayerSpawned: RTSCameraPawn=%s"), RTSCameraPawn ? TEXT("valid") : TEXT("NULL"));
@@ -99,6 +94,13 @@ void AAdBellumPlayerController::OnRep_RTSPlayerSpawned()
 
 void AAdBellumPlayerController::SpawnRTSHud()
 {
+	// OnRep_RTSPlayerSpawned can fire again if the RTS camera is re-replicated; reuse the existing HUD
+	if (RTSHUD)
+	{
+		RTSCameraPawn->HUD = RTSHUD;
+		return;
+	}
+
 	FActorSpawnParameters SpawnInfoRTSHUD;
 	SpawnInfoRTSHUD.Owner = this;
 	SpawnInfoRTSHUD.Instigator = GetInstigator();
@@ -463,7 +465,16 @@ void AAdBellumPlayerController::UpdateCameraDamageEffects_Implementation(float H
 
 void AAdBellumPlayerController::Client_UpdateCameraDamageEffects_Implementation(float HPRatio)
 {
-	PlayerCameraManager->UpdateDamageEffect(HPRatio);
+	// The engine creates PlayerCameraManager for every local controller, so it is valid on the
+	// owning client (and for the listen server host) without any extra setup.
+	if (!IsLocalController())
+	{
+		return;
+	}
+	if (AALSPlayerCameraManager* CameraManager = Cast<AALSPlayerCameraManager>(PlayerCameraManager))
+	{
+		CameraManager->UpdateDamageEffect(HPRatio);
+	}
 }
 
 void AAdBellumPlayerController::InitializeRTSHUD_Implementation(ABaseFormation* Formation)

@@ -17,6 +17,49 @@ class UCurveFloat;
 class UAnimSequence;
 class UCurveVector;
 
+/** State machines read by transition rules (names are resolved in ALSCharacterAnimInstance.cpp) */
+enum class EALSAnimMachine : uint8
+{
+	LookTowardsCamera,
+	AimOffsetBehavior,
+	NLocomotionDetail,
+	NLocomotionStates,
+	MainGrounded,
+	CLFLocomotion,
+	CrawlCLF,
+	NDirectional,
+	CLFDirectional,
+	Rifle,
+	Rifle_1,
+	Pistol1H,
+	Pistol2H,
+	Pistol2H_1,
+	Bow,
+	RPG,
+	RPG_1,
+	Count
+};
+
+/** States whose blend weight is read by transition rules */
+enum class EALSAnimState : uint8
+{
+	None,
+	LookingRightBack,
+	LookingLeftBack,
+	LookingForwards,
+	CLFMoving,
+	CLFStop,
+	CrawlMoving,
+	CrawlStop,
+	NMoving,
+	NStop,
+	NDirMoveLB,
+	NDirMoveRB,
+	CLFDirMoveRB,
+	CLFDirMoveLF,
+	Count
+};
+
 /**
  * Main anim instance class for character
  */
@@ -108,6 +151,31 @@ private:
 	void UpdateInAirValues(float DeltaSeconds);
 
 	void UpdateRagdollValues();
+
+	/** Transition Rules */
+
+	/** Computes the fast-path transition variables in TransitionRules. Runs every update. */
+	void UpdateTransitionRules();
+
+	/** Resolves state machine/state indices by name and logs any name missing from the anim BP. */
+	void ResolveTransitionRuleIndices();
+
+	/** Logs every state machine with its transitions, used to fix names after anim graph edits. */
+	void LogBakedStateMachines() const;
+
+	/** True when the machine was updated (had weight) on the previous frame, so its time and weights are current */
+	bool WasMachineActive(EALSAnimMachine Machine);
+
+	/** Relax rule for a weapon overlay machine: delay passed and (curve or moving) */
+	void UpdateOverlayRelaxRule(EALSAnimMachine Machine, bool bCurveAllows, bool& bOutByCurve, bool& bOutByMoving);
+
+	float GetMachineTime(EALSAnimMachine Machine);
+
+	float GetMachineWeight(EALSAnimMachine Machine);
+
+	float GetStateWeight(EALSAnimState State);
+
+	float GetOverlayRelaxDelay(EALSAnimMachine Machine) const;
 
 	/** Foot IK */
 
@@ -235,6 +303,14 @@ public:
 		ShowOnlyInnerProperties))
 	FALSAnimGraphFootIK FootIKValues;
 
+	/** Anim Graph - Transition Rules (read directly by state machine transitions) */
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Read Only Data|Anim Graph - Transition Rules")
+	FALSAnimGraphTransitionRules TransitionRules;
+
+	/** How long weapon overlays stay Ready before relaxing */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Configuration|Overlay Relax", Meta = (
+		ShowOnlyInnerProperties))
+	FALSAnimOverlayRelaxSettings OverlayRelax;
 
 	/** Turn In Place */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Configuration|Turn In Place", Meta = (
@@ -298,6 +374,15 @@ private:
 	FTimerHandle OnJumpedTimer;
 
 	bool bCanPlayDynamicTransition = true;
+
+	/** Baked state machine indices, INDEX_NONE when the machine is not found */
+	int32 MachineIndices[static_cast<int32>(EALSAnimMachine::Count)] = {};
+
+	/** Baked state indices inside their machine, INDEX_NONE when not found */
+	int32 StateIndices[static_cast<int32>(EALSAnimState::Count)] = {};
+
+	/** False until ResolveTransitionRuleIndices has filled the index tables */
+	bool bTransitionRuleIndicesResolved = false;
 
 	UPROPERTY()
 	TObjectPtr<UALSDebugComponent> ALSDebugComponent = nullptr;

@@ -52,6 +52,9 @@ protected:
 	virtual void ModifyPostProcess(float DeltaTime, float& PostProcessBlendWeight, FPostProcessSettings& PostProcessSettings) override;
 
 private:
+	/** Creates the dynamic material instances for the materials that are assigned */
+	void CreateMaterialInstances();
+
 	float PrevVignetteStrength = 0.f;
 	float PrevBlurStrength = 1.f;
 

@@ -72,7 +72,20 @@ adb.Sight.DiagnosticsFile 0 | 1
     Takes up to 0.25 s to switch on or off.
 
 
-4. RELATED KEYS (input actions in IMC_Default, not console commands)
+4. ANIMATION (editor only, type in the editor's Output Log console)
+
+adb.Anim.RewireTransitionRules [apply]
+    Rewires the ALS_AnimBP transition rules that used Blueprint logic so they read the C++
+    variables in TransitionRules (UALSCharacterAnimInstance) and run on the fast path.
+    Transitions that waited for an animation to finish get the automatic rule instead.
+    no argument - dry run: lists each transition it would change, changes nothing
+    apply       - changes the anim BP and compiles it (undo with Ctrl+Z); save the asset afterwards
+    Entries that cannot be found are reported as MISSING. Results are in the log (LogALSRewire).
+    The transition table is in Plugins/ALSCommunity/Source/ALSV4_CPPEditor; update it when the
+    anim graph changes. Not available in packaged builds (editor module).
+
+
+5. RELATED KEYS (input actions in IMC_Default, not console commands)
 
 ScopeZeroUpAction / ScopeZeroDownAction (num + / num -)
     Step the sight zero distance through ZeroDistances of the sight. Only while not aiming.

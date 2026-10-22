@@ -26,6 +26,11 @@
 				"GameplayTasks",
 				"PhysicsCore"
 			]
+		},
+		{
+			"Name": "ALSV4_CPPEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [

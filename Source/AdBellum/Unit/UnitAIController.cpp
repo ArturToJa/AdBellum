@@ -62,7 +62,15 @@ void AUnitAIController::MoveOrder_Implementation(FVector TargetPosition)
 }
 void AUnitAIController::AttackTarget_Implementation(UObject* TargetObject) {
 
+	if (!GetPawn())
+	{
+		return;
+	}
 	AActor* ActiveWeaponActor = IArmedUnitInterface::Execute_GetWeapon(GetPawn());
+	if (!ActiveWeaponActor)
+	{
+		return;
+	}
 	IIWeapon::Execute_SetupAim(ActiveWeaponActor, TargetObject);
 
 	float TriggerDuration = ComputeTriggerDuration(ActiveWeaponActor, TargetObject);
@@ -151,9 +159,13 @@ void AUnitAIController::ClearAttackTimer()
 
 void AUnitAIController::AttackLocation_Implementation(FVector TargetPosition)
 {
+	if (!GetPawn())
+	{
+		return;
+	}
 	AActor* ActiveWeaponActor = IArmedUnitInterface::Execute_GetWeapon(GetPawn());
-	bool bTriggerActive = IIWeapon::Execute_IsTriggerActive(ActiveWeaponActor);
 	if (!ActiveWeaponActor) return;
+	bool bTriggerActive = IIWeapon::Execute_IsTriggerActive(ActiveWeaponActor);
 	if (!bTriggerActive)
 	{
 		IIWeapon::Execute_Trigger(ActiveWeaponActor, true);
