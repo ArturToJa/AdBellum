@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.7",
+	"EngineAssociation": "5.8",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -55,9 +55,8 @@
 			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/4d7f5dc837fc4b009bb91e678adf9fd0"
 		},
 		{
-			"Name": "WorldDirectorPRO",
-			"Enabled": true,
-			"MarketplaceURL": "com.epicgames.launcher://ue/Fab/product/7ac4ef3c-ccfc-484a-aeec-5a672ff30130"
+			"Name": "MetaRoad",
+			"Enabled": true
 		},
 		{
 			"Name": "RecoilAnimation",
@@ -105,6 +104,10 @@
 		},
 		{
 			"Name": "SmartModularUI_Plugin",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelContextProtocol",
 			"Enabled": true
 		}
 	],

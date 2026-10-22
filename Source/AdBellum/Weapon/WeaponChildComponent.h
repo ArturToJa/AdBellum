@@ -26,5 +26,6 @@ public:
 	//used to find look for ADS arrow comp
 	FVector GetCalibrationVector(float Distance);
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TObjectPtr<ASimpleWeapon> ControlledWeapon;
 };

@@ -9,6 +9,12 @@
 
 float UVehicleSeatComponent::LocationOffset = 90.0f;
 
+UVehicleSeatComponent::UVehicleSeatComponent()
+{
+	// OccupyingUnit (and gunner aim in UGunnerSeatComponent) is replicated
+	SetIsReplicatedByDefault(true);
+}
+
 void UVehicleSeatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);

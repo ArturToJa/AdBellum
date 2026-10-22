@@ -1501,20 +1501,15 @@ void AALSBaseCharacter::ClearAimLookRate()
 
 void AALSBaseCharacter::CameraUpAction_Implementation(float Value)
 {
-	if ((StationaryRole == EALSStationaryRole::Gunner_Standing && bRecenterCamera) || StationaryRole == EALSStationaryRole::Gunner)
+	if (StationaryRole == EALSStationaryRole::Gunner_Standing)
 	{
-		if (StationaryRole == EALSStationaryRole::Gunner_Standing && bRecenterCamera)
-		{
-			AddControllerPitchInput(GetEffectiveLookUpDownRate() * Value);
-			if (RotationMode == EALSRotationMode::Aiming) 
-			{
-				Server_CameraUpAction(GetEffectiveLookUpDownRate() * Value);
-			}
-		}
-		else if (StationaryRole == EALSStationaryRole::Gunner)
-		{
-			Server_CameraUpAction(Value);
-		}
+		// A standing gunner always aims: every look input turns the seat's turret and gun,
+		// the camera follows the weapon (see AALSPlayerCameraManager::CustomCameraBehavior)
+		GunnerCameraUpInput(GetEffectiveLookUpDownRate() * Value);
+	}
+	else if (StationaryRole == EALSStationaryRole::Gunner)
+	{
+		GunnerCameraUpInput(Value);
 	}
 	else {
 		if (GetMovementState() == EALSMovementState::Stationary) {
@@ -1535,19 +1530,13 @@ void AALSBaseCharacter::Server_CameraUpAction_Implementation(float Value)
 
 void AALSBaseCharacter::CameraRightAction_Implementation(float Value)
 {
-	if ((StationaryRole == EALSStationaryRole::Gunner_Standing && bRecenterCamera) || StationaryRole == EALSStationaryRole::Gunner)
+	if (StationaryRole == EALSStationaryRole::Gunner_Standing)
 	{
-		if (StationaryRole == EALSStationaryRole::Gunner_Standing && bRecenterCamera)
-		{
-			AddControllerYawInput(GetEffectiveLookLeftRightRate() * Value);
-			//IALSInputInterface::Execute_CameraRightAction(ControlledInputInterceptor, LookLeftRightRate * Value);
-			Server_CameraRightAction(GetEffectiveLookLeftRightRate() * Value);
-		}
-		else if (StationaryRole == EALSStationaryRole::Gunner)
-		{ // && bBlockCameraRotation
-			//IALSInputInterface::Execute_CameraRightAction(ControlledInputInterceptor, Value);
-			Server_CameraRightAction(Value);
-		}
+		GunnerCameraRightInput(GetEffectiveLookLeftRightRate() * Value);
+	}
+	else if (StationaryRole == EALSStationaryRole::Gunner)
+	{
+		GunnerCameraRightInput(Value);
 	}
 	else {
 		if (GetMovementState() == EALSMovementState::Stationary) {
@@ -1563,6 +1552,16 @@ void AALSBaseCharacter::Server_CameraRightAction_Implementation(float Value)
 	{
 		IALSInputInterface::Execute_GunnerCameraRightAction(ControlledInputInterceptor, Value);
 	}
+}
+
+void AALSBaseCharacter::GunnerCameraUpInput(float Value)
+{
+	Server_CameraUpAction(Value);
+}
+
+void AALSBaseCharacter::GunnerCameraRightInput(float Value)
+{
+	Server_CameraRightAction(Value);
 }
 
 
@@ -1847,6 +1846,17 @@ void AALSBaseCharacter::Multicast_SitCharacterDown_Implementation(USceneComponen
 	bRecenterCamera = true;
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Vehicle, ECollisionResponse::ECR_Ignore);
+
+	// A seated character sits in the way of the vehicle's camera arm (it probes the Camera channel and
+	// ignores only the vehicle itself), which would pull the vehicle camera into the vehicle
+	if (!bSeatedCameraResponseSaved)
+	{
+		SeatedCapsuleCameraResponse = GetCapsuleComponent()->GetCollisionResponseToChannel(ECollisionChannel::ECC_Camera);
+		SeatedMeshCameraResponse = GetMesh()->GetCollisionResponseToChannel(ECollisionChannel::ECC_Camera);
+		bSeatedCameraResponseSaved = true;
+	}
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
+	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
 }
 
 void AALSBaseCharacter::AttachCharacter(USceneComponent* SeatComponent)
@@ -1895,6 +1905,13 @@ void AALSBaseCharacter::MultiCast_StandCharacterUp_Implementation(FVector ExitLo
 	SetMovementState(EALSMovementState::Grounded);
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Vehicle, ECollisionResponse::ECR_Block);
+
+	if (bSeatedCameraResponseSaved)
+	{
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, SeatedCapsuleCameraResponse);
+		GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, SeatedMeshCameraResponse);
+		bSeatedCameraResponseSaved = false;
+	}
 }
 
 void AALSBaseCharacter::HandleExitControlledInterceptor() {

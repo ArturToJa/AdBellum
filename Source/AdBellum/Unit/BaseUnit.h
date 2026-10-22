@@ -33,6 +33,7 @@ class URecoilComponent;
 class ABaseWeapon;
 class UNetworkComponent;
 class ABaseFormation;
+class UVehicleSeatComponent;
 
 UENUM(BlueprintType)
 enum class ETargetBodyPart : uint8
@@ -215,6 +216,9 @@ public:
 
 	void HandleStationaryAimAction(bool Value);
 
+	// Aim button state HandleStationaryAimAction last acted on, local only
+	bool bStationaryAimHeld = false;
+
 	FTimerHandle CheckAimCollisionTimer;
 
 	void CheckAimCollision();
@@ -245,6 +249,28 @@ public:
 	virtual void ScopeZeroDownAction_Implementation() override;
 
 	virtual void ZoomAction_Implementation() override;
+
+	//VEHICLE SEAT
+
+	// Seat this unit sits in, null on foot. Set by UVehicleAccessPoint on the server.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Vehicle")
+	TObjectPtr<UVehicleSeatComponent> OccupiedSeat = nullptr;
+
+	// Look input of a seated gunner goes to the unit's own gunner seat
+	virtual void GunnerCameraUpInput(float Value) override;
+
+	virtual void GunnerCameraRightInput(float Value) override;
+
+	// A gunner does not own the vehicle, so its aim reaches the server through the unit
+	UFUNCTION(Server, Unreliable)
+	void Server_SetGunnerAim(FVector2D Aim);
+
+	// Returns false when the unit does not sit in a gunner seat
+	bool AddGunnerAimInput(float YawInput, float PitchInput);
+
+	void SendGunnerAim();
+
+	FTimerHandle GunnerAimSendTimer;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Input")
 	bool bIsReloading = false;

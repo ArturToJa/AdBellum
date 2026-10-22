@@ -8,6 +8,8 @@ AStationaryWeapon::AStationaryWeapon()
 {
 	WeaponMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMeshComponent"));
 	RootComponent = WeaponMeshComponent;
+	// Everything ASimpleWeapon hangs on WeaponRoot follows the weapon mesh
+	WeaponRoot->SetupAttachment(WeaponMeshComponent);
 
 	EBarrel->SetupAttachment(WeaponMeshComponent);
 }
@@ -19,4 +21,4 @@ void AStationaryWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AStationaryWeapon, WeaponMeshComponent);
 }
 
-//add camera inputs and decide when to delegate to vehicle or to weapon actor
+//add camera inputs and decide when to delegate to vehicle or to weapon actor

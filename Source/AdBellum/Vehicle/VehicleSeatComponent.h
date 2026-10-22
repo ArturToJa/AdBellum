@@ -14,11 +14,12 @@ DECLARE_DELEGATE_OneParam(OnExitSeatDelegate, AALSBaseCharacter*)
 /**
  * 
  */
-UCLASS(DefaultToInstanced)
+UCLASS(DefaultToInstanced, ClassGroup = (VehicleComponent), meta = (BlueprintSpawnableComponent))
 class ADBELLUM_API UVehicleSeatComponent : public USkeletalMeshComponent
 {
 	GENERATED_BODY()
 public:
+	UVehicleSeatComponent();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

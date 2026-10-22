@@ -10,6 +10,7 @@
 #include "Interfaces/Selectable.h"
 #include "_Core/AVS_Vehicle.h"
 #include "VehicleSeatComponent.h"
+#include "VehicleStructs.h"
 #include "Library/ALSADSInterface.h"
 #include "Weapon/BaseWeapon.h"
 #include "Weapon/WeaponChildComponent.h"
@@ -17,6 +18,7 @@
 
 class UNetworkComponent;
 class ABaseWeapon;
+class UGunnerSeatComponent;
 
 UCLASS()
 class ADBELLUM_API ABaseVehicle : public AAVS_Vehicle, public IEnterable, public IFormable, public ISelectable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface
@@ -25,7 +27,7 @@ class ADBELLUM_API ABaseVehicle : public AAVS_Vehicle, public IEnterable, public
 public:
 
 	ABaseVehicle(const FObjectInitializer& ObjectInitializer);
-	
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
@@ -33,6 +35,7 @@ public:
 
 	//possession
 
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void UnPossessed() override;
@@ -42,39 +45,66 @@ public:
 
 	void PossessByAIController();
 
-	UVehicleSeatComponent* DriverSeat;
+	// SEATS
 
+	// Seat of the driver, part of every vehicle: place it in the viewport and list it in an access point
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UVehicleSeatComponent> DriverSeat;
 
-	// DAMAGE 
+	UFUNCTION(BlueprintCallable, Category = "Seats")
+	UVehicleSeatComponent* GetSeatWithRole(EALSStationaryRole StationaryRole) const;
+
+	// Every gunner seat of the vehicle, each one has its own weapons and its own aim
+	UFUNCTION(BlueprintCallable, Category = "Seats")
+	TArray<UGunnerSeatComponent*> GetGunnerSeats() const;
+
+	// DAMAGE
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Damage")
 	float HP = 5000.0f;
 
 	UFUNCTION()
 	void OnAnyDamageReceived(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser);
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerUpdateHealth(float Value);
-
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Vehicle - General")
 	TObjectPtr<USkeletalMeshComponent> VehicleSkeletalMesh;
 
-	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Animation")
-	float TurretYaw = 0.0f;
+	// MESH
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
-	float TurretTurnRate = 0.66f;
+	// Bones of the vehicle skeletal mesh that are not drawn, together with the bones below them
+	// (hiding turret_jnt also hides the gun). Use it for parts replaced by a more detailed weapon or
+	// turret model. Only drawing is switched off: the bone still moves, so whatever is attached to it
+	// (weapon, seat) stays where it belongs and keeps its size.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mesh")
+	TArray<FName> HiddenBones;
 
-	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Animation")
-	float GunPitch = 0.0f;
+	// WHEELS
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
-	float GunPitchRate = 0.35f;
+	// Wheels created on the skeletal mesh's wheel bones when the vehicle is constructed.
+	// Empty - found by the standard bone names lf_wheel_N_jnt / rt_wheel_N_jnt (N - axle, 1 is the front one)
+	// and given their roles by the axle lists below. Fill it to decide every wheel by hand instead.
+	// Wheel components added in the blueprint are left alone either way.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels")
+	TArray<FVehicleWheelSetup> WheelSetups;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	UArrowComponent* GunnerADS;
+	// Suspension, tire and brake settings of every created wheel
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels")
+	FAVS1_Wheel_Config DefaultWheelConfig;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Setup")
-	FName ADSSocketName = "ADS_Gunner";
+	// Axles that steer, used when wheels are found by bone name
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Auto Detect")
+	TArray<int32> SteerableAxles = { 1 };
+
+	// Axles that receive torque, empty - all of them
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Auto Detect")
+	TArray<int32> DrivenAxles;
+
+	// Axles the handbrake holds, empty - the last one
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Auto Detect")
+	TArray<int32> HandbrakeAxles;
+
+	// WheelSetups, or what the skeleton's standard wheel bones give when WheelSetups is empty
+	UFUNCTION(BlueprintCallable, Category = "Wheels")
+	TArray<FVehicleWheelSetup> GetEffectiveWheelSetups() const;
 
 	// IEnterable interface
 	virtual UVehicleAccessPoint* TryBookSeat_Implementation(AALSBaseCharacter* InUnit) override;
@@ -100,17 +130,18 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UOrdersManager> OrdersManagerComponent;
 
-	//Input interface
+	//Input interface, called on the machine of the player driving the vehicle (the driver possesses it)
 
-	virtual void GunnerCameraRightAction_Implementation(float Value) override;
+	virtual void ForwardMovementAction_Implementation(float Value) override;
 
-	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_GunnerCameraRightAction(float Value);
+	virtual void ForwardMovementActionCompleted_Implementation() override;
 
-	virtual void GunnerCameraUpAction_Implementation(float Value) override;
+	virtual void RightMovementAction_Implementation(float Value) override;
 
-	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_GunnerCameraUpAction(float Value);
+	virtual void RightMovementActionCompleted_Implementation() override;
+
+	// Handbrake, held while the action keeps triggering
+	virtual void JumpAction_Implementation(bool bValue) override;
 
 	virtual void InteractionAction_Implementation() override;
 
@@ -121,20 +152,18 @@ public:
 	//virtual void SecondarySelectionAction_Implementation() override;
 	//virtual void ThirdSelectionAction_Implementation() override;
 
-	//Vehicle interaface
-	virtual void CalibrateADS_Implementation(FVector TargetVector) override;
+	//Vehicle interface
+	virtual float GetSteeringValue_Implementation() override;
 
-	//ADS Interface
+	//ADS Interface, fallbacks only: a gunner's ADS comes from the gunner's weapon (ASimpleWeapon)
 	virtual FVector getADSTarget_Implementation() override;
 
 	virtual FRotator getADSRotation_Implementation() override;
 
 	virtual FTransform getCameraTransform_Implementation(EALSStationaryRole StationaryRole) override;
 
-	void CalibrateGunnerADS();
-
 	//orderable
-	
+
 	//virtual void Stop_Implementation(FVector TargetPosition) override;
 	//virtual void MoveOrder_Implementation(FVector TargetPosition) override;
 	//virtual void AttackTarget_Implementation(UObject* TargetObject) override;
@@ -157,4 +186,19 @@ public:
 	int32 SelectionCircleIndex;
 	UPROPERTY(Replicated)
 	ABaseFormation* OwningFormation;
+
+private:
+	// Stops drawing every bone listed in HiddenBones
+	void ApplyHiddenBones();
+
+	// Creates a raycast UAVS_Wheel on the bone of every effective wheel setup
+	void BuildWheelsFromSetup();
+
+	// Throttle, brake and steering back to zero
+	void ReleaseDriverInputs();
+
+	void ReleaseHandbrake();
+
+	// JumpAction only reports the key being held, the handbrake lets go when the reports stop
+	FTimerHandle HandbrakeReleaseTimer;
 };

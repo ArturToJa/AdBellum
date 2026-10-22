@@ -18,7 +18,7 @@
 #include "System/AdBellumGameState.h"
 #include "Components/CapsuleComponent.h"
 #include "Library/NetworkComponent.h"
-#include "Vehicle/Vehicle.h"
+#include "Vehicle/GunnerSeatComponent.h"
 #include "EBBarrel.h"
 #include "Formation/BaseFormation.h"
 #include "Player/IPlayer.h"
@@ -61,6 +61,7 @@ void ABaseUnit::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(ABaseUnit, TeamIndex);
 	DOREPLIFETIME(ABaseUnit, PlayerPtr);
 	DOREPLIFETIME(ABaseUnit, OwningFormation);
+	DOREPLIFETIME(ABaseUnit, OccupiedSeat);
 }
 
 void ABaseUnit::BeginPlay()
@@ -389,6 +390,14 @@ void ABaseUnit::HandleNonStationaryAimAction(bool Value)
 
 void ABaseUnit::HandleStationaryAimAction(bool Value)
 {
+	// AimAction arrives every frame while the button is held, only a change does anything
+	// (Server_AimAction is reliable, sending it every frame floods the connection)
+	if (bStationaryAimHeld == Value)
+	{
+		return;
+	}
+	bStationaryAimHeld = Value;
+
 	if (StationaryRole == EALSStationaryRole::Gunner_Standing)
 	{
 		if (Value)
@@ -424,6 +433,13 @@ void ABaseUnit::Server_AimAction_Implementation(bool bValue)
 
 void ABaseUnit::AimActionCompleted_Implementation()
 {
+	// AimAction only reports the button while it is held, so a seated unit leaves its aim state here
+	if (StationaryRole != EALSStationaryRole::None)
+	{
+		HandleStationaryAimAction(false);
+	}
+	// Also when the unit left its seat with the button still held
+	bStationaryAimHeld = false;
 	Server_AimActionCompleted();
 	HandleReleasedADS();
 }
@@ -643,12 +659,8 @@ void ABaseUnit::HandleStationaryWeaponSwitch(int WeaponId)
 		AActor* NewActiveWeapon = GunnerWeaponChangedDelegate.Execute(WeaponId);
 		if (NewActiveWeapon)
 		{
+			// The weapon brings its own ADS point and zero, nothing to recalibrate on the vehicle
 			ActiveWeaponActor = NewActiveWeapon;
-			if (IIWeapon::Execute_GetWeaponSocket(ActiveWeaponActor) != EWeaponSocketEnum::SPECIAL)
-			{
-				FVector CalibationVector = IIWeapon::Execute_GetCalibrationVector(ActiveWeaponActor, 500.00f);
-				IVehicle::Execute_CalibrateADS(ControlledInputInterceptor, CalibationVector);
-			}
 		}
 	}
 }
@@ -1384,8 +1396,10 @@ void ABaseUnit::SetIsSeenBy_Implementation(ABaseFormation* Formation, bool IsSee
 //END ITARGETABBLE INTERAFCE
 void ABaseUnit::ScopeZeroUpAction_Implementation()
 {
-	// Zero is only adjusted while the sight is not being aimed through
-	if (ActiveWeaponActor && StationaryRole == EALSStationaryRole::None && !UsingADS)
+	// On foot zero is only adjusted while the sight is not being aimed through.
+	// A seated gunner always looks through the weapon's ADS, so there it works any time.
+	const bool bSeatedGunner = StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing;
+	if (ActiveWeaponActor && (bSeatedGunner || (StationaryRole == EALSStationaryRole::None && !UsingADS)))
 	{
 		IIWeapon::Execute_ChangeSightZero(ActiveWeaponActor, 1);
 	}
@@ -1393,11 +1407,66 @@ void ABaseUnit::ScopeZeroUpAction_Implementation()
 
 void ABaseUnit::ScopeZeroDownAction_Implementation()
 {
-	if (ActiveWeaponActor && StationaryRole == EALSStationaryRole::None && !UsingADS)
+	const bool bSeatedGunner = StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing;
+	if (ActiveWeaponActor && (bSeatedGunner || (StationaryRole == EALSStationaryRole::None && !UsingADS)))
 	{
 		IIWeapon::Execute_ChangeSightZero(ActiveWeaponActor, -1);
 	}
 }
+
+//VEHICLE SEAT
+bool ABaseUnit::AddGunnerAimInput(float YawInput, float PitchInput)
+{
+	UGunnerSeatComponent* GunnerSeat = Cast<UGunnerSeatComponent>(OccupiedSeat);
+	if (!GunnerSeat)
+	{
+		return false;
+	}
+
+	GunnerSeat->AddAimInput(YawInput, PitchInput);
+
+	// The server already has the new aim when the gunner plays on it. Other machines send it at a fixed
+	// rate instead of once per input event, the timer also delivers the last value after the mouse stops.
+	if (!HasAuthority() && !GetWorldTimerManager().IsTimerActive(GunnerAimSendTimer))
+	{
+		constexpr float GunnerAimSendInterval = 1.0f / 30.0f;
+		GetWorldTimerManager().SetTimer(GunnerAimSendTimer, this, &ABaseUnit::SendGunnerAim, GunnerAimSendInterval, false);
+	}
+	return true;
+}
+
+void ABaseUnit::SendGunnerAim()
+{
+	if (const UGunnerSeatComponent* GunnerSeat = Cast<UGunnerSeatComponent>(OccupiedSeat))
+	{
+		Server_SetGunnerAim(GunnerSeat->GetAim());
+	}
+}
+
+void ABaseUnit::Server_SetGunnerAim_Implementation(FVector2D Aim)
+{
+	if (UGunnerSeatComponent* GunnerSeat = Cast<UGunnerSeatComponent>(OccupiedSeat))
+	{
+		GunnerSeat->SetAimFromClient(Aim);
+	}
+}
+
+void ABaseUnit::GunnerCameraUpInput(float Value)
+{
+	if (!AddGunnerAimInput(0.0f, Value))
+	{
+		Super::GunnerCameraUpInput(Value);
+	}
+}
+
+void ABaseUnit::GunnerCameraRightInput(float Value)
+{
+	if (!AddGunnerAimInput(Value, 0.0f))
+	{
+		Super::GunnerCameraRightInput(Value);
+	}
+}
+
 
 void ABaseUnit::ZoomAction_Implementation()
 {

@@ -95,6 +95,17 @@ public:
 	void MultiCast_StandCharacterUp(FVector ExitLocation);
 
 	void HandleExitControlledInterceptor();
+
+	// Look input of a seated gunner (Gunner / Gunner_Standing). By default it goes to
+	// ControlledInputInterceptor through the server, override to aim something else with it.
+	virtual void GunnerCameraUpInput(float Value);
+
+	virtual void GunnerCameraRightInput(float Value);
+
+	// Camera channel responses of capsule and mesh from before sitting down, restored when standing up
+	TEnumAsByte<ECollisionResponse> SeatedCapsuleCameraResponse = ECR_Block;
+	TEnumAsByte<ECollisionResponse> SeatedMeshCameraResponse = ECR_Block;
+	bool bSeatedCameraResponseSaved = false;
 	
 	/** Ragdoll System */
 	/** Implement on BP to get required get up animation according to character's state */

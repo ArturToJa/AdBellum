@@ -2,6 +2,7 @@
 
 #include "BaseWeapon.h"
 #include "EBBarrel.h"
+#include "WeaponBallistics.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Character/ALSInputInterface.h"
@@ -221,19 +222,7 @@ FName ABaseWeapon::GetSightSocketName(const ABaseSight* Sight) const
 
 TSubclassOf<AEBBullet> ABaseWeapon::GetCalibrationBulletClass() const
 {
-	if (!EBarrel)
-	{
-		return nullptr;
-	}
-	if (EBarrel->ChamberedBullet)
-	{
-		return EBarrel->ChamberedBullet;
-	}
-	if (EBarrel->Ammo.Num() > 0)
-	{
-		return EBarrel->Ammo[0];
-	}
-	return nullptr;
+	return WeaponBallistics::GetCalibrationBulletClass(EBarrel);
 }
 
 void ABaseWeapon::StepSightZoomTransition()
@@ -371,85 +360,9 @@ FTransform ABaseWeapon::GetBaseBarrelWorldTransform() const
 bool ABaseWeapon::SimulateTrajectoryPoint(TSubclassOf<AEBBullet> BulletClass, float DistanceMeters, FVector& OutRangePoint,
 	float& OutFlightTime, TArray<FVector>* OutTrajectory) const
 {
-	UWorld* World = GetWorld();
-	const AEBBullet* Bullet = BulletClass ? BulletClass->GetDefaultObject<AEBBullet>() : nullptr;
-	if (!World || !Bullet || !EBarrel || DistanceMeters <= 0.0f)
-	{
-		return false;
-	}
-
-	constexpr float TimeStep = 0.001f;
-	constexpr float MaxTime = 10.0f;
-	constexpr int32 TrajectorySampleInterval = 10;
-
-	const float TargetX = DistanceMeters * 100.0f;
-	// When collecting trajectory for debug, continue past the zero point to show the drop behind it
-	const float EndX = OutTrajectory ? TargetX * 1.5f : TargetX;
-
-	// Same muzzle velocity as EBBarrel prediction functions use
-	const float MuzzleSpeed = FMath::Lerp(EBarrel->MuzzleVelocityMultiplierMin, EBarrel->MuzzleVelocityMultiplierMax, 0.5f)
-		* FMath::Lerp(Bullet->MuzzleVelocityMin, Bullet->MuzzleVelocityMax, 0.5f);
-	if (MuzzleSpeed <= 0.0f)
-	{
-		return false;
-	}
-
-	// Virtual level frame: real barrel location (air density depends on altitude), shooting along world +X,
-	// so gravity (world -Z) acts as if the weapon was held level. Range frame X = downrange, Z = up.
-	const FVector Start = GetBaseBarrelWorldTransform().GetLocation();
-	FVector Location = Start;
-	FVector Velocity(MuzzleSpeed, 0.0f, 0.0f);
-	float Time = 0.0f;
-	int32 StepIndex = 0;
-	bool bFound = false;
-
-	if (OutTrajectory)
-	{
-		OutTrajectory->Reset();
-		OutTrajectory->Add(FVector::ZeroVector);
-	}
-
-	while (Time < MaxTime)
-	{
-		const FVector PreviousVelocity = Velocity;
-		Velocity = Bullet->UpdateVelocity(World, Location, Velocity, TimeStep);
-		const FVector NewLocation = Location + (PreviousVelocity + Velocity) * 0.5f * TimeStep;
-
-		if (!bFound && NewLocation.X - Start.X >= TargetX)
-		{
-			const float Alpha = (TargetX - (Location.X - Start.X)) / (NewLocation.X - Location.X);
-			OutRangePoint = FMath::Lerp(Location, NewLocation, Alpha) - Start;
-			OutFlightTime = Time + Alpha * TimeStep;
-			bFound = true;
-		}
-
-		Location = NewLocation;
-		Time += TimeStep;
-
-		const bool bEnd = Location.X - Start.X >= EndX || Velocity.X <= KINDA_SMALL_NUMBER;
-		if (OutTrajectory && (++StepIndex % TrajectorySampleInterval == 0 || bEnd))
-		{
-			OutTrajectory->Add(Location - Start);
-		}
-		if (bEnd)
-		{
-			break;
-		}
-	}
-	return bFound;
-}
-
-// Signed angle (radians) rotating From to To around Axis, both projected onto the plane perpendicular to Axis
-static float SignedAngleAroundAxis(const FVector& From, const FVector& To, const FVector& Axis)
-{
-	const FVector FromProjected = FVector::VectorPlaneProject(From, Axis).GetSafeNormal();
-	const FVector ToProjected = FVector::VectorPlaneProject(To, Axis).GetSafeNormal();
-	if (FromProjected.IsNearlyZero() || ToProjected.IsNearlyZero())
-	{
-		return 0.0f;
-	}
-	return FMath::Atan2(FVector::DotProduct(Axis, FVector::CrossProduct(FromProjected, ToProjected)),
-		FVector::DotProduct(FromProjected, ToProjected));
+	// Real barrel location: air density depends on altitude
+	return WeaponBallistics::SimulateTrajectoryPoint(GetWorld(), EBarrel, BulletClass, GetBaseBarrelWorldTransform().GetLocation(),
+		DistanceMeters, OutRangePoint, OutFlightTime, OutTrajectory);
 }
 
 bool ABaseWeapon::CalibrateSight(float Distance)
@@ -512,11 +425,11 @@ bool ABaseWeapon::CalibrateSight(float Distance)
 		const FVector CurrentDirection = Sight->GetSightLineDirection();
 		const FVector DesiredDirection = (ZeroPoint - Sight->GetSightLineOrigin()).GetSafeNormal();
 
-		FQuat Delta(PitchAxis, SignedAngleAroundAxis(CurrentDirection, DesiredDirection, PitchAxis));
+		FQuat Delta(PitchAxis, WeaponBallistics::SignedAngleAroundAxis(CurrentDirection, DesiredDirection, PitchAxis));
 		if (bCalibrateSightYaw)
 		{
 			const FVector PitchedDirection = Delta.RotateVector(CurrentDirection);
-			Delta = FQuat(YawAxis, SignedAngleAroundAxis(PitchedDirection, DesiredDirection, YawAxis)) * Delta;
+			Delta = FQuat(YawAxis, WeaponBallistics::SignedAngleAroundAxis(PitchedDirection, DesiredDirection, YawAxis)) * Delta;
 		}
 		if (Delta.GetAngle() < 1.0e-7f)
 		{
@@ -1037,4 +950,4 @@ bool ABaseWeapon::GetIsScoped_Implementation()
 		return SightComponent->GetSightActor()->GetIsScoped();
 	}
 	else return false;
-}
+}

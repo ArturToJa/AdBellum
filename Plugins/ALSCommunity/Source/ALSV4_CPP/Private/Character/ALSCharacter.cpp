@@ -4,6 +4,7 @@
 
 #include "Character/ALSCharacter.h"
 #include "Library/ALSADSInterface.h"
+#include "Components/CapsuleComponent.h"
 
 #include "Engine/StaticMesh.h"
 #include "AI/ALSAIController.h"
@@ -97,10 +98,27 @@ FTransform AALSCharacter::GetThirdPersonPivotTarget()
 		FVector::OneVector);
 }
 
+// Weapon of a seated gunner when it knows its own ADS point. A vehicle can have several gunners,
+// so the weapon is asked first and the vehicle (ControlledInputInterceptor) is only the fallback.
+static AActor* GetGunnerADSWeapon(const AALSCharacter* Character)
+{
+	const EALSStationaryRole Role = Character->GetStationaryRole();
+	if (Role != EALSStationaryRole::Gunner && Role != EALSStationaryRole::Gunner_Standing)
+	{
+		return nullptr;
+	}
+	AActor* Weapon = Character->ActiveWeaponActor;
+	return Weapon && Weapon->GetClass()->ImplementsInterface(UALSADSInterface::StaticClass()) ? Weapon : nullptr;
+}
+
 FVector AALSCharacter::GetFirstPersonCameraTarget()
 {
 	if (bUseMainCameraTransform)
 	{
+		if (AActor* GunnerWeapon = GetGunnerADSWeapon(this))
+		{
+			return IALSADSInterface::Execute_getADSTarget(GunnerWeapon);
+		}
 		if (ControlledInputInterceptor)
 		{
 			return IALSADSInterface::Execute_getCameraTransform(ControlledInputInterceptor, StationaryRole).GetLocation();
@@ -117,6 +135,10 @@ FVector AALSCharacter::GetFirstPersonCameraTargetADS()
 {
 	if (ControlledInputInterceptor) {
 		if (bUseStationaryADS) {
+			if (AActor* GunnerWeapon = GetGunnerADSWeapon(this))
+			{
+				return IALSADSInterface::Execute_getADSTarget(GunnerWeapon);
+			}
 			return IALSADSInterface::Execute_getADSTarget(ControlledInputInterceptor);
 		}
 	}
@@ -130,6 +152,15 @@ FVector AALSCharacter::GetFirstPersonCameraTargetADS()
 
 FRotator AALSCharacter::GetFirstPersonCameraRotationADS() {
 	if (ControlledInputInterceptor) {
+		if (AActor* GunnerWeapon = GetGunnerADSWeapon(this))
+		{
+			return IALSADSInterface::Execute_getADSRotation(GunnerWeapon);
+		}
+		// Gunner seat without a weapon: look where the unit faces, the vehicle cannot tell which gunner asks
+		if (StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing)
+		{
+			return GetCapsuleComponent()->GetComponentRotation();
+		}
 		return IALSADSInterface::Execute_getADSRotation(ControlledInputInterceptor);
 	}
 	else return FRotator::ZeroRotator;

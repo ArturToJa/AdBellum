@@ -29,19 +29,4 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IVehicle")
 	float GetSteeringValue();
 
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IVehicle")
-	void SetTurretYaw(float value);
-
-	UFUNCTION(BlueprintCallable,BlueprintNativeEvent, Category = "IVehicle")
-	float GetTurretYaw();
-	
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IVehicle")
-	void SetTurretPitch(float value);
-
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IVehicle")
-	float GetTurretPitch();
-
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IVehicle")
-	void CalibrateADS(FVector TargetPoint);
-
 };

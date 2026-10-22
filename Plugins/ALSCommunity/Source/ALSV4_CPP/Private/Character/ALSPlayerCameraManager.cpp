@@ -167,8 +167,9 @@ bool AALSPlayerCameraManager::CustomCameraBehavior(float DeltaTime, FVector& Loc
 		// Stationary cameras smooth from the camera itself, restart control rotation smoothing afterwards
 		bHasSmoothedControlRotation = false;
 
-		if ((castedNewCharacter->GetRotationMode() == EALSRotationMode::Aiming && castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner_Standing)
-			|| castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner && castedNewCharacter->GetUseMainCameraTransform()) {
+		// A standing gunner always aims: the camera turns with the weapon whether the aim button is held or not
+		if (castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner_Standing
+			|| (castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner && castedNewCharacter->GetUseMainCameraTransform())) {
 			const FRotator& ADSRotation =  castedNewCharacter->GetFirstPersonCameraRotationADS();
 
 			const FRotator& InterpResult = FMath::RInterpTo(GetCameraRotation(), ADSRotation, DeltaTime,
