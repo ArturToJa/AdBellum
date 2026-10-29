@@ -2006,3 +2006,13 @@ UObject* AALSBaseCharacter::LineTraceForObjectType(float Range, TEnumAsByte<EObj
 	}
 	else return nullptr;
 }
+void AALSBaseCharacter::SwitchStationarySeat(USceneComponent* SeatComponent)
+{
+	if (!HasAuthority() || !SeatComponent)
+	{
+		return;
+	}
+	// A pending sit down (entered less than a second ago) would attach to the old seat afterwards
+	GetWorldTimerManager().ClearTimer(CharacterAttachmentTimer);
+	Multicast_AttachCharacter(SeatComponent);
+}

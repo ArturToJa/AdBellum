@@ -96,6 +96,9 @@ public:
 
 	void HandleExitControlledInterceptor();
 
+	// Server: moves an already seated character to another seat right away (no sit down delay)
+	void SwitchStationarySeat(USceneComponent* SeatComponent);
+
 	// Look input of a seated gunner (Gunner / Gunner_Standing). By default it goes to
 	// ControlledInputInterceptor through the server, override to aim something else with it.
 	virtual void GunnerCameraUpInput(float Value);

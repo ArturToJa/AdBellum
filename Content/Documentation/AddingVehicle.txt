@@ -91,6 +91,11 @@ WHAT THE MODEL NEEDS
    4. Place and rotate each seat where the character should sit. The character is attached to the seat
       about one second after entering.
 
+   5. Switching seats (debug, needs the ALS debug input context): hold Q in a vehicle to open the seat list
+      (seat component names, sorted by name), scroll to pick, release Q to move there. A free seat is taken,
+      a seat with an AI unit is swapped, seats of other players are greyed out. Name seat components clearly,
+      the names are what the player sees.
+
 6. ACCESS POINTS
    1. Add BP_VehicleAccessPoint (a box) where the crew enters, e.g. at a door.
    2. Seat Array: add every seat reachable from this point. One access point can serve several seats;

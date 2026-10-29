@@ -5,6 +5,7 @@
 #include "Player/IPlayer.h"
 #include "VehicleSeatComponent.h"
 #include "GunnerSeatComponent.h"
+#include "BaseVehicle.h"
 
 
 void UVehicleAccessPoint::BeginPlay()
@@ -15,37 +16,16 @@ void UVehicleAccessPoint::BeginPlay()
 
 void UVehicleAccessPoint::Interact_Implementation(AALSBaseCharacter* InUnit)
 {
-	if (InUnit->StationaryRole == EALSStationaryRole::None) {
-		UVehicleSeatComponent* Seat = GetAvailableSeat(InUnit);
-		if (Seat)
-		{
-			if (Seat->SetOccupyingUnit(InUnit))
-			{
-				if (ABaseUnit* Unit = Cast<ABaseUnit>(InUnit))
-				{
-					Unit->OccupiedSeat = Seat;
-				}
-				InUnit->ControlledInputInterceptor = OwnerActor;
-				InUnit->Server_SitCharacterDown(Seat);
-				InUnit->StationaryRole = Seat->GetRole();
-
-				if (InUnit->GetController()->GetClass()->ImplementsInterface(UIPlayer::StaticClass()))
-				{
-					IIPlayer::Execute_NotifyHUDRole(InUnit->GetController(), Seat->GetRole(), InUnit);
-				}
-
-				if (Seat->GetRole() == EALSStationaryRole::Driver) 
-				{
-					InUnit->GetController()->Possess(Cast<APawn>(OwnerActor));
-				}
-				InUnit->Client_SetUseStationaryADS(Seat->GetUseADS());
-				InUnit->Client_SetUseMainCameraTransform(Seat->GetUseMainCameraTransform());
-				//InUnit->Client_SetRecenterCamera(true);
-				//go to controller -> Selectable AActor* for APlayerController
-				// One access point can serve several seats, the seat remembers which point its unit leaves through
-				Seat->ExitDelegate.BindUObject(this, &UVehicleAccessPoint::Exit);
-			}
-		}
+	if (InUnit->StationaryRole != EALSStationaryRole::None)
+	{
+		return;
+	}
+	// Seating itself is shared with seat switching (ABaseVehicle::OccupySeat)
+	ABaseVehicle* Vehicle = Cast<ABaseVehicle>(OwnerActor);
+	UVehicleSeatComponent* Seat = GetAvailableSeat(InUnit);
+	if (Vehicle && Seat)
+	{
+		Vehicle->OccupySeat(InUnit, Seat, this, false);
 	}
 }
 

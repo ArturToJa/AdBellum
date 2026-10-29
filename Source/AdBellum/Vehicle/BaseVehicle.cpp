@@ -566,3 +566,208 @@ void ABaseVehicle::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	UpdateDriverHeadVisibility(false);
 	Super::EndPlay(EndPlayReason);
 }
+
+//SEAT SWITCHING
+TArray<UVehicleSeatComponent*> ABaseVehicle::GetSortedSeats() const
+{
+	TArray<UVehicleSeatComponent*> Seats;
+	GetComponents<UVehicleSeatComponent>(Seats);
+	Seats.Sort([](const UVehicleSeatComponent& A, const UVehicleSeatComponent& B)
+	{
+		return A.GetName() < B.GetName();
+	});
+	return Seats;
+}
+
+UVehicleAccessPoint* ABaseVehicle::FindAccessPointForSeat(const UVehicleSeatComponent* Seat) const
+{
+	TInlineComponentArray<UVehicleAccessPoint*> AccessPoints(this);
+	for (UVehicleAccessPoint* AccessPoint : AccessPoints)
+	{
+		for (const FComponentReference& SeatRef : AccessPoint->SeatArray)
+		{
+			if (SeatRef.GetComponent(const_cast<ABaseVehicle*>(this)) == Seat)
+			{
+				return AccessPoint;
+			}
+		}
+	}
+	return nullptr;
+}
+
+bool ABaseVehicle::IsSeatHeldByPlayer(const UVehicleSeatComponent* Seat) const
+{
+	const AALSBaseCharacter* Occupant = Seat ? Seat->OccupyingUnit : nullptr;
+	if (!Occupant)
+	{
+		return false;
+	}
+	// A driving player controls the vehicle, not the unit in the seat
+	return Occupant->IsPlayerControlled() || (Seat->SeatRole == EALSStationaryRole::Driver && IsPlayerControlled());
+}
+
+ABaseUnit* ABaseVehicle::GetPlayerUnit(const APlayerController* Player) const
+{
+	APawn* Pawn = Player ? Player->GetPawn() : nullptr;
+	if (Pawn == this)
+	{
+		const UVehicleSeatComponent* Seat = GetSeatWithRole(EALSStationaryRole::Driver);
+		return Seat ? Cast<ABaseUnit>(Seat->OccupyingUnit) : nullptr;
+	}
+	ABaseUnit* Unit = Cast<ABaseUnit>(Pawn);
+	return Unit && Unit->OccupiedSeat && Unit->OccupiedSeat->GetOwner() == this ? Unit : nullptr;
+}
+
+bool ABaseVehicle::OccupySeat(AALSBaseCharacter* Unit, UVehicleSeatComponent* Seat, UVehicleAccessPoint* ExitPoint, bool bSwitchingSeat)
+{
+	if (!HasAuthority() || !Unit || !Seat || Seat->GetOwner() != this || !Seat->SetOccupyingUnit(Unit))
+	{
+		return false;
+	}
+
+	if (ABaseUnit* BaseUnit = Cast<ABaseUnit>(Unit))
+	{
+		BaseUnit->OccupiedSeat = Seat;
+	}
+	Unit->ControlledInputInterceptor = this;
+	Unit->StationaryRole = Seat->GetRole();
+	if (bSwitchingSeat)
+	{
+		Unit->SwitchStationarySeat(Seat);
+	}
+	else
+	{
+		Unit->Server_SitCharacterDown(Seat);
+	}
+
+	AController* UnitController = Unit->GetController();
+	if (UnitController && UnitController->GetClass()->ImplementsInterface(UIPlayer::StaticClass()))
+	{
+		IIPlayer::Execute_NotifyHUDRole(UnitController, Seat->GetRole(), Unit);
+	}
+
+	if (Seat->GetRole() == EALSStationaryRole::Driver)
+	{
+		// A player drives the vehicle himself, for an AI crew the vehicle's own AI controller does
+		if (APlayerController* PlayerController = Cast<APlayerController>(UnitController))
+		{
+			PlayerController->Possess(this);
+		}
+		else if (GetController() != BackupAIController)
+		{
+			PossessByAIController();
+		}
+	}
+
+	Unit->Client_SetUseStationaryADS(Seat->GetUseADS());
+	Unit->Client_SetUseMainCameraTransform(Seat->GetUseMainCameraTransform());
+
+	// One access point can serve several seats, the seat remembers which point its unit leaves through
+	if (UVehicleAccessPoint* ExitAccessPoint = ExitPoint ? ExitPoint : FindAccessPointForSeat(Seat))
+	{
+		Seat->ExitDelegate.BindUObject(ExitAccessPoint, &UVehicleAccessPoint::Exit);
+	}
+	return true;
+}
+
+void ABaseVehicle::VacateSeatForSwitch(AALSBaseCharacter* Unit)
+{
+	ABaseUnit* BaseUnit = Cast<ABaseUnit>(Unit);
+	UVehicleSeatComponent* Seat = BaseUnit ? BaseUnit->OccupiedSeat.Get() : nullptr;
+	if (!Seat)
+	{
+		return;
+	}
+
+	if (UGunnerSeatComponent* GunnerSeat = Cast<UGunnerSeatComponent>(Seat))
+	{
+		GunnerSeat->SetWeaponArrayOwner(nullptr);
+		Unit->ActiveWeaponActor = nullptr;
+	}
+	if (Unit->GunnerWeaponChangedDelegate.IsBound())
+	{
+		Unit->GunnerWeaponChangedDelegate.Unbind();
+	}
+	// Lets go of held inputs of the old role (driving, standing gunner aim)
+	Unit->HandleExitControlledInterceptor();
+	Unit->ExitDelegate.Unbind();
+	Seat->ExitDelegate.Unbind();
+	Seat->ClearOccupyingUnit();
+	BaseUnit->OccupiedSeat = nullptr;
+}
+
+bool ABaseVehicle::ServerSwitchSeat(ABaseUnit* Unit, UVehicleSeatComponent* TargetSeat)
+{
+	if (!HasAuthority() || !Unit || !TargetSeat || TargetSeat->GetOwner() != this)
+	{
+		return false;
+	}
+	UVehicleSeatComponent* CurrentSeat = Unit->OccupiedSeat;
+	if (!CurrentSeat || CurrentSeat->GetOwner() != this || CurrentSeat == TargetSeat || IsSeatHeldByPlayer(TargetSeat))
+	{
+		return false;
+	}
+	AALSBaseCharacter* OtherUnit = TargetSeat->GetOccupyingUnit();
+	// Free but booked: a unit is on its way in
+	if (!OtherUnit && !TargetSeat->IsSeatAvailable())
+	{
+		return false;
+	}
+
+	// Leaving the driver seat: the player takes its unit back, the vehicle's AI takes the vehicle
+	APlayerController* PlayerController = Cast<APlayerController>(Unit->GetController());
+	if (!PlayerController && CurrentSeat->GetRole() == EALSStationaryRole::Driver)
+	{
+		PlayerController = Cast<APlayerController>(GetController());
+		if (PlayerController && PlayerController->GetPawn() == this)
+		{
+			PlayerController->Possess(Unit);
+			PossessByAIController();
+		}
+	}
+
+	UVehicleAccessPoint* CurrentExit = FindAccessPointForSeat(CurrentSeat);
+	UVehicleAccessPoint* TargetExit = FindAccessPointForSeat(TargetSeat);
+
+	VacateSeatForSwitch(Unit);
+	if (OtherUnit)
+	{
+		VacateSeatForSwitch(OtherUnit);
+	}
+	OccupySeat(Unit, TargetSeat, TargetExit, true);
+	if (OtherUnit)
+	{
+		OccupySeat(OtherUnit, CurrentSeat, CurrentExit, true);
+	}
+	return true;
+}
+
+void ABaseVehicle::GetSelectionMenuOptions_Implementation(APlayerController* Player, TArray<FSelectionMenuOption>& Options, int32& CurrentIndex)
+{
+	const ABaseUnit* Unit = GetPlayerUnit(Player);
+	const UVehicleSeatComponent* CurrentSeat = Unit ? Unit->OccupiedSeat.Get() : nullptr;
+	CurrentIndex = INDEX_NONE;
+
+	const TArray<UVehicleSeatComponent*> Seats = GetSortedSeats();
+	for (int32 Index = 0; Index < Seats.Num(); ++Index)
+	{
+		UVehicleSeatComponent* Seat = Seats[Index];
+		FSelectionMenuOption& Option = Options.AddDefaulted_GetRef();
+		Option.Label = FText::FromString(Seat->GetName());
+		// Free seats and seats of AI units, not the own seat and not seats of other players
+		Option.bEnabled = Seat != CurrentSeat && !IsSeatHeldByPlayer(Seat) && (Seat->OccupyingUnit || Seat->IsSeatAvailable());
+		if (Seat == CurrentSeat)
+		{
+			CurrentIndex = Index;
+		}
+	}
+}
+
+void ABaseVehicle::HandleSelectionMenuChoice_Implementation(APlayerController* Player, int32 Index)
+{
+	const TArray<UVehicleSeatComponent*> Seats = GetSortedSeats();
+	if (Seats.IsValidIndex(Index))
+	{
+		ServerSwitchSeat(GetPlayerUnit(Player), Seats[Index]);
+	}
+}

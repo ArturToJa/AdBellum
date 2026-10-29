@@ -14,6 +14,7 @@
 #include "Library/ALSADSInterface.h"
 #include "Weapon/BaseWeapon.h"
 #include "Weapon/WeaponChildComponent.h"
+#include "UI/SelectionMenuProvider.h"
 #include "BaseVehicle.generated.h"
 
 class UNetworkComponent;
@@ -21,9 +22,11 @@ class ABaseWeapon;
 class UGunnerSeatComponent;
 class USpringArmComponent;
 class UCameraComponent;
+class UVehicleAccessPoint;
+class ABaseUnit;
 
 UCLASS()
-class ADBELLUM_API ABaseVehicle : public AAVS_Vehicle, public IEnterable, public IFormable, public ISelectable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface
+class ADBELLUM_API ABaseVehicle : public AAVS_Vehicle, public IEnterable, public IFormable, public ISelectable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface, public ISelectionMenuProvider
 {
 	GENERATED_BODY()
 public:
@@ -59,6 +62,27 @@ public:
 	// Every gunner seat of the vehicle, each one has its own weapons and its own aim
 	UFUNCTION(BlueprintCallable, Category = "Seats")
 	TArray<UGunnerSeatComponent*> GetGunnerSeats() const;
+
+	// Every seat sorted by component name: the same order on every machine (selection menu)
+	TArray<UVehicleSeatComponent*> GetSortedSeats() const;
+
+	// First access point that lists Seat, the point a unit in that seat leaves through
+	UVehicleAccessPoint* FindAccessPointForSeat(const UVehicleSeatComponent* Seat) const;
+
+	// True when a player sits in Seat (directly, or drives the vehicle from it)
+	bool IsSeatHeldByPlayer(const UVehicleSeatComponent* Seat) const;
+
+	// Server: puts Unit in Seat. Entering through an access point and switching seats both use it.
+	// bSwitchingSeat - the unit already sits in this vehicle: moved to the new seat at once, no sit down.
+	bool OccupySeat(AALSBaseCharacter* Unit, UVehicleSeatComponent* Seat, UVehicleAccessPoint* ExitPoint, bool bSwitchingSeat);
+
+	// Server: Unit (a player's unit) moves to TargetSeat. A free seat is taken, an AI unit in it swaps
+	// to Unit's old seat, a seat held by another player is refused.
+	bool ServerSwitchSeat(ABaseUnit* Unit, UVehicleSeatComponent* TargetSeat);
+
+	// ISelectionMenuProvider: the vehicle's seats
+	virtual void GetSelectionMenuOptions_Implementation(APlayerController* Player, TArray<FSelectionMenuOption>& Options, int32& CurrentIndex) override;
+	virtual void HandleSelectionMenuChoice_Implementation(APlayerController* Player, int32 Index) override;
 
 	// DAMAGE
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Damage")
@@ -260,6 +284,12 @@ private:
 
 	// Throttle, brake and steering back to zero
 	void ReleaseDriverInputs();
+
+	// Server: takes Unit out of its seat without standing it up (seat switch)
+	void VacateSeatForSwitch(AALSBaseCharacter* Unit);
+
+	// The unit Player plays in this vehicle, null when it is not in it
+	ABaseUnit* GetPlayerUnit(const APlayerController* Player) const;
 
 	// DRIVER CAMERA
 	UPROPERTY(Replicated)

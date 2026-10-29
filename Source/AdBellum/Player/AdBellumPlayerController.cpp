@@ -21,11 +21,14 @@
 #include "Formation/BaseFormation.h"
 #include "Trainer/TrainingHelper.h"
 #include "Player/ReplicationReporter.h"
+#include "UI/SelectionMenuComponent.h"
 
 
 AAdBellumPlayerController::AAdBellumPlayerController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
-{}
+{
+	SelectionMenu = CreateDefaultSubobject<USelectionMenuComponent>(TEXT("SelectionMenu"));
+}
 
 void AAdBellumPlayerController::BeginPlay()
 {
@@ -833,4 +836,44 @@ void AAdBellumPlayerController::PerformSmartOrder(AActor* TargetUnit)
 bool AAdBellumPlayerController::IsEnemyUnit(AActor* TargetUnit)
 {
 	return TeamIndex != IOwnershipInterface::Execute_GetTeamIndex(TargetUnit);
+}
+
+//SELECTION MENU
+void AAdBellumPlayerController::DebugOpenOverlayMenuAction(const FInputActionValue& Value)
+{
+	const bool bOpen = Value.Get<bool>();
+	// Release closes a menu that is open even if its provider is gone by now
+	if (SelectionMenu && (SelectionMenu->IsOpen() || SelectionMenu->Open(bOpen)))
+	{
+		if (!bOpen)
+		{
+			SelectionMenu->Open(false);
+		}
+		return;
+	}
+	Super::DebugOpenOverlayMenuAction(Value);
+}
+
+void AAdBellumPlayerController::DebugOverlayMenuCycleAction(const FInputActionValue& Value)
+{
+	// Cycled from ScrollAction, the wheel fires both actions
+	if (SelectionMenu && SelectionMenu->IsOpen())
+	{
+		return;
+	}
+	Super::DebugOverlayMenuCycleAction(Value);
+}
+
+void AAdBellumPlayerController::ScrollAction(const FInputActionValue& Value)
+{
+	if (SelectionMenu && SelectionMenu->IsOpen())
+	{
+		const float ScrollValue = Value.GetMagnitude();
+		if (ScrollValue != 0.0f)
+		{
+			SelectionMenu->Cycle(ScrollValue > 0.0f);
+		}
+		return;
+	}
+	Super::ScrollAction(Value);
 }

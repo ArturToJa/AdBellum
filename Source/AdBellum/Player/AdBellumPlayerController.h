@@ -20,6 +20,7 @@ class BaseOrder;
 class ACharacterHUD;
 class ABaseFormation;
 class AReplicationReporter;
+class USelectionMenuComponent;
 /**
  * 
  */
@@ -179,6 +180,17 @@ public:
 	// Networking
 	UFUNCTION(Server, Reliable)
 	void ServerNotifyActorReplicated(AActor* ReplicatedActor);
+
+	// Generic hold-to-open menu (debug overlay menu input), e.g. switching seats in a vehicle
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
+	TObjectPtr<USelectionMenuComponent> SelectionMenu;
+
+protected:
+	// While the selection menu is open: Q release applies it, the mouse wheel cycles it (no gunner zoom).
+	// Without anything to select the old ALS overlay menu keeps working.
+	virtual void DebugOpenOverlayMenuAction(const FInputActionValue& Value) override;
+	virtual void DebugOverlayMenuCycleAction(const FInputActionValue& Value) override;
+	virtual void ScrollAction(const FInputActionValue& Value) override;
 
 private:
 	bool IsEnemyUnit(AActor* TargetUnit);
