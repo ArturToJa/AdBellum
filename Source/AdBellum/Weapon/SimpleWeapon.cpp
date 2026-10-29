@@ -49,6 +49,14 @@ void ASimpleWeapon::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// A mounted weapon is its own actor: the vehicle's camera arm (and any third person camera trace) would
+	// treat it as an obstacle and pull the camera in. Only the Camera channel is changed.
+	TInlineComponentArray<UPrimitiveComponent*> Primitives(this);
+	for (UPrimitiveComponent* Primitive : Primitives)
+	{
+		Primitive->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	}
+
 	// Nothing here needs to run every frame, the random first delay spreads many weapons over different frames
 	constexpr float OwnerStateInterval = 0.25f;
 	GetWorldTimerManager().SetTimer(OwnerStateTimer, this, &ASimpleWeapon::RefreshOwnerDependentState,
@@ -246,4 +254,24 @@ FVector ASimpleWeapon::getADSTarget_Implementation()
 FRotator ASimpleWeapon::getADSRotation_Implementation()
 {
 	return ADS->GetComponentRotation();
+}
+
+float ASimpleWeapon::GetWeaponFOV_Implementation()
+{
+	return ADSFOV;
+}
+
+bool ASimpleWeapon::GetHandIKTargets(FTransform& OutLeft, FTransform& OutRight) const
+{
+	const UMeshComponent* Meshes[] = { SkeletalMesh, StaticMesh };
+	for (const UMeshComponent* Mesh : Meshes)
+	{
+		if (Mesh && Mesh->DoesSocketExist(LeftHandSocket) && Mesh->DoesSocketExist(RightHandSocket))
+		{
+			OutLeft = Mesh->GetSocketTransform(LeftHandSocket);
+			OutRight = Mesh->GetSocketTransform(RightHandSocket);
+			return true;
+		}
+	}
+	return false;
 }

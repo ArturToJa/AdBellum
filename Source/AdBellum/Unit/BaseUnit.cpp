@@ -251,6 +251,12 @@ void ABaseUnit::PossessByAIController()
 //INPUT INTERFACE
 void ABaseUnit::SprintAction_Implementation(bool bValue)
 {
+	// Nothing to sprint in a vehicle seat, and the aiming branch below would overwrite the gunner's zoom
+	if (StationaryRole != EALSStationaryRole::None)
+	{
+		return;
+	}
+
 	if (bValue)
 	{
 		SetDesiredGait(EALSGait::Sprinting);
@@ -410,15 +416,11 @@ void ABaseUnit::HandleStationaryAimAction(bool Value)
 		Server_AimAction(Value);
 	}
 
-	else if (StationaryRole == EALSStationaryRole::Gunner) {
-		if (Value)
-		{
-			CameraFOV = 45.0f;
-		}
-		else
-		{
-			CameraFOV = 90.0f;
-		}
+	// Both gunner roles zoom to the FOV of the weapon they man while the aim button is held
+	if (StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing)
+	{
+		const float WeaponFOV = (Value && ActiveWeaponActor) ? IIWeapon::Execute_GetWeaponFOV(ActiveWeaponActor) : 0.0f;
+		CameraFOV = WeaponFOV > 0.0f ? WeaponFOV : 90.0f;
 	}
 }
 

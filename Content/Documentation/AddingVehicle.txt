@@ -52,6 +52,18 @@ WHAT THE MODEL NEEDS
       skid steering is not implemented yet.
    5. To see the suspension range in the viewport enable Default Wheel Config > Editor Preview.
 
+   6. SUSPENSION MUST CARRY THE MASS. Spring Strength is in kN/m (25 = 25 000 N/m). If it is too weak for the
+      weight on each wheel, the springs sit fully compressed and the vehicle jumps and shakes.
+      Same behaviour as the AVS demo APC (44% sag, same damping ratio):
+        load per wheel (N)  = Mass(kg) * 9.81 / number of wheels
+        Spring Strength     = load / (0.44 * Spring Length(cm) / 100) / 1000
+        Spring Damping      = 0.214 * sqrt(Spring Strength * 1000 * Mass / wheels) / 1000
+      Example LCV Coyote: 13 500 kg, 6 wheels, Spring Length 40 -> Strength 126, Damping 3.6.
+   7. VehicleMesh body (select VehicleMesh > Physics): Mass Override, Angular Damping 1.0 (calms body wobble),
+      Linear Damping 0, COM Nudge Z about -20. A large negative COM Nudge (e.g. -200) puts the centre of mass
+      near the ground and makes the vehicle rock.
+   8. Bones of the model must have scale 1.0, scaled bones make wheels sit or size wrong (AVS docs).
+
 4. ENGINE AND GEARS (Class Defaults, category "Advanced Vehicle System")
    1. Transmission > Gears: index 0 is reverse, 1+ are forward gears. Set speeds and torque per gear.
    2. General > Speed Units: the unit all gear speeds are given in.
@@ -65,6 +77,15 @@ WHAT THE MODEL NEEDS
    1. Driver: the DriverSeat component already exists on every vehicle (Seat Role = Driver), select it in the
       component list and place it. Do not add a second driver seat.
       Use Main Camera Transform = on puts the driver camera at the seat.
+      Steering wheel (DriverSeat > Steering Wheel): tick Has Steering Wheel. The bone steering_wheel_jnt
+      turns with the steering around Steering Wheel Axis (bone Z by default) by Steering Wheel Max Angle at
+      full lock (negative = other direction). Add sockets steering_hand_l / steering_hand_r on the vehicle
+      skeletal mesh as children of steering_wheel_jnt: the driver's hands hold them (hand IK).
+      Driver camera (Class Defaults > Driver Camera): first person at the driver unit's FP_Camera socket by
+      default, the driver's head is hidden only for the driving player. Camera held action toggles third
+      person (debug, ThirdPersonCameraArm). Look limits, rate and pitch inversion are set there. Other players
+      see the driver's head turn where the driver looks. Do not add camera components or CameraUp/Right
+      events to vehicle blueprints, they override this.
    2. Passengers: BP_VehicleSeatComponent, Seat Role = Passenger.
    3. Gunners: BP_GunnerSeatComponent, one per gunner (see step 7).
    4. Place and rotate each seat where the character should sit. The character is attached to the seat
@@ -96,6 +117,9 @@ WHAT THE MODEL NEEDS
    3. SECOND GUNNER: give that seat its own bones (or None when its weapon does not turn a bone).
       Two seats with the same bone names fight over the same turret.
    4. A weapon with one bone doing both turns (pintle machine gun): set only Gun Bone Name, Turret Bone Name = None.
+   5. Sitting Pose (Gunner_Standing seats): the unit keeps all Gunner_Standing behaviour but sits.
+   6. Hand IK: a gunner's hands hold the grip sockets of the weapon it mans (step 8), every gunner its own
+      weapon, so several standing gunners work.
 
 8. WEAPON BLUEPRINT (child of SimpleWeapon)
    1. Create a blueprint with parent class SimpleWeapon (or reuse BP_50cal / BP_Coax and check the barrel placement).
@@ -107,6 +131,10 @@ WHAT THE MODEL NEEDS
         Default Zero Distance Index - which entry is used when a gunner sits down.
         Calibrate ADS Yaw         - on when ADS is placed sideways from the barrel.
    6. Weapon Reticle Texture: reticle drawn in the middle of the screen.
+   7. HandIK > Left Hand Socket / Right Hand Socket (default L_HandIK / R_HandIK): grip sockets on the weapon's
+      SkeletalMesh (or StaticMesh) for the gunner's hands.
+   8. ADS > ADS FOV: camera field of view while the gunner holds the aim button (both gunner roles,
+      default 45). Releasing aim goes back to 90.
    In game the gunner changes zero with the Scope Zero Up / Down keys. The camera then looks at the point
    where the shot lands at that distance.
 

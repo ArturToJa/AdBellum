@@ -48,6 +48,11 @@ bool FBaseVehicleAnimInstanceProxy::Evaluate(FPoseContext& Output)
 	{
 		FTransform BoneTransform = ComponentPose.GetComponentSpaceTransform(Bone.Key);
 		BoneTransform.SetRotation((Bone.Value->Rotation * BoneTransform.GetRotation()).GetNormalized());
+		if (Bone.Value->bTurnAroundBoneAxis)
+		{
+			const FVector Axis = BoneTransform.GetUnitAxis(Bone.Value->BoneAxis);
+			BoneTransform.SetRotation((FQuat(Axis, Bone.Value->BoneAxisAngle) * BoneTransform.GetRotation()).GetNormalized());
+		}
 		BoneTransform.AddToTranslation(Bone.Value->Translation);
 		ComponentPose.SetComponentSpaceTransform(Bone.Key, BoneTransform);
 	}
@@ -76,7 +81,7 @@ void UBaseVehicleAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	// Reference pose until the vehicle is initialized (also in the editor): wheels are placed on their bones
 	// during construction, animating before that would move the bones they are being placed on
-	const ABaseVehicle* Vehicle = OwningVehicle.Get();
+	ABaseVehicle* Vehicle = OwningVehicle.Get();
 	const USkeletalMeshComponent* Mesh = GetSkelMeshComponent();
 	if (!Vehicle || !Mesh || !Vehicle->GetInitializationState())
 	{
@@ -86,6 +91,7 @@ void UBaseVehicleAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const FTransform MeshTransform = Mesh->GetComponentTransform();
 	AddWheelOffsets(Vehicle, MeshTransform, BoneOffsets);
 	AddAimOffsets(Vehicle, MeshTransform, DeltaSeconds, BoneOffsets);
+	AddSteeringWheelOffsets(Vehicle, BoneOffsets);
 }
 
 void UBaseVehicleAnimInstance::AddWheelOffsets(const ABaseVehicle* Vehicle, const FTransform& MeshTransform, TArray<FVehicleBoneOffset>& OutOffsets) const
@@ -169,5 +175,26 @@ void UBaseVehicleAnimInstance::AddAimOffsets(const ABaseVehicle* Vehicle, const 
 			Offset.BoneName = Seat->GunBoneName;
 			Offset.Rotation = bHasTurretBone ? Pitch : Pitch * Yaw;
 		}
+	}
+}
+
+void UBaseVehicleAnimInstance::AddSteeringWheelOffsets(ABaseVehicle* Vehicle, TArray<FVehicleBoneOffset>& OutOffsets) const
+{
+	const USkeletalMeshComponent* Mesh = GetSkelMeshComponent();
+	TInlineComponentArray<UVehicleSeatComponent*> Seats(Vehicle);
+	for (const UVehicleSeatComponent* Seat : Seats)
+	{
+		if (!Seat->bHasSteeringWheel || Seat->SteeringWheelBoneName.IsNone() || Mesh->GetBoneIndex(Seat->SteeringWheelBoneName) == INDEX_NONE)
+		{
+			continue;
+		}
+
+		static const EAxis::Type Axes[] = { EAxis::X, EAxis::Y, EAxis::Z };
+		FVehicleBoneOffset& Offset = OutOffsets.AddDefaulted_GetRef();
+		Offset.BoneName = Seat->SteeringWheelBoneName;
+		Offset.bTurnAroundBoneAxis = true;
+		Offset.BoneAxis = Axes[static_cast<uint8>(Seat->SteeringWheelAxis)];
+		// Actual steering (smoothed by AVS), the same value on every machine
+		Offset.BoneAxisAngle = FMath::DegreesToRadians(Vehicle->GetCurrentSteering() * Seat->SteeringWheelMaxAngle);
 	}
 }

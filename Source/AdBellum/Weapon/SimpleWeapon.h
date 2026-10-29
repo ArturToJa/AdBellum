@@ -70,6 +70,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ADS|Calibration")
 	bool bCalibrateADSYaw = true;
 
+	// Camera FOV while the gunner holds the aim button with this weapon
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "ADS", meta = (ClampMin = "5.0", ClampMax = "170.0"))
+	float ADSFOV = 45.0f;
+
+	// Grip sockets for the gunner's hand IK, looked up on SkeletalMesh first, then on StaticMesh
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HandIK")
+	FName LeftHandSocket = TEXT("L_HandIK");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "HandIK")
+	FName RightHandSocket = TEXT("R_HandIK");
+
+	// World transforms of the grip sockets. False when neither mesh has both sockets.
+	UFUNCTION(BlueprintCallable, Category = "HandIK")
+	bool GetHandIKTargets(FTransform& OutLeft, FTransform& OutRight) const;
+
 	// Turns ADS so its forward axis crosses the bullet trajectory at Distance (meters).
 	// Local only: every machine keeps its own ADS rotation, only the gunner looking through it needs it.
 	UFUNCTION(BlueprintCallable, Category = "ADS|Calibration")
@@ -96,6 +111,8 @@ public:
 	virtual void ChangeSightZero_Implementation(int32 Direction) override;
 
 	virtual float GetSightZeroDistance_Implementation() override;
+
+	virtual float GetWeaponFOV_Implementation() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD")
 	UTexture2D* WeaponReticleTexture;

@@ -7,6 +7,7 @@
 #include <Unit/BaseUnit.h>
 #include <Net/UnrealNetwork.h>
 #include <Weapon/WeaponChildComponent.h>
+#include "Weapon/SimpleWeapon.h"
 
 
 
@@ -136,4 +137,30 @@ void UGunnerSeatComponent::SetAim(float Yaw, float Pitch)
 	{
 		ReplicatedAim = ClampAim(FVector2D(Yaw, Pitch));
 	}
+}
+
+bool UGunnerSeatComponent::GetHandTargets(const AALSBaseCharacter* Unit, FTransform& OutLeft, FTransform& OutRight) const
+{
+	// The weapon this unit mans in this seat: its active weapon when that belongs to the seat, otherwise the first one
+	UGunnerSeatComponent* MutableThis = const_cast<UGunnerSeatComponent*>(this);
+	AActor* Weapon = MutableThis->GetWeapon(0);
+	if (Unit && Unit->ActiveWeaponActor)
+	{
+		for (int32 Index = 0; Index < WeaponArray.Num(); ++Index)
+		{
+			if (MutableThis->GetWeapon(Index) == Unit->ActiveWeaponActor)
+			{
+				Weapon = Unit->ActiveWeaponActor;
+				break;
+			}
+		}
+	}
+
+	const ASimpleWeapon* SimpleWeapon = Cast<ASimpleWeapon>(Weapon);
+	if (SimpleWeapon && SimpleWeapon->GetHandIKTargets(OutLeft, OutRight))
+	{
+		return true;
+	}
+	// A gunner seat can also have a steering wheel (driver and gunner in one)
+	return Super::GetHandTargets(Unit, OutLeft, OutRight);
 }

@@ -19,6 +19,8 @@
 class UNetworkComponent;
 class ABaseWeapon;
 class UGunnerSeatComponent;
+class USpringArmComponent;
+class UCameraComponent;
 
 UCLASS()
 class ADBELLUM_API ABaseVehicle : public AAVS_Vehicle, public IEnterable, public IFormable, public ISelectable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface
@@ -140,13 +142,75 @@ public:
 
 	virtual void RightMovementActionCompleted_Implementation() override;
 
-	// Handbrake, held while the action keeps triggering
+	// Handbrake, on while the key is held
 	virtual void JumpAction_Implementation(bool bValue) override;
 
 	virtual void InteractionAction_Implementation() override;
 
 	UFUNCTION(Server, Reliable)
 	void Server_InteractionAction();
+
+	// DRIVER CAMERA
+	// One look direction, relative to the vehicle (turns with it), drives the first person view, the third
+	// person arm and the driver's head. The driver's machine owns it and sends it to the server for the others.
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<USpringArmComponent> ThirdPersonCameraArm;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UCameraComponent> ThirdPersonCamera;
+
+	// First person at the driver's head. Off - third person (debugging), toggled with the camera held action.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Driver Camera")
+	bool bDriverFirstPerson = true;
+
+	// Socket of the driver unit's mesh the first person camera sits at
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Driver Camera")
+	FName FirstPersonCameraSocket = TEXT("FP_Camera");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Driver Camera")
+	float FirstPersonFOV = 90.0f;
+
+	// Look limits relative to the vehicle (degrees, X - min, Y - max)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Driver Camera")
+	FVector2D FirstPersonYawLimit = FVector2D(-135.0f, 135.0f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Driver Camera")
+	FVector2D FirstPersonPitchLimit = FVector2D(-60.0f, 45.0f);
+
+	// Third person turns all the way around, only pitch is limited
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Driver Camera")
+	FVector2D ThirdPersonPitchLimit = FVector2D(-45.0f, 20.0f);
+
+	// Degrees per unit of look input
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Driver Camera")
+	float DriverLookRate = 1.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Driver Camera")
+	bool bInvertDriverLookPitch = false;
+
+	// Driver look relative to the vehicle: exact on the driver's machine, replicated everywhere else
+	UFUNCTION(BlueprintPure, Category = "Driver Camera")
+	FRotator GetDriverLookRotation() const;
+
+	UFUNCTION(BlueprintPure, Category = "Driver Camera")
+	FRotator GetDriverLookWorldRotation() const;
+
+	virtual void CameraUpAction_Implementation(float Value) override;
+
+	virtual void CameraRightAction_Implementation(float Value) override;
+
+	// Toggles first / third person
+	virtual void CameraHeldAction_Implementation() override;
+
+	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
+
+	virtual void NotifyControllerChanged() override;
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	UFUNCTION(Server, Unreliable)
+	void Server_SetDriverLookRotation(FRotator NewLook);
 
 	//virtual void PrimarySelectionAction_Implementation() override;
 	//virtual void SecondarySelectionAction_Implementation() override;
@@ -197,8 +261,21 @@ private:
 	// Throttle, brake and steering back to zero
 	void ReleaseDriverInputs();
 
-	void ReleaseHandbrake();
+	// DRIVER CAMERA
+	UPROPERTY(Replicated)
+	FRotator ReplicatedDriverLook = FRotator::ZeroRotator;
 
-	// JumpAction only reports the key being held, the handbrake lets go when the reports stop
-	FTimerHandle HandbrakeReleaseTimer;
+	// Look on the driver's machine, ahead of ReplicatedDriverLook by the network delay
+	FRotator LocalDriverLook = FRotator::ZeroRotator;
+
+	FTimerHandle DriverLookSendTimer;
+
+	void AddDriverLook(float YawInput, float PitchInput);
+	FRotator ClampDriverLook(FRotator Look) const;
+	void SendDriverLook();
+
+	// Hides the head of the driver unit on this machine while it looks through it (first person)
+	void UpdateDriverHeadVisibility(bool bHide);
+
+	TWeakObjectPtr<AALSBaseCharacter> HiddenHeadUnit;
 };

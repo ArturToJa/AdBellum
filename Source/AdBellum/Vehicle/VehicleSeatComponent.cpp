@@ -6,6 +6,7 @@
 #include "System/AdBellumGameState.h"
 #include <Unit/BaseUnit.h>
 #include <Net/UnrealNetwork.h>
+#include "BaseVehicle.h"
 
 float UVehicleSeatComponent::LocationOffset = 90.0f;
 
@@ -96,4 +97,21 @@ bool UVehicleSeatComponent::GetUseADS()
 bool UVehicleSeatComponent::GetUseMainCameraTransform()
 {
 	return bUseMainCameraTransform;
+}
+
+bool UVehicleSeatComponent::GetHandTargets(const AALSBaseCharacter* Unit, FTransform& OutLeft, FTransform& OutRight) const
+{
+	if (!bHasSteeringWheel)
+	{
+		return false;
+	}
+	const ABaseVehicle* Vehicle = Cast<ABaseVehicle>(GetOwner());
+	const USkeletalMeshComponent* Mesh = Vehicle ? Vehicle->VehicleSkeletalMesh.Get() : nullptr;
+	if (!Mesh || !Mesh->DoesSocketExist(LeftHandSocket) || !Mesh->DoesSocketExist(RightHandSocket))
+	{
+		return false;
+	}
+	OutLeft = Mesh->GetSocketTransform(LeftHandSocket);
+	OutRight = Mesh->GetSocketTransform(RightHandSocket);
+	return true;
 }

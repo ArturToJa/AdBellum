@@ -99,6 +99,13 @@ public:
 	// True on the machine of the player sitting here (when that machine is not the server): aim is not delayed there
 	bool IsLocallyAimed() const { return UsesLocalAim(); }
 
+	// Gunner_Standing logic (camera, aiming, input), but the unit sits instead of standing
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Seat")
+	bool bSittingPose = false;
+
+	// Grips of the weapon this unit mans here (ASimpleWeapon hand sockets)
+	virtual bool GetHandTargets(const AALSBaseCharacter* Unit, FTransform& OutLeft, FTransform& OutRight) const override;
+
 private:
 	FVector2D ClampAim(FVector2D Aim) const;
 

@@ -17,6 +17,10 @@ struct FVehicleBoneOffset
 	FVector Translation = FVector::ZeroVector;
 	// Turns the bone around its own origin
 	FQuat Rotation = FQuat::Identity;
+	// Extra turn around one of the bone's own axes (steering wheel), applied after Rotation
+	bool bTurnAroundBoneAxis = false;
+	EAxis::Type BoneAxis = EAxis::X;
+	float BoneAxisAngle = 0.0f; // radians
 };
 
 // Builds the pose on the animation thread: reference pose plus BoneOffsets, no anim graph involved
@@ -57,6 +61,8 @@ private:
 	void AddWheelOffsets(const ABaseVehicle* Vehicle, const FTransform& MeshTransform, TArray<FVehicleBoneOffset>& OutOffsets) const;
 
 	void AddAimOffsets(const ABaseVehicle* Vehicle, const FTransform& MeshTransform, float DeltaSeconds, TArray<FVehicleBoneOffset>& OutOffsets);
+
+	void AddSteeringWheelOffsets(ABaseVehicle* Vehicle, TArray<FVehicleBoneOffset>& OutOffsets) const;
 
 	TWeakObjectPtr<ABaseVehicle> OwningVehicle;
 

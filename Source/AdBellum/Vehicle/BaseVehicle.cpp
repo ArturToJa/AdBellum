@@ -10,6 +10,9 @@
 #include "Weapon/WeaponChildComponent.h"
 #include "TimerManager.h"
 #include "AnimationRuntime.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
 
 ABaseVehicle::ABaseVehicle(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
@@ -23,6 +26,18 @@ ABaseVehicle::ABaseVehicle(const FObjectInitializer& ObjectInitializer) : Super(
 	DriverSeat->SeatRole = EALSStationaryRole::Driver;
 
 	OrdersManagerComponent = CreateDefaultSubobject<UOrdersManager>(TEXT("Order Manager Component"));
+
+	// Third person (debug) camera orbiting the vehicle. Rotation comes from the driver look, set in CalcCamera.
+	ThirdPersonCameraArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("ThirdPersonCameraArm"));
+	ThirdPersonCameraArm->SetupAttachment(VehicleMesh);
+	ThirdPersonCameraArm->TargetArmLength = 900.0f;
+	ThirdPersonCameraArm->TargetOffset = FVector(0.0f, 0.0f, 250.0f);
+	ThirdPersonCameraArm->bUsePawnControlRotation = false;
+	ThirdPersonCameraArm->bInheritRoll = false;
+	ThirdPersonCameraArm->bDoCollisionTest = true;
+
+	ThirdPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ThirdPersonCamera"));
+	ThirdPersonCamera->SetupAttachment(ThirdPersonCameraArm, USpringArmComponent::SocketName);
 
 	// Wheel, turret and gun bones are animated in C++, no anim blueprint needed
 	VehicleSkeletalMesh->SetAnimationMode(EAnimationMode::AnimationBlueprint);
@@ -164,6 +179,8 @@ void ABaseVehicle::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ABaseVehicle, TeamIndex);
 	DOREPLIFETIME(ABaseVehicle, PlayerPtr);
 	DOREPLIFETIME(ABaseVehicle, OwningFormation);
+	// The driver's machine has its own, newer value
+	DOREPLIFETIME_CONDITION(ABaseVehicle, ReplicatedDriverLook, COND_SkipOwner);
 }
 
 void ABaseVehicle::BeginPlay()
@@ -212,6 +229,8 @@ void ABaseVehicle::PossessedBy(AController* NewController)
 		SetHandbrakeInput(false);
 		SetEngineRunning(true);
 	}
+	// A new driver starts looking straight ahead
+	ReplicatedDriverLook = FRotator::ZeroRotator;
 }
 
 void ABaseVehicle::UnPossessed()
@@ -252,26 +271,10 @@ void ABaseVehicle::RightMovementActionCompleted_Implementation()
 
 void ABaseVehicle::JumpAction_Implementation(bool bValue)
 {
-	if (!bValue)
+	// JumpAction has a Pressed and a Released trigger: true when the key goes down, false when it comes up
+	if (bValue != GetHandbrakeInput())
 	{
-		ReleaseHandbrake();
-		return;
-	}
-
-	if (!GetHandbrakeInput())
-	{
-		SetHandbrakeInput(true);
-	}
-	constexpr float HandbrakeHoldTime = 0.15f;
-	GetWorldTimerManager().SetTimer(HandbrakeReleaseTimer, this, &ABaseVehicle::ReleaseHandbrake, HandbrakeHoldTime, false);
-}
-
-void ABaseVehicle::ReleaseHandbrake()
-{
-	GetWorldTimerManager().ClearTimer(HandbrakeReleaseTimer);
-	if (GetHandbrakeInput())
-	{
-		SetHandbrakeInput(false);
+		SetHandbrakeInput(bValue);
 	}
 }
 
@@ -430,4 +433,136 @@ int32 ABaseVehicle::GetInstanceIndex_Implementation()
 int ABaseVehicle::GetUnitType_Implementation()
 {
 	return 1;
+}
+
+//DRIVER CAMERA
+FRotator ABaseVehicle::GetDriverLookRotation() const
+{
+	return IsLocallyControlled() ? LocalDriverLook : ReplicatedDriverLook;
+}
+
+FRotator ABaseVehicle::GetDriverLookWorldRotation() const
+{
+	return (VehicleMesh->GetComponentQuat() * GetDriverLookRotation().Quaternion()).Rotator();
+}
+
+FRotator ABaseVehicle::ClampDriverLook(FRotator Look) const
+{
+	if (bDriverFirstPerson)
+	{
+		Look.Yaw = FMath::Clamp(FRotator::NormalizeAxis(Look.Yaw), FirstPersonYawLimit.X, FirstPersonYawLimit.Y);
+		Look.Pitch = FMath::Clamp(Look.Pitch, FirstPersonPitchLimit.X, FirstPersonPitchLimit.Y);
+	}
+	else
+	{
+		Look.Yaw = FRotator::NormalizeAxis(Look.Yaw);
+		Look.Pitch = FMath::Clamp(Look.Pitch, ThirdPersonPitchLimit.X, ThirdPersonPitchLimit.Y);
+	}
+	Look.Roll = 0.0f;
+	return Look;
+}
+
+void ABaseVehicle::AddDriverLook(float YawInput, float PitchInput)
+{
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
+	LocalDriverLook = ClampDriverLook(LocalDriverLook + FRotator(PitchInput * DriverLookRate, YawInput * DriverLookRate, 0.0f));
+
+	if (HasAuthority())
+	{
+		ReplicatedDriverLook = LocalDriverLook;
+	}
+	else if (!GetWorldTimerManager().IsTimerActive(DriverLookSendTimer))
+	{
+		// A fixed rate instead of once per input event, the timer also delivers the last value after the mouse stops
+		constexpr float DriverLookSendInterval = 1.0f / 20.0f;
+		GetWorldTimerManager().SetTimer(DriverLookSendTimer, this, &ABaseVehicle::SendDriverLook, DriverLookSendInterval, false);
+	}
+}
+
+void ABaseVehicle::SendDriverLook()
+{
+	Server_SetDriverLookRotation(LocalDriverLook);
+}
+
+void ABaseVehicle::Server_SetDriverLookRotation_Implementation(FRotator NewLook)
+{
+	ReplicatedDriverLook = ClampDriverLook(NewLook);
+}
+
+void ABaseVehicle::CameraUpAction_Implementation(float Value)
+{
+	AddDriverLook(0.0f, bInvertDriverLookPitch ? -Value : Value);
+}
+
+void ABaseVehicle::CameraRightAction_Implementation(float Value)
+{
+	AddDriverLook(Value, 0.0f);
+}
+
+void ABaseVehicle::CameraHeldAction_Implementation()
+{
+	bDriverFirstPerson = !bDriverFirstPerson;
+	// First person limits are tighter, bring the look back inside them
+	LocalDriverLook = ClampDriverLook(LocalDriverLook);
+}
+
+void ABaseVehicle::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
+{
+	AALSBaseCharacter* Driver = DriverSeat ? DriverSeat->GetOccupyingUnit() : nullptr;
+	const bool bFirstPerson = bDriverFirstPerson && Driver && Driver->GetMesh()->DoesSocketExist(FirstPersonCameraSocket);
+	UpdateDriverHeadVisibility(bFirstPerson && IsLocallyControlled());
+
+	if (bFirstPerson)
+	{
+		OutResult.Location = Driver->GetMesh()->GetSocketLocation(FirstPersonCameraSocket);
+		OutResult.Rotation = GetDriverLookWorldRotation();
+		OutResult.FOV = FirstPersonFOV;
+		return;
+	}
+
+	ThirdPersonCameraArm->SetRelativeRotation(GetDriverLookRotation());
+	Super::CalcCamera(DeltaTime, OutResult);
+}
+
+void ABaseVehicle::UpdateDriverHeadVisibility(bool bHide)
+{
+	AALSBaseCharacter* Driver = bHide && DriverSeat ? DriverSeat->GetOccupyingUnit() : nullptr;
+	AALSBaseCharacter* Hidden = HiddenHeadUnit.Get();
+	if (Hidden == Driver)
+	{
+		return;
+	}
+	// Local only: everybody else keeps seeing the driver's head
+	if (Hidden && Hidden->HeadComponent)
+	{
+		Hidden->HeadComponent->SetVisibility(true, true);
+	}
+	if (Driver && Driver->HeadComponent)
+	{
+		Driver->HeadComponent->SetVisibility(false, true);
+	}
+	HiddenHeadUnit = Driver;
+}
+
+void ABaseVehicle::NotifyControllerChanged()
+{
+	Super::NotifyControllerChanged();
+	if (IsLocallyControlled())
+	{
+		LocalDriverLook = FRotator::ZeroRotator;
+	}
+	else
+	{
+		// CalcCamera stops running here once this machine no longer drives, show the head again
+		UpdateDriverHeadVisibility(false);
+	}
+}
+
+void ABaseVehicle::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UpdateDriverHeadVisibility(false);
+	Super::EndPlay(EndPlayReason);
 }
