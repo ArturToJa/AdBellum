@@ -114,7 +114,7 @@ void ABaseAmmo::PlayEffects(EPhysicalSurface HitSurfaceEnum, FVector Location, F
 {
 	FImpactEffectDataStruct ImpactEffects = EffectsLibrary.GetImpactEffectData(HitSurfaceEnum);
 	const FVector AdjustedScale = EmitterBaseScale.operator*(IncomingVelocity.Length() / MuzzleVelocityMax);
-	if (ImpactEffects.ImpactEffect && (FMath::RandRange(1,6) == 1))
+	if (ImpactEffects.ImpactEffect && FMath::RandRange(1, 9) > 1)
 	{
 		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), ImpactEffects.ImpactEffect, Location, UKismetMathLibrary::Conv_VectorToRotator(IncomingVelocity), AdjustedScale);
 	}

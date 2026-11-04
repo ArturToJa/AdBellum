@@ -43,26 +43,88 @@ WHAT THE MODEL NEEDS
         Brake Torque, Tire Friction - tune after the first drive.
         Keep Wheel Mode = Raycast and Auto Wheel Radius = off.
    2. Auto Detect:
-        Steerable Axles  - axle numbers that steer (default: 1).
+        Steerable Axles  - axle numbers that steer (default: 1). Ignored on a tracked vehicle (see TRACKED
+        VEHICLES below) - every wheel is forced non-steerable there regardless of this list.
         Driven Axles     - axle numbers that get torque, empty = all.
         Handbrake Axles  - axle numbers held by the handbrake, empty = the last axle.
+        Bone names: lf_wheel_N_jnt / rt_wheel_N_jnt (standard - this bone spins/steers, and on most rigs also
+        carries the suspension height). lf_wheel_N_fake_jnt / rt_wheel_N_fake_jnt is used only as a fallback
+        when no plain _jnt sibling exists; some rigs (e.g. Vigilante's BMP2) leave it as a dead locator with
+        nothing skinned to it, so don't rely on it being visible.
+        Vigilante rigs also add lf_wheel_N_root_jnt / rt_wheel_N_root_jnt as the _jnt bone's parent: on BMP2
+        that bone alone carries the track-deformation skin weight (the wheel's own _jnt only spins, moving it
+        does not drag the track). When this sibling exists it is auto-detected and recorded as
+        FVehicleWheelSetup::SuspensionBoneName, so the anim instance moves it for suspension height instead of
+        _jnt, which then only turns - keeping the wheel correctly seated inside the track loop. Confirm this
+        per rig by moving the _jnt vs _root_jnt bone in the Skeletal Mesh Editor's preview pose: whichever one
+        visibly drags the track with it is the real suspension bone.
    3. Only when the standard roles are not enough (rear axle steering against the front, one odd wheel):
-      fill Wheel Setups with one row per wheel (bone name + flags). A filled list replaces auto detection.
-   4. Tracked vehicles: every *_wheel_N_jnt bone becomes a wheel. Clear Steerable Axles for now,
-      skid steering is not implemented yet.
-   5. To see the suspension range in the viewport enable Default Wheel Config > Editor Preview.
+      fill Wheel Setups with one row per wheel (bone name + flags, including SuspensionBoneName /
+      SuspensionPivotBoneName if needed). A filled list replaces auto detection entirely.
+      FVehicleWheelSetup::bFixedSuspension multiplies a wheel's Spring Strength/Damping by 20 (rigid - never
+      visibly compresses) rather than zeroing Spring Length: a Line trace's ground-detection reach is Spring
+      Length + Wheel Radius * 2, so zeroing it instead of stiffening it also shortens how far the wheel can
+      reach to find the ground - and a fixed wheel's attach height doesn't drop to compensate the way a
+      compliant wheel's spring compression does, so it can lose contact at a body height a compliant wheel
+      comfortably still reaches (and AVS's physics then gets the wheel's spin stuck at zero - confirmed on
+      BMP2's sprocket). Auto detection sets bFixedSuspension on a tracked vehicle's first/last axle (the
+      sprocket/idler, which is fixed in reality); every other auto-detected wheel uses the one Default Wheel
+      Config as-is.
+      FVehicleWheelSetup::SuspensionPivotBoneName (auto-detected as the Vigilante _hidr_chasing_jnt sibling,
+      e.g. BMP2) is not itself skinned to any visible mesh on BMP2 (check per rig before assuming the same),
+      but it is also given the rotation that same swing implies (GetWheelSuspensionTranslation's
+      OutPivotRotation), so a visible strut/rod rigidly childed to it (BMP2's _hidr_rod_jnt) swings with the
+      wheel via normal FK - cosmetic, needs no translation of its own, just this rotation on its parent. When
+      present, SuspensionBoneName is swung around its reference position instead of moved in a straight line,
+      which is noticeably more accurate the more the wheel travels (large travel - e.g. over a bump - is
+      exactly where a straight line looks wrong).
+      Real trailing arms genuinely do swing fore/aft as they travel, not just up/down - but their travel is
+      itself limited (bump stops, shock absorbers, the torsion bar reaching its angle limit). FVehicleWheelSetup
+      ::MaxSuspensionArcSwing (default 8cm) is the fore/aft swing at full suspension travel (Default Wheel
+      Config > Spring Length), scaled smoothly down from there as travel decreases - not a clamp on the arc's
+      raw geometry, which would swing exactly this far within a sliver of travel and then just sit there
+      (looks like a snap, not a swing, especially driving slowly) when the pivot bone isn't a true short arm
+      close to the wheel (e.g. a hull-mounted reference like BMP2's _hidr_chasing_jnt - the arc's own raw
+      sensitivity depends entirely on exactly where that bone sits, which this sidesteps). The arc still
+      decides which direction (forward or backward) the wheel swings as it travels. Raise Max Suspension Arc
+      Swing if wheels look too stiff, lower it if they still look loose or collide at full travel.
+      All three of SuspensionBoneName / SuspensionPivotBoneName / bFixedSuspension are per-wheel, not gated by
+      bTracked, so a half-track (steerable wheeled axles mixed with brake-steer tracked axles on one vehicle)
+      could configure them per wheel today. bTracked itself is still all-or-nothing though: it forces every
+      wheel non-steerable (next paragraph) and the skid-steer/handbrake logic below applies to the whole
+      vehicle - a real half-track would need those to become per-axle too, not implemented.
+   4. To see the suspension range in the viewport enable Default Wheel Config > Editor Preview.
 
-   6. SUSPENSION MUST CARRY THE MASS. Spring Strength is in kN/m (25 = 25 000 N/m). If it is too weak for the
+   TRACKED VEHICLES (Class Defaults, category "Wheels|Tracked"): tick bTracked. No wheel turns to steer - this
+      is enforced automatically (every wheel's bSteerable is forced off while bTracked is on, regardless of
+      Steerable Axles or a stale per-instance override), so there is nothing to configure for it. Turning
+      instead locks (brakes) wheels on the side the vehicle turns toward while the other side drives - this
+      is AVS's real per-wheel brake friction (UAVS_Wheel::LockWheel), not a cosmetic trick. The number of
+      wheels locked grows with how hard the turn is, so a gentle turn only brakes the lead wheels instead of
+      snapping the whole side to a stop. Releasing the forward key applies the handbrake (both sides), the way
+      a tracked vehicle actually stops.
+      Track scroll visuals (optional): Left/Right Track Material Slot name the material slots on the vehicle's
+      skeletal mesh; Track Scroll Parameter Name (default OffsetV) is the scalar parameter scrolled from each
+      side's real simulated wheel speed (so a locked or stationary track visibly stops scrolling). Track Scroll
+      Speed Scale tunes how fast the texture scrolls relative to that speed.
+      The first/last wheel's (sprocket/idler, bFixedSuspension) own spin bone rotation is substituted with one
+      driven by the side's average speed instead of its own AVS reading (ABaseVehicle::GetWheelSpinRotation) -
+      AVS's own angular velocity for one of these specific wheels can get stuck at exactly zero after it
+      briefly loses ground contact and never recovers even once contact resumes, otherwise freezing that one
+      wheel's visible spin for the rest of the drive (confirmed on BMP2). This also means GetTrackSpeed's
+      average, and the scroll it drives, already excludes the first/last wheel for the same reason.
+
+   5. SUSPENSION MUST CARRY THE MASS. Spring Strength is in kN/m (25 = 25 000 N/m). If it is too weak for the
       weight on each wheel, the springs sit fully compressed and the vehicle jumps and shakes.
       Same behaviour as the AVS demo APC (44% sag, same damping ratio):
         load per wheel (N)  = Mass(kg) * 9.81 / number of wheels
         Spring Strength     = load / (0.44 * Spring Length(cm) / 100) / 1000
         Spring Damping      = 0.214 * sqrt(Spring Strength * 1000 * Mass / wheels) / 1000
       Example LCV Coyote: 13 500 kg, 6 wheels, Spring Length 40 -> Strength 126, Damping 3.6.
-   7. VehicleMesh body (select VehicleMesh > Physics): Mass Override, Angular Damping 1.0 (calms body wobble),
+   6. VehicleMesh body (select VehicleMesh > Physics): Mass Override, Angular Damping 1.0 (calms body wobble),
       Linear Damping 0, COM Nudge Z about -20. A large negative COM Nudge (e.g. -200) puts the centre of mass
       near the ground and makes the vehicle rock.
-   8. Bones of the model must have scale 1.0, scaled bones make wheels sit or size wrong (AVS docs).
+   7. Bones of the model must have scale 1.0, scaled bones make wheels sit or size wrong (AVS docs).
 
 4. ENGINE AND GEARS (Class Defaults, category "Advanced Vehicle System")
    1. Transmission > Gears: index 0 is reverse, 1+ are forward gears. Set speeds and torque per gear.
@@ -70,6 +132,48 @@ WHAT THE MODEL NEEDS
    3. Leave Automatic Transmission and Automatic Shifter Position on: forward / backward input then
       drives and reverses without a shifter.
    4. Leave Start With Engine Running off. The engine starts when a player takes the driver seat.
+   5. VehicleMesh > Physics > Mass: tick Override Mass and set Mass (Kg) to the real vehicle weight.
+      Override Mass defaults off, so without this the simulated mass comes from the collision mesh's
+      volume * density instead of anything you configured - almost never the real weight, and the single
+      biggest cause of a vehicle accelerating much faster than it should.
+
+   SURFACE-DEPENDENT DRIVING (Class Defaults, category "Wheels|Surfaces"): AVS already multiplies each wheel's
+      Tire Friction by the ground's own PhysicalMaterial Friction every tick (UAVS_Wheel::GetContactSurfaceType,
+      the same per-wheel ground reading the wheel VFX Surface Effects already use) - so driving already varies
+      by surface IF the project's PhysicalMaterial assets actually have different Friction values. Check that
+      first (Project Settings > Physics > Physical Surfaces lists the named surfaces; each ground's
+      PhysicalMaterial asset sets its own Friction).
+      Default Wheel Config's Rolling Resistance is NOT surface-dependent by itself though, and realistically
+      most of a vehicle's speed loss on soft ground (mud, sand, loose dirt) comes from resistance/sinkage, not
+      lost grip. Surface Driving Modifiers (a map of Physical Surface -> Rolling Resistance Multiplier / Tire
+      Friction Multiplier, re-applied every tick from Default Wheel Config so it can't drift) exists for that:
+      give a surface a Rolling Resistance Multiplier > 1 and the vehicle's achievable speed and acceleration on
+      it drop accordingly, without having to touch Gears. A surface missing from the map uses Default Surface
+      Driving Modifier (1.0/1.0 - no change), so this is opt-in per vehicle; leaving the map empty changes
+      nothing. The project does not currently have a dedicated "Asphalt" PhysicalSurface - BMP2 uses
+      SurfaceType6 "Stone" for its PhysicalMaterial_Concrete (the closest existing paved-ground material); add a
+      real Asphalt/Concrete PhysicalSurface in DefaultEngine.ini if finer-grained control over paved surfaces
+      is needed later.
+      BMP2 as a reference point for a tracked IFV/APC (14.4t, 65 km/h asphalt / 40 km/h dirt):
+        Stone (paved): 1.0 / 1.0 (baseline)         Grass: 1.3 / 0.95          Sand: 2.0 / 0.9
+        Dirt:          1.6 / 1.0 (-> ~40 km/h)       Mud:   2.6 / 0.8           Water: 4.0 / 0.6
+      These are a first-pass, reasoned from the dirt/asphalt speed ratio given for BMP2 plus general tracked-
+      vehicle behavior, not measured - retune per vehicle type after testing (wheeled vehicles likely need
+      lower Tire Friction Multipliers on soft ground than tracks do, since wheels lose grip there more than
+      tracks).
+      A Landscape only reports the right PhysicalMaterial to this (and to anything else reading Hit.PhysMaterial,
+      e.g. weapon impact effects) if every layer actually painted into its material's layer blend has a Physical
+      Material assigned there - a layer with none set reports no material at all (falls back to Default) even
+      though it looks correctly painted in the viewport. Check this first if a surface seems undetected.
+
+   WHEEL VFX/SFX (Class Defaults, category "AdvancedVehicleSystem|Wheel Effects", inherited from AVS_Vehicle):
+      Global Wheel Effects / Effects For Default Surface / Surface Effects only need configuring on
+      BP_BaseVehicle - ABaseVehicle::SyncWheelEffectsFromBaseVehicle overwrites every subclass's own copy with
+      BP_BaseVehicle's at BeginPlay, so a child vehicle (BP_BMP2, BP_Coyote_LSV, ...) never needs its own kept-
+      in-sync-by-hand copy of these three. Anything edited directly on a child class here is therefore
+      overwritten the moment it plays - that is intentional, not a bug. Per-wheel overrides (an individual
+      AVS_Wheel's own Surface Effect Overrides / Global Effects Override / Effects For Default Surface Override)
+      are untouched by this and still work normally for a wheel that really should differ from the rest.
 
 5. SEATS
    One seat component per place in the vehicle, as a child of "Vehicle Skeletal Mesh" (pick the bone
@@ -86,6 +190,13 @@ WHAT THE MODEL NEEDS
       person (debug, ThirdPersonCameraArm). Look limits, rate and pitch inversion are set there. Other players
       see the driver's head turn where the driver looks. Do not add camera components or CameraUp/Right
       events to vehicle blueprints, they override this.
+      Hide Occupant Mesh (any seat, default off): hides whichever unit sits here entirely (not just the head -
+      SetVisibility recursive, so held weapons/gear too), for every machine regardless of who or what controls
+      that unit. Tick this for an enclosed seat (e.g. Driver on a closed-hull IFV like BMP2) where nobody can
+      see the occupant from outside anyway and a standing human doesn't actually fit the real position cleanly
+      enough for any seated pose to look right. Leave off for an exposed seat (Gunner_Standing, an open-top
+      vehicle's Driver) that should stay visible. This is separate from the driver head-hide above, which only
+      ever hides the head and only from the driver's own camera (so it doesn't block their own view).
    2. Passengers: BP_VehicleSeatComponent, Seat Role = Passenger.
    3. Gunners: BP_GunnerSeatComponent, one per gunner (see step 7).
    4. Place and rotate each seat where the character should sit. The character is attached to the seat

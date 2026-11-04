@@ -24,6 +24,41 @@ class USpringArmComponent;
 class UCameraComponent;
 class UVehicleAccessPoint;
 class ABaseUnit;
+class UMaterialInstanceDynamic;
+class UAVS_Wheel;
+
+// Internal, built by ABaseVehicle::BuildWheelsFromSetup from FVehicleWheelSetup - see GetWheelSuspensionTranslation.
+// Reflected (USTRUCT/UPROPERTY) even though nothing outside this class needs to see it: a plain C++ member
+// here would not survive PIE's actor duplication (which only copies UPROPERTY data), going back to default-
+// constructed/empty on the play-world vehicle while BuildWheelsFromSetup's editor-world log looked correct.
+USTRUCT()
+struct FWheelSuspensionArc
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FName SuspensionBoneName = NAME_None;
+	// Reference-pose vector from SuspensionPivotBoneName to SuspensionBoneName, in mesh component space.
+	// Only meaningful when bHasPivot.
+	UPROPERTY()
+	FVector PivotToSuspensionRefPose = FVector::ZeroVector;
+	UPROPERTY()
+	bool bHasPivot = false;
+	// Copied from FVehicleWheelSetup::MaxSuspensionArcSwing
+	UPROPERTY()
+	float MaxArcSwing = 8.0f;
+	// The wheel's full suspension travel (DefaultWheelConfig.SpringLength at the time this was built), used
+	// to turn a frame's vertical movement into a fraction of total travel for the fore/aft swing - see
+	// GetWheelSuspensionTranslation.
+	UPROPERTY()
+	float MaxTravel = 0.0f;
+	// Copied from FVehicleWheelSetup::SuspensionPivotBoneName when bHasPivot - the bone GetWheelSuspensionTranslation's
+	// OutPivotRotation is meant for (e.g. BMP2's _hidr_chasing_jnt). Purely cosmetic: not itself skinned to any
+	// visible mesh on BMP2, but its child (_hidr_rod_jnt) represents the suspension arm/strut and should swing
+	// with the wheel for a fully realistic look even though nothing is skinned to track its position directly.
+	UPROPERTY()
+	FName PivotBoneName = NAME_None;
+};
 
 UCLASS()
 class ADBELLUM_API ABaseVehicle : public AAVS_Vehicle, public IEnterable, public IFormable, public ISelectable, public IOrderable, public ICustomizable, public IVehicle, public IALSInputInterface, public IALSADSInterface, public ISelectionMenuProvider
@@ -116,6 +151,16 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels")
 	FAVS1_Wheel_Config DefaultWheelConfig;
 
+	// How driving feels on each kind of ground (Project Settings > Physics > Physical Surfaces), relative to
+	// Default Wheel Config - see FVehicleSurfaceDrivingModifier. A surface with no entry here uses
+	// Default Surface Driving Modifier (1.0/1.0, i.e. no change), so an empty map leaves every vehicle's
+	// current behavior untouched until this is actually configured for it.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Surfaces")
+	TMap<TEnumAsByte<EPhysicalSurface>, FVehicleSurfaceDrivingModifier> SurfaceDrivingModifiers;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Surfaces")
+	FVehicleSurfaceDrivingModifier DefaultSurfaceDrivingModifier;
+
 	// Axles that steer, used when wheels are found by bone name
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Auto Detect")
 	TArray<int32> SteerableAxles = { 1 };
@@ -131,6 +176,63 @@ public:
 	// WheelSetups, or what the skeleton's standard wheel bones give when WheelSetups is empty
 	UFUNCTION(BlueprintCallable, Category = "Wheels")
 	TArray<FVehicleWheelSetup> GetEffectiveWheelSetups() const;
+
+	// The bone that should receive a wheel's suspension-height offset (FVehicleWheelSetup::SuspensionBoneName)
+	// and what translation to put on it, swung around FVehicleWheelSetup::SuspensionPivotBoneName's reference
+	// position when one was recorded (closer to how a real hinged arm moves) or applied as a straight line
+	// otherwise. RawTranslation is the uncorrected delta, as if WheelBoneName received the wheel's full
+	// movement itself. Returns NAME_None (OutTranslation untouched) when the wheel has no separate suspension
+	// bone, meaning WheelBoneName should receive RawTranslation itself. When a pivot bone is set, also outputs
+	// the rotation that same swing implies for it (OutPivotBoneName/OutPivotRotation, NAME_None/identity
+	// otherwise) - cosmetic, for a visible strut/rod bone rigidly childed to the pivot to swing with the wheel
+	// via normal FK, without needing its own offset entry. Used by UBaseVehicleAnimInstance.
+	FName GetWheelSuspensionTranslation(FName WheelBoneName, const FVector& RawTranslation, FVector& OutTranslation, FName& OutPivotBoneName, FQuat& OutPivotRotation) const;
+
+	// Whether WheelBoneName is one of FVehicleWheelSetup::bFixedSuspension's wheels. These have no suspension
+	// bone of their own to apply translation to (see GetWheelSuspensionTranslation), so UBaseVehicleAnimInstance
+	// instead suppresses translation on the wheel's own bone entirely for them - the spring isn't literally
+	// rigid any more (see BuildWheelsFromSetup, needed for reliable ground contact), so without this a tiny
+	// residual compression would otherwise visibly move the wheel relative to the track geometry around it,
+	// which has nothing animating it for these wheels and stays fixed in its reference pose.
+	bool IsFixedSuspensionWheel(FName WheelBoneName) const { return FixedSuspensionWheelBones.Contains(WheelBoneName); }
+
+	// TRACKED VEHICLES
+
+	// No wheel turns to steer: the vehicle turns by locking (braking) wheels on the side it turns toward
+	// while the other side drives, like a real tracked vehicle's brake-steer. Leave Steerable Axles empty.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Tracked")
+	bool bTracked = false;
+
+	// Cosmetic per-side track scroll "speed": the side's road wheels' (excluding the first/last - see
+	// GetWheelSpinRotation) actual simulated angular velocity, averaged (so it already reflects slip, locked
+	// wheels and reverse) and scaled by TrackScrollSpeedScale.
+	UFUNCTION(BlueprintPure, Category = "Wheels|Tracked")
+	float GetTrackSpeed(bool bRight) const;
+
+	// The raw, wheel-local-space spin rotation to actually use for Wheel's spin bone - RawSpinRotation
+	// unchanged for most wheels, but for a tracked vehicle's first/last wheel (sprocket/idler,
+	// FVehicleWheelSetup::bFixedSuspension) substituted with one accumulated from the side's own reliable
+	// average speed instead. AVS's own per-wheel angular velocity can get stuck at exactly zero for one of
+	// these specific wheels after it briefly loses ground contact (shorter trace reach, no suspension to
+	// compensate for it) and never recovers even once contact resumes, which otherwise freezes that one
+	// wheel's visible spin for the rest of the drive (confirmed on this project's own BMP2). A tracked
+	// vehicle's wheels are all mechanically forced to the same surface speed by the track regardless, so this
+	// is also more accurate, not just a workaround. Used by UBaseVehicleAnimInstance::AddWheelOffsets.
+	UFUNCTION(BlueprintCallable, Category = "Wheels|Tracked")
+	FQuat GetWheelSpinRotation(const UAVS_Wheel* Wheel, const FQuat& RawSpinRotation) const;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Tracked", meta = (EditCondition = "bTracked"))
+	float TrackScrollSpeedScale = 1.0f;
+
+	// Material slots on VehicleSkeletalMesh scrolled by GetTrackSpeed. Empty - no track visual scroll.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Tracked", meta = (EditCondition = "bTracked"))
+	FName LeftTrackMaterialSlot;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Tracked", meta = (EditCondition = "bTracked"))
+	FName RightTrackMaterialSlot;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wheels|Tracked", meta = (EditCondition = "bTracked"))
+	FName TrackScrollParameterName = TEXT("OffsetV");
 
 	// IEnterable interface
 	virtual UVehicleAccessPoint* TryBookSeat_Implementation(AALSBaseCharacter* InUnit) override;
@@ -282,6 +384,27 @@ private:
 	// Creates a raycast UAVS_Wheel on the bone of every effective wheel setup
 	void BuildWheelsFromSetup();
 
+	// Re-derives every wheel's RollingResistance/TireFriction from DefaultWheelConfig and the matching
+	// SurfaceDrivingModifiers entry for whatever ground that wheel is currently touching. Called every tick
+	// (AVS_AlwaysTick) since a wheel's contact surface can change every tick.
+	void UpdateSurfaceDrivingModifiers();
+
+	// Overwrites this vehicle's own GlobalWheelEffects/EffectsForDefaultSurface/SurfaceEffects with
+	// BP_BaseVehicle's, so every vehicle type shares one wheel-VFX/SFX config instead of each Blueprint
+	// subclass needing its own kept-in-sync-by-hand copy. Called from BeginPlay.
+	void SyncWheelEffectsFromBaseVehicle();
+
+	// BoneName -> suspension arc data of every effective wheel setup that has one, rebuilt by BuildWheelsFromSetup.
+	// Needs UPROPERTY: PIE duplicates the placed actor rather than rerunning construction, and only reflected
+	// data survives that duplication - a plain member here would come through empty on the play-world vehicle.
+	UPROPERTY()
+	TMap<FName, FWheelSuspensionArc> WheelSuspensionArcs;
+
+	// Backs IsFixedSuspensionWheel, rebuilt by BuildWheelsFromSetup alongside WheelSuspensionArcs (same
+	// UPROPERTY need, see above).
+	UPROPERTY()
+	TSet<FName> FixedSuspensionWheelBones;
+
 	// Throttle, brake and steering back to zero
 	void ReleaseDriverInputs();
 
@@ -308,4 +431,46 @@ private:
 	void UpdateDriverHeadVisibility(bool bHide);
 
 	TWeakObjectPtr<AALSBaseCharacter> HiddenHeadUnit;
+
+	// TRACKED VEHICLES
+	UPROPERTY()
+	TArray<TObjectPtr<UAVS_Wheel>> LeftTrackWheels;
+	UPROPERTY()
+	TArray<TObjectPtr<UAVS_Wheel>> RightTrackWheels;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> LeftTrackMID;
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> RightTrackMID;
+
+	// GetTrackSpeed(), integrated over time: the actual scrolled distance, since the scroll parameter is a
+	// position, not a speed - setting it to the instantaneous speed every tick would freeze it once the
+	// vehicle reaches a constant speed.
+	float LeftTrackOffset = 0.0f;
+	float RightTrackOffset = 0.0f;
+
+	// GetWheelSpinRotation()'s substitute spin angle for the first/last wheel of each side, integrated over
+	// time the same way AVS itself accumulates a wheel's own spin (UAVS_Wheel::TickComponent) - degrees,
+	// wrapped to stay bounded over a long drive.
+	float LeftFixedWheelSpinAngle = 0.0f;
+	float RightFixedWheelSpinAngle = 0.0f;
+
+	// The side's road wheels' (excluding the first/last) average angular velocity in rad/s - see
+	// GetWheelSpinRotation for why the first/last are excluded. GetTrackSpeed is this scaled for the cosmetic
+	// material scroll; GetWheelSpinRotation's accumulation uses the raw value directly.
+	float GetReliableWheelAngVel(bool bRight) const;
+
+	// Sorts GetWheels() into LeftTrackWheels/RightTrackWheels by bone name prefix (lf_/rt_)
+	void BuildTrackWheelArrays();
+
+	// Locks a growing number of wheels on the side Turn points toward (0 at Turn==0, the whole side at |Turn|==1),
+	// so a gentle turn only brakes the lead wheels instead of snapping the whole side to a stop.
+	void UpdateTrackSteeringLock(float Turn);
+
+	static void SetTrackLockCount(const TArray<TObjectPtr<UAVS_Wheel>>& Side, int32 LockCount);
+
+	// Creates the two dynamic track materials on first use and scrolls them from GetTrackSpeed
+	void UpdateTrackVisuals();
+
+	virtual void AVS_AlwaysTick() override;
 };

@@ -41,10 +41,29 @@ public:
 	//OnGunnerWeaponChanged GunnerWeaponChanged;
 
 
-	UPROPERTY(Replicated,EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(ReplicatedUsing = OnRep_OccupyingUnit, EditAnywhere, BlueprintReadOnly)
 	AALSBaseCharacter* OccupyingUnit = nullptr;
+
+	UFUNCTION()
+	void OnRep_OccupyingUnit(AALSBaseCharacter* PreviousOccupyingUnit);
+
 	virtual bool SetOccupyingUnit(AALSBaseCharacter* InUnit);
 	AALSBaseCharacter* GetOccupyingUnit();
+
+	// Hides the whole mesh (SetVisibility, recursive - also hides held weapons/gear) of whichever unit sits
+	// here, for every machine, regardless of who or what controls that unit - not just the local driver's own
+	// view. For an enclosed seat (e.g. Driver) nobody can see the occupant from outside the hull anyway, and a
+	// standing human doesn't actually fit a real IFV driver's position cleanly enough for any seated pose to
+	// look right. Leave off for an exposed seat (Gunner_Standing) that should stay visible.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+	bool bHideOccupantMesh = false;
+
+private:
+	// Shared by OnRep_OccupyingUnit (clients) and SetOccupyingUnit/ClearOccupyingUnit (the server's own local
+	// view, which never receives its own OnRep) so both apply the exact same rule.
+	void ApplyOccupantMeshVisibility(AALSBaseCharacter* Unit, bool bHide) const;
+
+public:
 
 	void BookSeat(AALSBaseCharacter* InUnit);
 	void ClearBookedSeat();
@@ -93,4 +112,11 @@ private:
 
 	AALSBaseCharacter* BookingUnit = nullptr;
 	static float LocationOffset;;
+
+	// Delays ApplyOccupantMeshVisibility(Unit, true) by the same 1 second
+	// AALSBaseCharacter::Server_SitCharacterDown_Implementation itself waits before actually attaching the
+	// character (CharacterAttachmentTimer) - without this the mesh vanished a full second early, mid-climb-in,
+	// instead of exactly when the unit is actually seated.
+	void ScheduleOccupantMeshHide(AALSBaseCharacter* Unit);
+	FTimerHandle OccupantHideTimer;
 };
