@@ -12,6 +12,7 @@
 #include "Engine/Engine.h"
 #include <Kismet/GameplayStatics.h>
 #include <NiagaraFunctionLibrary.h>
+#include "Particles/ParticleSystem.h"
 
 
 // Sets default values
@@ -61,12 +62,68 @@ void ASimpleWeapon::BeginPlay()
 	constexpr float OwnerStateInterval = 0.25f;
 	GetWorldTimerManager().SetTimer(OwnerStateTimer, this, &ASimpleWeapon::RefreshOwnerDependentState,
 		OwnerStateInterval, true, FMath::FRandRange(0.0f, OwnerStateInterval));
+
+	if (EBarrel)
+	{
+		EBarrel->BeforeShotFired.AddDynamic(this, &ASimpleWeapon::HandleBeforeShotFired);
+	}
 }
 
 void ASimpleWeapon::RefreshOwnerDependentState()
 {
 	UpdateClientSideAim();
 	EnsureADSCalibrated();
+}
+
+void ASimpleWeapon::HandleBeforeShotFired()
+{
+	// BeforeShotFired is itself replicated by EBarrel (ReplicateShotFiredEvents), so this already runs locally
+	// on every machine - the camera shake is purely cosmetic and needs no further replication.
+	if (CameraShakeClass)
+	{
+		UGameplayStatics::PlayWorldCameraShake(GetWorld(), CameraShakeClass, WeaponRoot->GetComponentLocation(), ShakeInnerRadius, ShakeRange);
+	}
+
+	if (HasAuthority())
+	{
+		Multicast_PlayEffects();
+	}
+	else
+	{
+		Server_PlayEffects();
+	}
+}
+
+void ASimpleWeapon::Server_PlayEffects_Implementation()
+{
+	Multicast_PlayEffects();
+}
+
+void ASimpleWeapon::Multicast_PlayEffects_Implementation()
+{
+	PlayEffects();
+}
+
+void ASimpleWeapon::PlayEffects()
+{
+	if (!EBarrel)
+	{
+		return;
+	}
+	const FVector Location = EBarrel->GetComponentLocation();
+	const FRotator Rotation = EBarrel->GetComponentRotation();
+	if (FireVX)
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), FireVX, Location, Rotation, FireVXScale);
+	}
+	else if (FireVX_Legacy)
+	{
+		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), FireVX_Legacy, Location, Rotation, FireVXScale);
+	}
+	if (FireSX)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, FireSX, Location);
+	}
 }
 
 void ASimpleWeapon::UpdateClientSideAim()
@@ -240,6 +297,11 @@ UTexture2D* ASimpleWeapon::GetWeaponHUDReticle_Implementation()
 	return WeaponReticleTexture;
 }
 
+FVector2D ASimpleWeapon::GetWeaponReticleSize_Implementation()
+{
+	return WeaponReticleSize;
+}
+
 FVector ASimpleWeapon::GetCalibrationVector_Implementation(float Distance)
 {
 	return EBarrel->GetForwardVector() * Distance * 100.0f + EBarrel->GetComponentLocation();
@@ -254,6 +316,21 @@ FVector ASimpleWeapon::getADSTarget_Implementation()
 FRotator ASimpleWeapon::getADSRotation_Implementation()
 {
 	return ADS->GetComponentRotation();
+}
+
+FRotator ASimpleWeapon::getADSCalibrationRotation_Implementation()
+{
+	if (!ADS || !bHasBaseADSRotation)
+	{
+		return FRotator::ZeroRotator;
+	}
+
+	// CalibrateADS always resets ADS to BaseADSRelativeRotation before applying its Delta, so the current
+	// world rotation is Delta * BaseWorldQuat - recompute BaseWorldQuat (without touching ADS) to solve for Delta.
+	const USceneComponent* AttachParent = ADS->GetAttachParent();
+	const FQuat ParentWorldQuat = AttachParent ? AttachParent->GetComponentQuat() : FQuat::Identity;
+	const FQuat BaseWorldQuat = ParentWorldQuat * BaseADSRelativeRotation.Quaternion();
+	return (ADS->GetComponentQuat() * BaseWorldQuat.Inverse()).Rotator();
 }
 
 float ASimpleWeapon::GetWeaponFOV_Implementation()

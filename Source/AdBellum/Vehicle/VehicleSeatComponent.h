@@ -34,6 +34,12 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	EALSStationaryRole SeatRole;
+
+	// Aim Down Sights: the occupant aims through their own weapon's sight, normal ALS behaviour. Only ever
+	// actually used for Gunner_Standing (GetUseADS gates it to that role) - an open mount with no vehicle
+	// sight of its own, where the weapon's sight really is what the gunner looks through. An enclosed Gunner
+	// (or Driver, Passenger) uses Use Main Camera Transform below instead, a fixed vehicle optic/vision-port
+	// rather than the weapon's own ADS point.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	bool bUseADS;
 	OnExitSeatDelegate ExitDelegate;
@@ -71,12 +77,25 @@ public:
 	bool IsSeatAvailable();
 	bool IsSeatBookedFor(AALSBaseCharacter* InUnit);
 	EALSStationaryRole GetRole();
+
+	// Gated to SeatRole == Gunner_Standing regardless of the raw bUseADS value - see its comment above.
 	bool GetUseADS();
 
+	// Main Camera Transform: the occupant's camera comes from Camera Socket Name on the vehicle mesh (a fixed
+	// periscope/vision-port/sight) instead of wherever this seat happens to be placed, or - for the Driver,
+	// via ABaseVehicle::CalcCamera - the driver character's own cramped FP_Camera head socket (which leaves a
+	// driver unable to see much of their surroundings inside a closed hull).
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	bool bUseMainCameraTransform;
 
 	bool GetUseMainCameraTransform();
+
+	// Socket on the vehicle's skeletal mesh (not this seat's own bone/socket) this seat's camera uses when
+	// Use Main Camera Transform is on. None - falls back to this seat's own component transform (or, for the
+	// Driver, the character's own FP_Camera socket).
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Camera", meta = (EditCondition = "bUseMainCameraTransform"))
+	FName CameraSocketName = NAME_None;
+
 	void ExitSeat();
 
 	// STEERING WHEEL

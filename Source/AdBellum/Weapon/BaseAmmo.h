@@ -53,6 +53,54 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	UMaterial* DecalMaterial;
 
+	// HE (high explosive): detonates on impact, dealing radial damage instead of DealDamage's single-actor hit
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion")
+	bool bIsHE = false;
+
+	// Preferred explosion VFX, spawned instead of ExplosionVFX_Legacy when set
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	TObjectPtr<class UNiagaraSystem> ExplosionVFX;
+
+	// Explosion VFX used while ExplosionVFX is not set
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	TObjectPtr<class UParticleSystem> ExplosionVFX_Legacy;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	FVector ExplosionVFXScale = FVector(0.7f, 0.7f, 0.7f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	TObjectPtr<class USoundBase> ExplosionSX;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	float ExplosionSXVolumeScale = 1.0f;
+
+	// Radial damage on detonation, see UGameplayStatics::ApplyRadialDamageWithFalloff
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	float ExplosionBaseDamage = -5000.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	float ExplosionMinimumDamage = -1000.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	float ExplosionDamageInnerRadius = 500.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	float ExplosionDamageOuterRadius = 1000.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	float ExplosionDamageFalloff = 0.33f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Explosion", meta = (EditCondition = "bIsHE"))
+	TSubclassOf<class UDamageType> ExplosionDamageType;
+
+	UFUNCTION(Server, Reliable)
+	void Server_PlayExplosionEffects(FVector Location);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayExplosionEffects(FVector Location);
+
+	void PlayExplosionEffects(FVector Location);
+
 	virtual void Tick(float DeltaSeconds) override;
 
 	// DebugEnabled as this bullet should currently use it: the console command adb.Ballistics.Debug

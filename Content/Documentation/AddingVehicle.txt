@@ -190,6 +190,27 @@ WHAT THE MODEL NEEDS
       person (debug, ThirdPersonCameraArm). Look limits, rate and pitch inversion are set there. Other players
       see the driver's head turn where the driver looks. Do not add camera components or CameraUp/Right
       events to vehicle blueprints, they override this.
+
+      ADS vs Main Camera Transform (any seat, UVehicleSeatComponent): two different cameras for two different
+      things, not a choice of which one to enable - do not just tick whichever sounds closer, they mean
+      specific roles.
+        Use ADS         - aim down the OCCUPANT'S OWN weapon's sight, standard ALS behaviour. Only ever
+                           actually takes effect for Gunner_Standing (GetUseADS gates it to that role
+                           regardless of this checkbox) - an open mount with no vehicle sight of its own, so
+                           the weapon's own sight genuinely is what the gunner looks through.
+        Use Main Camera  - the camera instead comes from Camera Socket Name below, a socket on THIS VEHICLE'S
+        Transform           OWN skeletal mesh (a periscope, vision port, sight block) - not wherever the seat
+                           happens to be placed, and not the weapon's ADS point. This is the one to use for an
+                           enclosed Gunner, and for Driver/Passenger: a Driver with no Camera Socket Name set
+                           falls back to their own character's FP_Camera head socket, which inside a closed
+                           hull (e.g. BMP2) leaves them barely able to see their surroundings - give the
+                           Driver seat a socket on the hull (a vision block location) to fix that.
+        Camera Socket    - the actual socket name on the vehicle mesh, only used when Use Main Camera
+        Name                Transform is on. Empty - falls back to the seat's own transform (or, for Driver,
+                           the character head socket as above).
+      getADSTarget/getADSRotation (used only when ADS is off, i.e. everything except Gunner_Standing) have no
+      Role parameter, unlike getCameraTransform, so they only ever resolve the vehicle's first Gunner seat -
+      a second, independent, enclosed gunner seat is not yet distinguished from the first.
       Hide Occupant Mesh (any seat, default off): hides whichever unit sits here entirely (not just the head -
       SetVisibility recursive, so held weapons/gear too), for every machine regardless of who or what controls
       that unit. Tick this for an enclosed seat (e.g. Driver on a closed-hull IFV like BMP2) where nobody can

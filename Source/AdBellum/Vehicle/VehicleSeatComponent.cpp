@@ -127,9 +127,11 @@ void UVehicleSeatComponent::ExitSeat()
 	}
 }
 
-bool UVehicleSeatComponent::GetUseADS() 
+bool UVehicleSeatComponent::GetUseADS()
 {
-	return bUseADS;
+	// Only Gunner_Standing (an open mount, no vehicle sight of its own) actually aims down its own weapon's
+	// sight - see the property comment. Every other role uses Use Main Camera Transform instead.
+	return bUseADS && SeatRole == EALSStationaryRole::Gunner_Standing;
 }
 
 bool UVehicleSeatComponent::GetUseMainCameraTransform()

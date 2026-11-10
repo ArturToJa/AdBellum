@@ -170,7 +170,15 @@ bool AALSPlayerCameraManager::CustomCameraBehavior(float DeltaTime, FVector& Loc
 		// A standing gunner always aims: the camera turns with the weapon whether the aim button is held or not
 		if (castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner_Standing
 			|| (castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner && castedNewCharacter->GetUseMainCameraTransform())) {
-			const FRotator& ADSRotation =  castedNewCharacter->GetFirstPersonCameraRotationADS();
+			FRotator ADSRotation = castedNewCharacter->GetFirstPersonCameraRotationADS();
+
+			// Enclosed gunner only: the MCT socket's own rotation knows nothing about the weapon's sight zero,
+			// add the weapon's calibration on top (zero for Gunner_Standing, whose ADSRotation already came
+			// straight from the weapon's own calibrated getADSRotation - see GetFirstPersonCameraCalibrationRotationADS).
+			if (castedNewCharacter->GetStationaryRole() == EALSStationaryRole::Gunner) {
+				const FQuat CalibrationQuat = castedNewCharacter->GetFirstPersonCameraCalibrationRotationADS().Quaternion();
+				ADSRotation = (CalibrationQuat * ADSRotation.Quaternion()).Rotator();
+			}
 
 			const FRotator& InterpResult = FMath::RInterpTo(GetCameraRotation(), ADSRotation, DeltaTime,
 				castedNewCharacter->StationaryTargetCameraRotationRate);
@@ -324,6 +332,15 @@ bool AALSPlayerCameraManager::CustomCameraBehavior(float DeltaTime, FVector& Loc
 		Location = TargetTransform.GetLocation();
 		Rotation = TargetTransform.Rotator();
 		FOV = FMath::Lerp(TPFOV, FPFOV, GetCameraBehaviorParam(NAME_Weight_FirstPerson));
+	}
+
+	// An enclosed gunner (Use Main Camera Transform, not Use ADS) zooms through its seat's own optic, which
+	// the branches above never consult (they only know GetCameraFOV() via the ADS branch, or the plain
+	// TP/FP lerp otherwise) - override just the FOV here rather than pulling this role into the ADS branch,
+	// since its location/rotation are already correct as computed above.
+	if (ControlledCharacter->GetStationaryRole() == EALSStationaryRole::Gunner && castedNewCharacter->GetUseMainCameraTransform())
+	{
+		FOV = ControlledCharacter->GetCameraFOV();
 	}
 	return true;
 }

@@ -76,6 +76,11 @@ public:
 		bool GetApplyHandIK();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		UTexture2D* GetWeaponHUDReticle();
+
+	// On screen size (pixels) of GetWeaponHUDReticle in the gunner crosshair. Zero - no override, the
+	// crosshair widget keeps its own default size.
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
+		FVector2D GetWeaponReticleSize();
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		FVector GetCalibrationVector(float Distance);
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
@@ -115,9 +120,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
 		float GetSightZeroDistance();
 
-	// Switches the sight to its next zoom level (wraps around)
+	// Steps the sight to its next (Direction > 0) or previous (Direction < 0) zoom level. bWrap wraps from
+	// the last level back to the first (and back); otherwise clamps, stopping at the first/last level.
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")
-		void ChangeSightZoom();
+		void ChangeSightZoom(int32 Direction, bool bWrap);
 
 	// Current sight magnification (2 = 2x), 1 when there is no sight
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "IWeapon")

@@ -9,12 +9,22 @@
 #include <Weapon/WeaponChildComponent.h>
 #include "Weapon/SimpleWeapon.h"
 
-
+UGunnerSeatComponent::UGunnerSeatComponent()
+{
+	// Without these, AALSCharacter::GetFirstPersonCameraTarget/GetFirstPersonCameraTargetADS fall back to the
+	// occupying character's own FP_Camera/ADS sockets instead of the weapon's (or this seat's) actual sight -
+	// correct for an infantry unit, wrong for a gunner looking through a mounted sight. The base class
+	// (UVehicleSeatComponent, also used by Driver/Passenger, which have no weapon/sight to route to) still
+	// defaults both to false.
+	bUseADS = true;
+	bUseMainCameraTransform = true;
+}
 
 void UGunnerSeatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UGunnerSeatComponent, WeaponArray);
+	DOREPLIFETIME(UGunnerSeatComponent, CoaxWeaponComponent);
 	DOREPLIFETIME(UGunnerSeatComponent, ReplicatedAim);
 }
 
@@ -32,10 +42,10 @@ bool UGunnerSeatComponent::SetOccupyingUnit(AALSBaseCharacter* InUnit)
 	else return false;
 }
 
-void UGunnerSeatComponent::SetWeaponArrayOwner(AALSBaseCharacter* InUnit) 
+void UGunnerSeatComponent::SetWeaponArrayOwner(AALSBaseCharacter* InUnit)
 {
 	UWeaponChildActorComponent* TempWeaponComp = nullptr;
-	for (FComponentReference WeaponCompRef : WeaponArray) 
+	for (FComponentReference WeaponCompRef : WeaponArray)
 	{
 		TempWeaponComp = Cast<UWeaponChildActorComponent>(WeaponCompRef.GetComponent(GetOwner()));
 		if (TempWeaponComp && TempWeaponComp->GetChildActor())
@@ -44,12 +54,23 @@ void UGunnerSeatComponent::SetWeaponArrayOwner(AALSBaseCharacter* InUnit)
 			{
 				TempWeaponComp->GetChildActor()->SetOwner(InUnit);
 			}
-			else 
+			else
 			{
 				TempWeaponComp->GetChildActor()->SetOwner(GetOwner());
 			}
 		}
 	}
+
+	if (AActor* Coax = GetCoaxWeapon())
+	{
+		Coax->SetOwner(InUnit ? static_cast<AActor*>(InUnit) : GetOwner());
+	}
+}
+
+AActor* UGunnerSeatComponent::GetCoaxWeapon() const
+{
+	UWeaponChildActorComponent* CoaxComp = Cast<UWeaponChildActorComponent>(CoaxWeaponComponent.GetComponent(GetOwner()));
+	return CoaxComp ? CoaxComp->GetChildActor() : nullptr;
 }
 
 void UGunnerSeatComponent::Multicast_BindDelegateToUnit_Implementation(AALSBaseCharacter* InUnit)
@@ -163,4 +184,38 @@ bool UGunnerSeatComponent::GetHandTargets(const AALSBaseCharacter* Unit, FTransf
 	}
 	// A gunner seat can also have a steering wheel (driver and gunner in one)
 	return Super::GetHandTargets(Unit, OutLeft, OutRight);
+}
+
+//ZOOM
+bool UGunnerSeatComponent::CycleZoom(int32 Direction, bool bWrap)
+{
+	const int32 Count = ZoomLevels.Num();
+	if (Count == 0)
+	{
+		return false;
+	}
+	const int32 Step = Direction >= 0 ? 1 : -1;
+	if (bWrap)
+	{
+		CurrentZoomIndex = ((CurrentZoomIndex + Step) % Count + Count) % Count;
+		return true;
+	}
+	const int32 NewIndex = FMath::Clamp(CurrentZoomIndex + Step, 0, Count - 1);
+	if (NewIndex == CurrentZoomIndex)
+	{
+		return false;
+	}
+	CurrentZoomIndex = NewIndex;
+	return true;
+}
+
+float UGunnerSeatComponent::GetCurrentZoomFOV() const
+{
+	const float Magnification = GetCurrentZoomMagnification();
+	return Magnification > 0.0f ? BaseFOV / Magnification : BaseFOV;
+}
+
+float UGunnerSeatComponent::GetCurrentZoomMagnification() const
+{
+	return ZoomLevels.IsValidIndex(CurrentZoomIndex) ? ZoomLevels[CurrentZoomIndex] : 1.0f;
 }

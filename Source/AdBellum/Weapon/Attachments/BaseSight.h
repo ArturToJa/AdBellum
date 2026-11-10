@@ -105,8 +105,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Sight|Zoom")
 	float GetCurrentMagnification() const;
 
-	// Selects the next zoom level, wraps around after the last one. Returns false when there is nothing to switch.
-	bool CycleZoomLevel();
+	// Steps to the next (Direction > 0) or previous (Direction < 0) zoom level. bWrap wraps from the last
+	// level back to the first (and back); otherwise clamps, stopping at the first/last level.
+	// Returns false when there is nothing to switch, or clamped and already at that end.
+	bool CycleZoomLevel(int32 Direction = 1, bool bWrap = true);
 
 	// Seconds a switch between two zoom levels takes, 0 switches instantly
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Sight|Zoom", meta = (ClampMin = "0.0", Units = "s"))

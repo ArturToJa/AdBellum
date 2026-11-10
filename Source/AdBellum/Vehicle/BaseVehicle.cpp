@@ -576,22 +576,30 @@ TArray<UVehicleAccessPoint*> ABaseVehicle::GetAllAccessPoints_Implementation()
 //ALSADS INTERFACE
 FVector ABaseVehicle::getADSTarget_Implementation()
 {
-	return FVector(0.0f,0.0f,0.0f);
+	return GetSeatCameraTransform(GetSeatWithRole(EALSStationaryRole::Gunner)).GetLocation();
 }
 
 FRotator ABaseVehicle::getADSRotation_Implementation()
 {
-	return FRotator(0.0f, 0.0f, 0.0f);
+	return GetSeatCameraTransform(GetSeatWithRole(EALSStationaryRole::Gunner)).Rotator();
 }
 
 FTransform ABaseVehicle::getCameraTransform_Implementation(EALSStationaryRole StationaryRole)
 {
-	// Gunners take their camera from their own weapon, this covers the roles that have no weapon (driver)
-	if (const UVehicleSeatComponent* Seat = GetSeatWithRole(StationaryRole))
+	return GetSeatCameraTransform(GetSeatWithRole(StationaryRole));
+}
+
+FTransform ABaseVehicle::GetSeatCameraTransform(const UVehicleSeatComponent* Seat) const
+{
+	if (!Seat)
 	{
-		return Seat->GetComponentTransform();
+		return GetActorTransform();
 	}
-	return GetActorTransform();
+	if (!Seat->CameraSocketName.IsNone() && VehicleSkeletalMesh && VehicleSkeletalMesh->DoesSocketExist(Seat->CameraSocketName))
+	{
+		return VehicleSkeletalMesh->GetSocketTransform(Seat->CameraSocketName);
+	}
+	return Seat->GetComponentTransform();
 }
 
 void ABaseVehicle::SetFormation_Implementation(ABaseFormation* Formation)
@@ -730,12 +738,19 @@ void ABaseVehicle::CameraHeldAction_Implementation()
 void ABaseVehicle::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 {
 	AALSBaseCharacter* Driver = DriverSeat ? DriverSeat->GetOccupyingUnit() : nullptr;
-	const bool bFirstPerson = bDriverFirstPerson && Driver && Driver->GetMesh()->DoesSocketExist(FirstPersonCameraSocket);
+
+	// DriverSeat->CameraSocketName on the vehicle mesh (a vision port/periscope) when configured and Use Main
+	// Camera Transform is on, else the driver character's own FP_Camera head socket as before - which leaves
+	// a driver unable to see much of their surroundings inside a closed hull, exactly what this is for.
+	const bool bUseVehicleSocket = DriverSeat && DriverSeat->bUseMainCameraTransform && !DriverSeat->CameraSocketName.IsNone()
+		&& VehicleSkeletalMesh && VehicleSkeletalMesh->DoesSocketExist(DriverSeat->CameraSocketName);
+	const bool bFirstPerson = bDriverFirstPerson && Driver && (bUseVehicleSocket || Driver->GetMesh()->DoesSocketExist(FirstPersonCameraSocket));
 	UpdateDriverHeadVisibility(bFirstPerson && IsLocallyControlled());
 
 	if (bFirstPerson)
 	{
-		OutResult.Location = Driver->GetMesh()->GetSocketLocation(FirstPersonCameraSocket);
+		OutResult.Location = bUseVehicleSocket ? VehicleSkeletalMesh->GetSocketLocation(DriverSeat->CameraSocketName)
+			: Driver->GetMesh()->GetSocketLocation(FirstPersonCameraSocket);
 		OutResult.Rotation = GetDriverLookWorldRotation();
 		OutResult.FOV = FirstPersonFOV;
 		return;

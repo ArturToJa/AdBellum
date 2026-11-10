@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "EBBarrel.h"
 #include <NiagaraSystem.h>
+#include "Camera/CameraShakeBase.h"
 #include "IWeapon.h"
 #include "Library/ALSADSInterface.h"
 #include "SimpleWeapon.generated.h"
@@ -48,14 +49,37 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
 	USoundBase* FireSX;
 
+	// Preferred muzzle flash, spawned instead of FireVX_Legacy when set
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
 	UNiagaraSystem* FireVX;
 
-	//UFUNCTION(NetMulticast, Reliable)
-	//void Multicast_PlayEffects();
+	// Muzzle flash used while FireVX is not set
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
+	class UParticleSystem* FireVX_Legacy;
 
-	//UFUNCTION()
-	//void HandleBarrelShotFired();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
+	FVector FireVXScale = FVector::OneVector;
+
+	// World camera shake played (locally, on every machine) when this weapon is about to fire. None - no shake.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Effects")
+	TSubclassOf<UCameraShakeBase> CameraShakeClass;
+
+	// Within this radius (cm) of WeaponRoot the shake plays at full strength
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Effects")
+	float ShakeInnerRadius = 0.0f;
+
+	// Outer radius (cm) of the camera shake, centered on WeaponRoot - falls off to nothing beyond this
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Effects")
+	float ShakeRange = 1000.0f;
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayEffects();
+
+	UFUNCTION(Server, Reliable)
+	void Server_PlayEffects();
+
+	UFUNCTION()
+	void HandleBeforeShotFired();
 
 	// Zero distances (meters) the gunner can step through with ScopeZeroUp/Down. Keep them sorted ascending.
 	// Empty - ADS is never turned, it looks along the direction it was placed in.
@@ -117,12 +141,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD")
 	UTexture2D* WeaponReticleTexture;
 
+	// On screen size (pixels) of WeaponReticleTexture in the gunner crosshair. Zero (default) - the crosshair
+	// widget keeps its own default size instead, see UGunnerCrosshairWidget::CrosshairSize.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD")
+	FVector2D WeaponReticleSize = FVector2D::ZeroVector;
+
 	virtual UTexture2D* GetWeaponHUDReticle_Implementation() override;
+
+	virtual FVector2D GetWeaponReticleSize_Implementation() override;
 
 	//ADS Interface
 	virtual FVector getADSTarget_Implementation() override;
 
 	virtual FRotator getADSRotation_Implementation() override;
+
+	// World space rotation CalibrateADS applied on top of the uncalibrated ADS orientation. Zero before any
+	// calibration has run. Lets a vehicle's MCT-driven camera (which otherwise only knows the vehicle socket's
+	// own fixed rotation) still reflect this weapon's sight zero.
+	virtual FRotator getADSCalibrationRotation_Implementation() override;
 
 private:
 	// Catches late arriving state (owner, its controller, replicated bullet class) on a slow timer
@@ -132,6 +168,9 @@ private:
 
 	// Calibrates to the default zero distance once, as soon as a local player controls the owning unit
 	void EnsureADSCalibrated();
+
+	// Spawns FireVX at EBarrel and plays FireSX, FireSX only plays when FireVX is also set
+	void PlayEffects();
 
 	FTimerHandle OwnerStateTimer;
 

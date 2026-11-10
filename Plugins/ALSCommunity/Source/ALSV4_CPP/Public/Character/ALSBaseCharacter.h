@@ -821,4 +821,10 @@ private:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_AttachCharacter(USceneComponent* SeatComponent);
+
+	// Server only: re-enables strict client movement error checking a moment after standing up, once the
+	// detach/teleport/reactivate from Server_StandCharacterUp has settled - see its own comment.
+	FTimerHandle StandUpSettleTimer;
+
+	void ReenableClientMovementErrorChecks();
 };

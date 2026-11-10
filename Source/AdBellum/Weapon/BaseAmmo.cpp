@@ -15,6 +15,7 @@
 #include "Components/DecalComponent.h"
 #include "Perception/AISense_Damage.h"
 #include <Kismet/KismetStringLibrary.h>
+#include "Particles/ParticleSystem.h"
 
 namespace
 {
@@ -94,9 +95,42 @@ void ABaseAmmo::OnImpact_Implementation(bool Ricochet, bool PassedThrough, FVect
 			}
 		}
 	}
-	if (Actor) 
+	if (bIsHE)
+	{
+		Server_PlayExplosionEffects(Location);
+		UGameplayStatics::ApplyRadialDamageWithFalloff(this, ExplosionBaseDamage, ExplosionMinimumDamage, Location,
+			ExplosionDamageInnerRadius, ExplosionDamageOuterRadius, ExplosionDamageFalloff, ExplosionDamageType,
+			TArray<AActor*>(), this, GetInstigatorController());
+	}
+	else if (Actor)
 	{
 		DealDamage(Actor, HitResult, IncomingVelocity);
+	}
+}
+
+void ABaseAmmo::Server_PlayExplosionEffects_Implementation(FVector Location)
+{
+	Multicast_PlayExplosionEffects(Location);
+}
+
+void ABaseAmmo::Multicast_PlayExplosionEffects_Implementation(FVector Location)
+{
+	PlayExplosionEffects(Location);
+}
+
+void ABaseAmmo::PlayExplosionEffects(FVector Location)
+{
+	if (ExplosionVFX)
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), ExplosionVFX, Location, FRotator::ZeroRotator, ExplosionVFXScale);
+	}
+	else if (ExplosionVFX_Legacy)
+	{
+		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ExplosionVFX_Legacy, Location, FRotator::ZeroRotator, ExplosionVFXScale);
+	}
+	if (ExplosionSX)
+	{
+		UGameplayStatics::PlaySoundAtLocation(GetWorld(), ExplosionSX, Location, ExplosionSXVolumeScale);
 	}
 }
 

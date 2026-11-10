@@ -120,15 +120,24 @@ float ABaseSight::GetCurrentMagnification() const
 	return FMath::Tan(FMath::DegreesToRadians(UnmagnifiedFOV * 0.5f)) / FMath::Tan(FMath::DegreesToRadians(SightFOV * 0.5f));
 }
 
-bool ABaseSight::CycleZoomLevel()
+bool ABaseSight::CycleZoomLevel(int32 Direction, bool bWrap)
 {
 	if (!HasZoomLevels() || ZoomLevels.Num() < 2)
 	{
 		return false;
 	}
+	const int32 Count = ZoomLevels.Num();
+	const int32 Step = Direction >= 0 ? 1 : -1;
+	const int32 NewIndex = bWrap
+		? ((GetZoomLevelIndex() + Step) % Count + Count) % Count
+		: FMath::Clamp(GetZoomLevelIndex() + Step, 0, Count - 1);
+	if (!bWrap && NewIndex == GetZoomLevelIndex())
+	{
+		return false;
+	}
 	// Start from what is shown right now, also when the previous transition has not finished
 	ZoomTransitionFrom = GetDisplayedMagnification();
-	CurrentZoomLevelIndex = (GetZoomLevelIndex() + 1) % ZoomLevels.Num();
+	CurrentZoomLevelIndex = NewIndex;
 	ZoomTransitionAlpha = ZoomTransitionTime > 0.0f ? 0.0f : 1.0f;
 	return true;
 }

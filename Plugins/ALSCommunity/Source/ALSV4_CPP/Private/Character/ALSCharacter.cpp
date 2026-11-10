@@ -98,12 +98,21 @@ FTransform AALSCharacter::GetThirdPersonPivotTarget()
 		FVector::OneVector);
 }
 
-// Weapon of a seated gunner when it knows its own ADS point. A vehicle can have several gunners,
-// so the weapon is asked first and the vehicle (ControlledInputInterceptor) is only the fallback.
+// Weapon of a seated gunner when it knows its own ADS point. Only actually used for Gunner_Standing (an
+// open mount with no vehicle sight of its own, so the weapon's own sight is genuinely what the gunner looks
+// through) - bUseStationaryADS already reflects this per seat (UVehicleSeatComponent::GetUseADS gates it to
+// that role). Every other seat (an enclosed Gunner, or Driver/Passenger) instead uses the vehicle's own
+// camera transform (ControlledInputInterceptor, via bUseMainCameraTransform), e.g. a hull-mounted sight.
 static AActor* GetGunnerADSWeapon(const AALSCharacter* Character)
 {
 	const EALSStationaryRole Role = Character->GetStationaryRole();
 	if (Role != EALSStationaryRole::Gunner && Role != EALSStationaryRole::Gunner_Standing)
+	{
+		return nullptr;
+	}
+	// bUseStationaryADS directly, not the GetUseStationaryADS() accessor: that getter isn't const-qualified
+	// and Character is const here; the backing UPROPERTY is public and this is a plain read either way.
+	if (!Character->bUseStationaryADS)
 	{
 		return nullptr;
 	}
@@ -156,7 +165,14 @@ FRotator AALSCharacter::GetFirstPersonCameraRotationADS() {
 		{
 			return IALSADSInterface::Execute_getADSRotation(GunnerWeapon);
 		}
-		// Gunner seat without a weapon: look where the unit faces, the vehicle cannot tell which gunner asks
+		// Use Main Camera Transform: the vehicle's own camera transform (e.g. MCT_Gunner socket) tracks the
+		// turret/sight, unlike the capsule-rotation fallback below - must be checked before that fallback,
+		// since an enclosed Gunner (no weapon ADS of its own) would otherwise always hit it instead.
+		if (bUseMainCameraTransform)
+		{
+			return IALSADSInterface::Execute_getADSRotation(ControlledInputInterceptor);
+		}
+		// Gunner seat without a weapon or vehicle camera transform to use: look where the unit faces
 		if (StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing)
 		{
 			return GetCapsuleComponent()->GetComponentRotation();
@@ -167,6 +183,15 @@ FRotator AALSCharacter::GetFirstPersonCameraRotationADS() {
 }
 
 FRotator AALSCharacter::GetFirstPersonCameraCalibrationRotationADS() {
+	// Enclosed gunner (Use Main Camera Transform): the MCT socket gives a fixed look direction, the weapon's
+	// own sight calibration (when it has one) still needs to be added on top so the gunner's zero actually
+	// changes what they see, not just the weapon's own aim point. Gunner_Standing is excluded - its
+	// GetFirstPersonCameraRotationADS already reads straight from the weapon's own (already calibrated)
+	// getADSRotation, so adding this again there would double the correction.
+	if (ControlledInputInterceptor && bUseMainCameraTransform && GetStationaryRole() == EALSStationaryRole::Gunner
+		&& ActiveWeaponActor && ActiveWeaponActor->GetClass()->ImplementsInterface(UALSADSInterface::StaticClass())) {
+		return IALSADSInterface::Execute_getADSCalibrationRotation(ActiveWeaponActor);
+	}
 	// Same conditions as the hand held weapon case of GetFirstPersonCameraTargetADS
 	if (!ControlledInputInterceptor && ActiveWeaponActor && OverlayState != EALSOverlayState::Default
 		&& ActiveWeaponActor->GetClass()->ImplementsInterface(UALSADSInterface::StaticClass())) {

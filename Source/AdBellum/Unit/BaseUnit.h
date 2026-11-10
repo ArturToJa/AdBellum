@@ -248,7 +248,23 @@ public:
 
 	virtual void ScopeZeroDownAction_Implementation() override;
 
+	// No-op: zoom is driven entirely by ScrollAction_Implementation now, see CycleZoomAction. Kept (rather than
+	// removed) only because IALSInputInterface::ZoomAction is a BlueprintNativeEvent every unit must implement.
 	virtual void ZoomAction_Implementation() override;
+
+	virtual void ScrollAction_Implementation(bool Value) override;
+
+	// Shared by ScrollAction_Implementation (direction from scroll): enclosed gunner cycles its seat's own
+	// optic, Gunner_Standing/handheld cycles the weapon's sight. bWrap - see UGunnerSeatComponent::CycleZoom.
+	void CycleZoomAction(int32 Direction, bool bWrap);
+
+	// Scroll wheel can report several deltas for what the player felt as one notch - without this a single
+	// scroll could skip multiple zoom levels at once. Only one CycleZoomAction call is allowed per cooldown.
+	float LastScrollZoomTime = -1000.0f;
+
+	// Space: fires a seated gunner's coaxial weapon (UGunnerSeatComponent::CoaxWeaponComponent) while held,
+	// otherwise the normal jump / vehicle handbrake behavior (Super).
+	virtual void JumpAction_Implementation(bool bValue) override;
 
 	//VEHICLE SEAT
 

@@ -5,6 +5,8 @@
 #include "WeaponBallistics.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "Character/ALSInputInterface.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Perception/AISense_Hearing.h"
@@ -524,11 +526,11 @@ void ABaseWeapon::Multicast_PlaySightAdjustSound_Implementation(ESightAdjustSoun
 	PlaySightAdjustSoundLocal(Sound);
 }
 
-void ABaseWeapon::ChangeSightZoom_Implementation()
+void ABaseWeapon::ChangeSightZoom_Implementation(int32 Direction, bool bWrap)
 {
 	ABaseSight* Sight = SightComponent ? SightComponent->GetSightActor() : nullptr;
 	const float PreviousMagnification = Sight ? Sight->GetCurrentMagnification() : 0.0f;
-	if (!Sight || !Sight->CycleZoomLevel())
+	if (!Sight || !Sight->CycleZoomLevel(Direction, bWrap))
 	{
 		return;
 	}
@@ -624,13 +626,19 @@ void ABaseWeapon::HandleBarrelShotFired()
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, FireSound, EBarrel->GetComponentLocation());
 	}
-	if (MuzzleFlashParticleSystem)
-	{	
-		UGameplayStatics::SpawnEmitterAttached(MuzzleFlashParticleSystem, EBarrel,
+	if (FireVX)
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAttached(FireVX, EBarrel, FName(),
+			EBarrel->GetComponentLocation(), EBarrel->GetComponentRotation(), EmitterScaleVector,
+			EAttachLocation::KeepWorldPosition, true, ENCPoolMethod::None, true);
+	}
+	else if (FireVX_Legacy)
+	{
+		UGameplayStatics::SpawnEmitterAttached(FireVX_Legacy, EBarrel,
 			FName(),
-			EBarrel->GetComponentLocation(), 
-			EBarrel->GetComponentRotation(), 
-			EmitterScaleVector, 
+			EBarrel->GetComponentLocation(),
+			EBarrel->GetComponentRotation(),
+			EmitterScaleVector,
 			EAttachLocation::KeepWorldPosition, true, EPSCPoolMethod::None, true);
 	}
 

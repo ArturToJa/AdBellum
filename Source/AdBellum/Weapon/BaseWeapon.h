@@ -59,8 +59,13 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayDryShotSound();
 
+	// Preferred muzzle flash, spawned instead of FireVX_Legacy when set
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VX")
-	UParticleSystem* MuzzleFlashParticleSystem;
+	class UNiagaraSystem* FireVX;
+
+	// Muzzle flash used while FireVX is not set
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VX")
+	UParticleSystem* FireVX_Legacy;
 
 	UPROPERTY(BlueprintReadWrite, Category = "VX")
 	float EmitterScale = 0.3f;
@@ -302,7 +307,7 @@ public:
 	virtual bool GetIsScoped_Implementation() override;
 	virtual void ChangeSightZero_Implementation(int32 Direction) override;
 	virtual float GetSightZeroDistance_Implementation() override;
-	virtual void ChangeSightZoom_Implementation() override;
+	virtual void ChangeSightZoom_Implementation(int32 Direction, bool bWrap) override;
 	virtual float GetSightMagnification_Implementation() override;
 
 	virtual void BeginPlay() override;

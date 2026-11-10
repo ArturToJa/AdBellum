@@ -345,12 +345,19 @@ public:
 	//Vehicle interface
 	virtual float GetSteeringValue_Implementation() override;
 
-	//ADS Interface, fallbacks only: a gunner's ADS comes from the gunner's weapon (ASimpleWeapon)
+	// ADS Interface. getADSTarget/getADSRotation have no Role parameter (unlike getCameraTransform) so they
+	// only ever resolve the Gunner seat - a limitation already shared elsewhere for multiple seats of the
+	// same role (GetSeatWithRole always returns the first match). They are only actually reached for a seat
+	// with ADS off (see UVehicleSeatComponent::GetUseADS and AALSCharacter's GetGunnerADSWeapon in the
+	// plugin), i.e. everything except Gunner_Standing, which aims through its own weapon's sight instead.
 	virtual FVector getADSTarget_Implementation() override;
 
 	virtual FRotator getADSRotation_Implementation() override;
 
 	virtual FTransform getCameraTransform_Implementation(EALSStationaryRole StationaryRole) override;
+
+	// Resolves Seat->CameraSocketName on VehicleSkeletalMesh when set and valid, else Seat's own transform
+	FTransform GetSeatCameraTransform(const UVehicleSeatComponent* Seat) const;
 
 	//orderable
 

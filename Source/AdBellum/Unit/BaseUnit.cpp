@@ -416,11 +416,32 @@ void ABaseUnit::HandleStationaryAimAction(bool Value)
 		Server_AimAction(Value);
 	}
 
-	// Both gunner roles zoom to the FOV of the weapon they man while the aim button is held
-	if (StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing)
+	if (StationaryRole == EALSStationaryRole::Gunner_Standing)
 	{
+		// Open mount: FOV follows the weapon's own sight, same as a handheld weapon aiming down sights
 		const float WeaponFOV = (Value && ActiveWeaponActor) ? IIWeapon::Execute_GetWeaponFOV(ActiveWeaponActor) : 0.0f;
 		CameraFOV = WeaponFOV > 0.0f ? WeaponFOV : 90.0f;
+	}
+	else if (StationaryRole == EALSStationaryRole::Gunner)
+	{
+		UGunnerSeatComponent* GunnerSeat = Cast<UGunnerSeatComponent>(OccupiedSeat);
+		if (GunnerSeat && GunnerSeat->HasZoomLevels())
+		{
+			// Zoom table present: the gunner always looks through its own optic (no separate hip-fire FOV),
+			// the aim button instead steps to the next zoom level, wrapping back to the first after the last.
+			if (Value)
+			{
+				GunnerSeat->CycleZoom(1);
+			}
+			CameraFOV = GunnerSeat->GetCurrentZoomFOV();
+		}
+		else
+		{
+			// No zoom table on the seat: fall back to hold-to-aim using the weapon's own ADS FOV,
+			// same as Gunner_Standing above
+			const float WeaponFOV = (Value && ActiveWeaponActor) ? IIWeapon::Execute_GetWeaponFOV(ActiveWeaponActor) : 0.0f;
+			CameraFOV = WeaponFOV > 0.0f ? WeaponFOV : 90.0f;
+		}
 	}
 }
 
@@ -1508,12 +1529,73 @@ void ABaseUnit::GunnerCameraRightInput(float Value)
 
 void ABaseUnit::ZoomAction_Implementation()
 {
-	if (!ActiveWeaponActor || StationaryRole != EALSStationaryRole::None)
+	// Zoom now lives entirely in ScrollAction_Implementation (see CycleZoomAction) - left empty rather than
+	// deleted since IALSInputInterface::ZoomAction is a BlueprintNativeEvent every unit must implement.
+}
+
+void ABaseUnit::ScrollAction_Implementation(bool Value)
+{
+	// Scroll drives zoom (also for a handheld weapon's own BaseSight, not just a seated gunner), instead of
+	// the base ScrollAction's continuous CameraFOV stepping (Gunner) or debug overlay cycling (everyone else)
+	// - the FOV stepping fought over the same CameraFOV value.
+	// Value is scroll-down (see AALSBaseCharacter::ScrollAction_Implementation's own comment).
+	const bool bHasZoomableWeapon = StationaryRole == EALSStationaryRole::None && ActiveWeaponActor
+		&& ActiveWeaponActor->GetClass()->ImplementsInterface(UIWeapon::StaticClass());
+	if (StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing || bHasZoomableWeapon)
+	{
+		// The wheel can report several deltas for what felt like one notch to the player - without this a
+		// single scroll could skip multiple zoom levels (or jump straight to the last one) instead of one step.
+		constexpr float ScrollZoomCooldown = 0.15f;
+		const float Now = GetWorld()->GetTimeSeconds();
+		if (Now - LastScrollZoomTime < ScrollZoomCooldown)
+		{
+			return;
+		}
+		LastScrollZoomTime = Now;
+		// Flipped from the naive !Value=up mapping: that had scroll up zooming out, backwards from what felt
+		// right. Scroll clamps at the ends (bWrap false) instead of revolving back around the array.
+		CycleZoomAction(Value ? 1 : -1, false);
+		return;
+	}
+	Super::ScrollAction_Implementation(Value);
+}
+
+void ABaseUnit::CycleZoomAction(int32 Direction, bool bWrap)
+{
+	if (StationaryRole == EALSStationaryRole::Gunner)
+	{
+		// Enclosed gunner: zoom is the seat's own optic (periscope/sight glass), not the weapon's
+		if (UGunnerSeatComponent* GunnerSeat = Cast<UGunnerSeatComponent>(OccupiedSeat))
+		{
+			if (GunnerSeat->CycleZoom(Direction, bWrap))
+			{
+				CameraFOV = GunnerSeat->GetCurrentZoomFOV();
+			}
+		}
+		return;
+	}
+	if (!ActiveWeaponActor || (StationaryRole != EALSStationaryRole::None && StationaryRole != EALSStationaryRole::Gunner_Standing))
 	{
 		return;
 	}
 	// The weapon reports every step of the zoom transition through RefreshSightZoom
-	IIWeapon::Execute_ChangeSightZoom(ActiveWeaponActor);
+	IIWeapon::Execute_ChangeSightZoom(ActiveWeaponActor, Direction, bWrap);
+}
+
+void ABaseUnit::JumpAction_Implementation(bool bValue)
+{
+	if (StationaryRole == EALSStationaryRole::Gunner || StationaryRole == EALSStationaryRole::Gunner_Standing)
+	{
+		if (const UGunnerSeatComponent* GunnerSeat = Cast<UGunnerSeatComponent>(OccupiedSeat))
+		{
+			if (AActor* Coax = GunnerSeat->GetCoaxWeapon())
+			{
+				IIWeapon::Execute_Trigger(Coax, bValue);
+				return;
+			}
+		}
+	}
+	Super::JumpAction_Implementation(bValue);
 }
 
 void ABaseUnit::RefreshSightZoom_Implementation(AActor* Weapon)

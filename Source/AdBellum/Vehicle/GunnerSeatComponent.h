@@ -19,12 +19,24 @@ class ADBELLUM_API UGunnerSeatComponent : public UVehicleSeatComponent
 public:
 	GENERATED_BODY()
 
+	UGunnerSeatComponent();
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	OnGunnerWeaponChanged GunnerWeaponChanged;
 
 	UPROPERTY(Replicated, BlueprintReadWrite, EditDefaultsOnly, Meta = (UseComponentPicker))
 	TArray<FComponentReference> WeaponArray;
+
+	// Coaxial machine gun fired independently of WeaponArray's main weapon(s), via JumpAction (space) while
+	// seated as gunner - see ABaseUnit::JumpAction_Implementation. Uses the gunner's existing crosshair/zero,
+	// no reticle of its own. None - space does nothing extra for this seat.
+	UPROPERTY(Replicated, BlueprintReadWrite, EditDefaultsOnly, Meta = (UseComponentPicker))
+	FComponentReference CoaxWeaponComponent;
+
+	// Resolves CoaxWeaponComponent to its actor, null when not configured
+	UFUNCTION(BlueprintPure, Category = "Weapons")
+	AActor* GetCoaxWeapon() const;
 
 	void SetWeaponArrayOwner(AALSBaseCharacter* InUnit);
 
@@ -103,10 +115,51 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Seat")
 	bool bSittingPose = false;
 
+	// ZOOM
+
+	// Magnifications this seat's own optic (periscope/sight glass) can step through, e.g. [1.0, 4.0, 8.0].
+	// Only used while Use Main Camera Transform is on (an enclosed gunner looking through the vehicle's own
+	// sight, not its weapon's) - a Gunner_Standing instead zooms through its weapon's own sight/FOV, since
+	// GetUseADS() is what gates that role. Empty - no zoom, always BaseFOV.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Zoom")
+	TArray<float> ZoomLevels;
+
+	// FOV at 1x (no magnification)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Zoom", meta = (ClampMin = "5.0", ClampMax = "170.0"))
+	float BaseFOV = 90.0f;
+
+	// Steps to the next (Direction > 0) or previous (Direction < 0) zoom level. bWrap wraps from the last
+	// level back to the first (and back) - used for the aim button's click-to-cycle; scroll instead clamps,
+	// stopping at the first/last level. Returns false (no-op) when ZoomLevels is empty, or clamped and
+	// already at that end.
+	UFUNCTION(BlueprintCallable, Category = "Zoom")
+	bool CycleZoom(int32 Direction, bool bWrap = true);
+
+	// True when this seat has its own optic zoom table (ZoomLevels), rather than relying on the weapon's ADSFOV
+	UFUNCTION(BlueprintPure, Category = "Zoom")
+	bool HasZoomLevels() const { return ZoomLevels.Num() > 0; }
+
+	// FOV for the current zoom level (BaseFOV divided by its magnification), BaseFOV when there is no zoom
+	UFUNCTION(BlueprintPure, Category = "Zoom")
+	float GetCurrentZoomFOV() const;
+
+	// Pixel offset from screen center for the gunner crosshair (UGunnerCrosshairWidget). A weapon's reticle
+	// texture is shared across vehicles, but this seat's own MCT socket placement is not - a reticle correctly
+	// centered on one vehicle's camera can need a different nudge on another, so this lives per seat, not on
+	// the weapon or the HUD widget's own default.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Crosshair")
+	FVector2D CrosshairOffset = FVector2D::ZeroVector;
+
+	UFUNCTION(BlueprintPure, Category = "Zoom")
+	float GetCurrentZoomMagnification() const;
+
 	// Grips of the weapon this unit mans here (ASimpleWeapon hand sockets)
 	virtual bool GetHandTargets(const AALSBaseCharacter* Unit, FTransform& OutLeft, FTransform& OutRight) const override;
 
 private:
+	// Index in ZoomLevels this seat's optic is currently set to
+	int32 CurrentZoomIndex = 0;
+
 	FVector2D ClampAim(FVector2D Aim) const;
 
 	// True on the machine of the player sitting here, when that machine is not the server

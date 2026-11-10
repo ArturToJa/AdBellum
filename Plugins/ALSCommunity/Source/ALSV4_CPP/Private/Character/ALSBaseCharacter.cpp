@@ -1883,14 +1883,27 @@ void AALSBaseCharacter::Multicast_AttachCharacter_Implementation(USceneComponent
 	GetCapsuleComponent()->AddRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));
 }
 
-void AALSBaseCharacter::Server_StandCharacterUp_Implementation(FVector ExitLocation) 
+void AALSBaseCharacter::Server_StandCharacterUp_Implementation(FVector ExitLocation)
 {
 	HandleExitControlledInterceptor();
-	GetCharacterMovement()->bIgnoreClientMovementErrorChecksAndCorrection = false;
 	//GetController()->SetControlRotation(FRotator(GetController()->GetControlRotation().Pitch, GetController()->GetControlRotation().Yaw, 0.0f));
 	GetController()->SetControlRotation(FRotator(0.0f, 0.0f, 0.0f));
 	StationaryRole = EALSStationaryRole::None;
 	MultiCast_StandCharacterUp(ExitLocation);
+
+	// Mirrors Server_SitCharacterDown's own settle delay (there, the flag flips to true immediately and
+	// attachment/deactivation only happens a second later - here it's the reverse order, detach/teleport/
+	// reactivate movement happens immediately in the multicast above, so re-enabling strict correction has to
+	// wait instead: flipping it back to false in the same instant as the detach/teleport/SetMovementMode left
+	// a brief window where the server's own CharacterMovementComponent hadn't actually settled into the new
+	// position/mode yet, so it treated the owning client's (correctly) already-moving prediction as an error
+	// and snapped them back to the access point once it caught up.
+	GetWorldTimerManager().SetTimer(StandUpSettleTimer, this, &AALSBaseCharacter::ReenableClientMovementErrorChecks, 0.3f, false);
+}
+
+void AALSBaseCharacter::ReenableClientMovementErrorChecks()
+{
+	GetCharacterMovement()->bIgnoreClientMovementErrorChecksAndCorrection = false;
 }
 
 void AALSBaseCharacter::MultiCast_StandCharacterUp_Implementation(FVector ExitLocation)

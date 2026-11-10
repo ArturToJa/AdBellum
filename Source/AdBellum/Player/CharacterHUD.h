@@ -7,15 +7,18 @@
 #include "GameFramework/HUD.h"
 #include "CharacterHUD.generated.h"
 
+class UGunnerCrosshairWidget;
+
 UCLASS()
 class ADBELLUM_API ACharacterHUD : public AHUD
 {
 	GENERATED_BODY()
-	
+
 public:
+	ACharacterHUD();
 
 	void HUDOpen(AActor* ControlledActor);
-	
+
 	void HUDClose();
 
 	UFUNCTION(BlueprintImplementableEvent)
@@ -32,4 +35,15 @@ public:
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void NotifyWeaponShot();
+
+	// Native gunner crosshair, independent of whatever the Blueprint-driven widget switch (NotifyRole) does.
+	// Shown for Gunner and Gunner_Standing, hidden for every other role.
+	void UpdateGunnerCrosshair(EALSStationaryRole StationaryRole);
+
+	UPROPERTY(EditDefaultsOnly, Category = "HUD")
+	TSubclassOf<UGunnerCrosshairWidget> GunnerCrosshairWidgetClass;
+
+private:
+	UPROPERTY()
+	TObjectPtr<UGunnerCrosshairWidget> GunnerCrosshairWidget;
 };

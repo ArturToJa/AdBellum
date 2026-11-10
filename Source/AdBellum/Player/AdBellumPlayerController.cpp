@@ -570,6 +570,7 @@ void AAdBellumPlayerController::Client_NotifyHUDRole_Implementation(EALSStationa
 		if (GetPawn() == ControlledActor)
 		{
 			CharacterHUD->NotifyRole(StationaryRole);
+			CharacterHUD->UpdateGunnerCrosshair(StationaryRole);
 		}
 	}
  }
