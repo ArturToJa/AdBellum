@@ -143,6 +143,12 @@ private:
 	// multicast (looping VFX).
 	bool bExploded = false;
 
+	// Set by Explode() (server) or directly by OnHit on a non-authority machine: stops Tick from continuing to
+	// drive the missile forward once it has hit something, so a client's own locally-simulated missile (see the
+	// class comment) visibly stops/rests at the impact point instead of ghosting on through whatever it hit -
+	// collision is detected identically on every machine, but only the server used to actually act on it.
+	bool bFlightStopped = false;
+
 	// Destroys self a moment after Explode() - not immediately (see Explode's own comment) and deliberately not
 	// via SetLifeSpan, since that would re-enter this class's own LifeSpanExpired override.
 	void DestroyDeferred();

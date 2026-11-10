@@ -56,6 +56,11 @@ void AATGMMissile::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (bFlightStopped)
+	{
+		return;
+	}
+
 	// Guidance/acceleration run on every machine identically now (see the class comment) - only
 	// damage/explosion (OnHit/Explode) stay server-authoritative.
 	ElapsedTime += DeltaTime;
@@ -96,12 +101,22 @@ void AATGMMissile::Tick(float DeltaTime)
 void AATGMMissile::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent,
 	FVector NormalImpulse, const FHitResult& Hit)
 {
-	// Every machine now actually simulates movement/collision locally (see Tick/class comment), so OnHit can
-	// fire on clients too - only the server's own hit is authoritative for damage/explosion, a client's is
-	// purely incidental and ignored here.
+	// Every machine now actually simulates movement/collision locally (see Tick/class comment), so OnHit fires
+	// on clients too - only the server's own hit is authoritative for damage/explosion. A client's hit still
+	// stops the missile locally (below) so it visibly rests at the impact point instead of flying on through
+	// whatever it touched until the server's destroy eventually replicates down.
 	if (HasAuthority())
 	{
 		Explode(Hit.Location);
+	}
+	else if (!bFlightStopped)
+	{
+		bFlightStopped = true;
+		SetActorEnableCollision(false);
+		if (ProjectileMovement)
+		{
+			ProjectileMovement->StopMovementImmediately();
+		}
 	}
 }
 
@@ -132,6 +147,7 @@ void AATGMMissile::Explode(const FVector& Location)
 	UGameplayStatics::ApplyRadialDamageWithFalloff(this, BaseDamage, MinimumDamage, Location,
 		DamageInnerRadius, DamageOuterRadius, DamageFalloff, nullptr, TArray<AActor*>(), this);
 
+	bFlightStopped = true;
 	SetActorEnableCollision(false);
 	if (ProjectileMovement)
 	{

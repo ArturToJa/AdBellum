@@ -38,6 +38,16 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayEffects(EPhysicalSurface HitSurfaceEnum, FVector Location, FVector IncomingVelocity);
 
+	// Debug marker drawn at the impact point when this ammo hits an ATargetField, replicated so every client
+	// sees it too, not just whichever machine's hit registered.
+	void DrawTargetFieldHitMarker(FVector Location);
+
+	UFUNCTION(Server, Reliable)
+	void Server_DrawTargetFieldHitMarker(FVector Location);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_DrawTargetFieldHitMarker(FVector Location);
+
 	float CalculateEnergy(FVector CurrentVelocity);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)

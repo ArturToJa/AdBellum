@@ -16,6 +16,8 @@
 #include "Perception/AISense_Damage.h"
 #include <Kismet/KismetStringLibrary.h>
 #include "Particles/ParticleSystem.h"
+#include "Target/TargetField.h"
+#include "DrawDebugHelpers.h"
 
 namespace
 {
@@ -106,6 +108,11 @@ void ABaseAmmo::OnImpact_Implementation(bool Ricochet, bool PassedThrough, FVect
 	{
 		DealDamage(Actor, HitResult, IncomingVelocity);
 	}
+
+	if (Actor && Actor->IsA<ATargetField>())
+	{
+		Server_DrawTargetFieldHitMarker(Location);
+	}
 }
 
 void ABaseAmmo::Server_PlayExplosionEffects_Implementation(FVector Location)
@@ -137,6 +144,21 @@ void ABaseAmmo::PlayExplosionEffects(FVector Location)
 void ABaseAmmo::Server_PlayEffects_Implementation(EPhysicalSurface HitSurfaceEnum, FVector Location, FVector IncomingVelocity)
 {
 	Multicast_PlayEffects(HitSurfaceEnum, Location, IncomingVelocity);
+}
+
+void ABaseAmmo::Server_DrawTargetFieldHitMarker_Implementation(FVector Location)
+{
+	Multicast_DrawTargetFieldHitMarker(Location);
+}
+
+void ABaseAmmo::Multicast_DrawTargetFieldHitMarker_Implementation(FVector Location)
+{
+	DrawTargetFieldHitMarker(Location);
+}
+
+void ABaseAmmo::DrawTargetFieldHitMarker(FVector Location)
+{
+	DrawDebugSphere(GetWorld(), Location, 3.0f, 12, FColor::Red, false, 5.0f, SDPG_World, 4.0f);
 }
 
 void ABaseAmmo::Multicast_PlayEffects_Implementation(EPhysicalSurface HitSurfaceEnum, FVector Location, FVector IncomingVelocity)
