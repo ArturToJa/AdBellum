@@ -22,6 +22,8 @@
 #include "EBBarrel.h"
 #include "Formation/BaseFormation.h"
 #include "Player/IPlayer.h"
+#include "Kismet/GameplayStatics.h"
+#include "Animation/AnimInstance.h"
 
 
 class ABaseWeapon;
@@ -62,6 +64,12 @@ void ABaseUnit::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(ABaseUnit, PlayerPtr);
 	DOREPLIFETIME(ABaseUnit, OwningFormation);
 	DOREPLIFETIME(ABaseUnit, OccupiedSeat);
+	DOREPLIFETIME(ABaseUnit, CurrentWeaponSocket);
+	DOREPLIFETIME(ABaseUnit, TargetWeaponSocket);
+	DOREPLIFETIME(ABaseUnit, PrimaryDrawMontage);
+	DOREPLIFETIME(ABaseUnit, PrimaryHideMontage);
+	DOREPLIFETIME(ABaseUnit, SecondaryDrawMontage);
+	DOREPLIFETIME(ABaseUnit, SecondaryHideMontage);
 }
 
 void ABaseUnit::BeginPlay()
@@ -74,6 +82,22 @@ void ABaseUnit::BeginPlay()
 	}
 	//RecoilComponent->Deactivate();
 	RecoilAnimationComponent->AddTickPrerequisiteComponent(GetMesh());
+
+	EnsureWeaponMontageDelegatesBound();
+}
+
+void ABaseUnit::EnsureWeaponMontageDelegatesBound()
+{
+	// The mesh/AnimInstance can be swapped after BeginPlay (customization load), so this is called again
+	// right before a weapon montage plays rather than relying on the BeginPlay binding alone.
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] EnsureWeaponMontageDelegatesBound on %s Mesh=%s AnimInstance=%s"),
+		*GetName(), *GetNameSafe(GetMesh()), *GetNameSafe(AnimInstance));
+	if (AnimInstance)
+	{
+		AnimInstance->OnPlayMontageNotifyBegin.AddUniqueDynamic(this, &ABaseUnit::OnWeaponMontageNotifyBegin);
+		AnimInstance->OnMontageEnded.AddUniqueDynamic(this, &ABaseUnit::OnWeaponMontageEnded);
+	}
 }
 
 void ABaseUnit::AddRecoil_Implementation()
@@ -633,6 +657,8 @@ void ABaseUnit::Server_InteractionAction_Implementation()
 
 void ABaseUnit::PrimarySelectionAction_Implementation()
 {
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] PrimarySelectionAction_Implementation on %s MovementState=%d WeaponArray[0]=%s IsReloading=%d"),
+		*GetName(), (int32)MovementState, *GetNameSafe(WeaponArray.IsValidIndex(0) ? WeaponArray[0] : nullptr), IsReloading_Implementation());
 	if (MovementState == EALSMovementState::Stationary)
 	{
 		HandleStationaryWeaponSwitch(0);
@@ -648,6 +674,8 @@ void ABaseUnit::PrimarySelectionAction_Implementation()
 }
 void ABaseUnit::SecondarySelectionAction_Implementation()
 {
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SecondarySelectionAction_Implementation on %s MovementState=%d WeaponArray[1]=%s IsReloading=%d"),
+		*GetName(), (int32)MovementState, *GetNameSafe(WeaponArray.IsValidIndex(1) ? WeaponArray[1] : nullptr), IsReloading_Implementation());
 	if (MovementState == EALSMovementState::Stationary)
 	{
 		HandleStationaryWeaponSwitch(1);
@@ -660,8 +688,19 @@ void ABaseUnit::SecondarySelectionAction_Implementation()
 		}
 	}
 }
+void ABaseUnit::ReloadAction_Implementation()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] ReloadAction_Implementation on %s StationaryRole=%d"), *GetName(), (int32)StationaryRole);
+	if (StationaryRole == EALSStationaryRole::None)
+	{
+		HandleReloadAction();
+	}
+}
+
 void ABaseUnit::ThirdSelectionAction_Implementation()
 {
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] ThirdSelectionAction_Implementation on %s MovementState=%d WeaponArray[2]=%s IsReloading=%d"),
+		*GetName(), (int32)MovementState, *GetNameSafe(WeaponArray.IsValidIndex(2) ? WeaponArray[2] : nullptr), IsReloading_Implementation());
 	if (MovementState == EALSMovementState::Stationary)
 	{
 		HandleStationaryWeaponSwitch(2);
@@ -832,6 +871,479 @@ void ABaseUnit::SocketWeapon(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum)
 	}
 }
 
+ABaseWeapon* ABaseUnit::GetWeaponBySocket(EWeaponSocketEnum weaponSocketType) const
+{
+	const int32 Index = static_cast<int32>(weaponSocketType);
+	return WeaponArray.IsValidIndex(Index) ? WeaponArray[Index] : nullptr;
+}
+
+ABaseWeapon* ABaseUnit::GetActiveWeapon() const
+{
+	return GetWeaponBySocket(CurrentWeaponSocket);
+}
+
+void ABaseUnit::SelectOverlayState(EWeaponSocketEnum DesiredSocket)
+{
+	switch (DesiredSocket)
+	{
+	case EWeaponSocketEnum::PRIMARY:
+		Server_SetOverlayState(EALSOverlayState::Rifle, false);
+		break;
+	case EWeaponSocketEnum::SECONDARY:
+		Server_SetOverlayState(EALSOverlayState::PistolTwoHanded, false);
+		break;
+	case EWeaponSocketEnum::SPECIAL:
+		Server_SetOverlayState(EALSOverlayState::RPG, false);
+		break;
+	case EWeaponSocketEnum::NONE:
+	default:
+		Server_SetOverlayState(EALSOverlayState::Default, false);
+		break;
+	}
+}
+
+void ABaseUnit::HandleReloadAction()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] HandleReloadAction called on %s (HasAuthority=%d, LocallyControlled=%d, CurrentWeaponSocket=%d, TargetWeaponSocket=%d)"),
+		*GetName(), HasAuthority(), IsLocallyControlled(), (int32)CurrentWeaponSocket, (int32)TargetWeaponSocket);
+
+	ABaseWeapon* Weapon = GetActiveWeapon();
+	if (!Weapon || !Weapon->EBarrel)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] HandleReloadAction aborted: %s"), !Weapon ? TEXT("GetActiveWeapon() returned null") : TEXT("Weapon->EBarrel is null"));
+		return;
+	}
+
+	const bool bHasSpareAmmo = Weapon->TotalAmmo > 0;
+	const bool bMagazineNotFull = Weapon->EBarrel->CycleAmmoCount != Weapon->MagazineSize;
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] HandleReloadAction weapon=%s TotalAmmo=%d MagazineSize=%d CycleAmmoCount=%d bHasSpareAmmo=%d bMagazineNotFull=%d"),
+		*Weapon->GetName(), Weapon->TotalAmmo, Weapon->MagazineSize, Weapon->EBarrel->CycleAmmoCount, bHasSpareAmmo, bMagazineNotFull);
+	if (!bHasSpareAmmo || !bMagazineNotFull)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] HandleReloadAction aborted: nothing to reload"));
+		return;
+	}
+
+	UAnimMontage* MontageToPlay = AALSBaseCharacter::GetStance() == EALSStance::Standing ? Weapon->ReloadStandMontage : Weapon->ReloadCrouchMontage;
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] HandleReloadAction stance=%d MontageToPlay=%s"), (int32)AALSBaseCharacter::GetStance(), *GetNameSafe(MontageToPlay));
+	if (!MontageToPlay)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] HandleReloadAction aborted: no reload montage assigned on weapon"));
+		return;
+	}
+
+	PlayMontageReplicated(MontageToPlay, 1.0f);
+	Server_StartReload(Weapon);
+}
+
+void ABaseUnit::Server_StartReload_Implementation(ABaseWeapon* Weapon)
+{
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] Server_StartReload on %s Weapon=%s"), *GetName(), *GetNameSafe(Weapon));
+	if (Weapon)
+	{
+		IIWeapon::Execute_Reload(Weapon);
+	}
+}
+
+void ABaseUnit::HandleWeaponSwitch(EWeaponSocketEnum DesiredWeaponSocket)
+{
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] HandleWeaponSwitch called on %s DesiredWeaponSocket=%d (HasAuthority=%d, LocallyControlled=%d, ControlledInputInterceptor=%s)"),
+		*GetName(), (int32)DesiredWeaponSocket, HasAuthority(), IsLocallyControlled(), *GetNameSafe(ControlledInputInterceptor));
+
+	Server_SetRotationMode(EALSRotationMode::LookingDirection, false);
+
+	if (IsValid(ControlledInputInterceptor))
+	{
+		// Something (a gunner seat, a turret, ...) is intercepting this unit's input: forward the
+		// selection to it instead of switching this unit's own weapon.
+		switch (DesiredWeaponSocket)
+		{
+		case EWeaponSocketEnum::PRIMARY:
+			IALSInputInterface::Execute_PrimarySelectionAction(ControlledInputInterceptor);
+			break;
+		case EWeaponSocketEnum::SECONDARY:
+			IALSInputInterface::Execute_SecondarySelectionAction(ControlledInputInterceptor);
+			break;
+		case EWeaponSocketEnum::SPECIAL:
+			IALSInputInterface::Execute_ThirdSelectionAction(ControlledInputInterceptor);
+			break;
+		default:
+			break;
+		}
+	}
+	else
+	{
+		switch (DesiredWeaponSocket)
+		{
+		case EWeaponSocketEnum::PRIMARY:
+			SelectPrimaryWeapon();
+			break;
+		case EWeaponSocketEnum::SECONDARY:
+			SelectSecondaryWeapon();
+			break;
+		case EWeaponSocketEnum::SPECIAL:
+			SelectSpecialWeapon();
+			break;
+		default:
+			break;
+		}
+	}
+
+	if (ActiveWeaponActor)
+	{
+		IIWeapon::Execute_ResetAim(ActiveWeaponActor);
+	}
+}
+
+void ABaseUnit::SetTargetWeaponSocketReplicated(EWeaponSocketEnum DesiredSocket)
+{
+	TargetWeaponSocket = DesiredSocket;
+	if (!HasAuthority())
+	{
+		Server_SetTargetWeaponSocket(DesiredSocket);
+	}
+}
+
+void ABaseUnit::Server_SetTargetWeaponSocket_Implementation(EWeaponSocketEnum DesiredSocket)
+{
+	TargetWeaponSocket = DesiredSocket;
+}
+
+void ABaseUnit::SelectPrimaryWeapon()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectPrimaryWeapon called on %s CurrentWeaponSocket=%d HasAuthority=%d LocallyControlled=%d"), *GetName(), (int32)CurrentWeaponSocket, HasAuthority(), IsLocallyControlled());
+	if (CurrentWeaponSocket == EWeaponSocketEnum::PRIMARY)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectPrimaryWeapon: already Primary, cancelling TargetWeaponSocket"));
+		SetTargetWeaponSocketReplicated(EWeaponSocketEnum::NONE);
+		return;
+	}
+
+	SetTargetWeaponSocketReplicated(EWeaponSocketEnum::PRIMARY);
+	switch (CurrentWeaponSocket)
+	{
+	case EWeaponSocketEnum::SECONDARY:
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectPrimaryWeapon: holstering Secondary via SecondaryHideMontage=%s"), *GetNameSafe(SecondaryHideMontage));
+		PlayMontageReplicated(SecondaryHideMontage, 1.0f);
+		break;
+	case EWeaponSocketEnum::SPECIAL:
+		// Special is back-mounted like Primary, so holstering it reuses Primary's hide montage.
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectPrimaryWeapon: holstering Special via PrimaryHideMontage=%s"), *GetNameSafe(PrimaryHideMontage));
+		PlayMontageReplicated(PrimaryHideMontage, 1.0f);
+		break;
+	case EWeaponSocketEnum::NONE:
+	default:
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectPrimaryWeapon: drawing directly via PrimaryDrawMontage=%s"), *GetNameSafe(PrimaryDrawMontage));
+		PlayMontageReplicated(PrimaryDrawMontage, 1.0f);
+		break;
+	}
+}
+
+void ABaseUnit::SelectSecondaryWeapon()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSecondaryWeapon called on %s CurrentWeaponSocket=%d HasAuthority=%d LocallyControlled=%d"), *GetName(), (int32)CurrentWeaponSocket, HasAuthority(), IsLocallyControlled());
+	if (CurrentWeaponSocket == EWeaponSocketEnum::SECONDARY)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSecondaryWeapon: already Secondary, cancelling TargetWeaponSocket"));
+		SetTargetWeaponSocketReplicated(EWeaponSocketEnum::NONE);
+		return;
+	}
+
+	SetTargetWeaponSocketReplicated(EWeaponSocketEnum::SECONDARY);
+	switch (CurrentWeaponSocket)
+	{
+	case EWeaponSocketEnum::PRIMARY:
+	case EWeaponSocketEnum::SPECIAL:
+		// Both Primary and Special are back-mounted, so holstering either reuses Primary's hide montage.
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSecondaryWeapon: holstering via PrimaryHideMontage=%s"), *GetNameSafe(PrimaryHideMontage));
+		PlayMontageReplicated(PrimaryHideMontage, 1.0f);
+		break;
+	case EWeaponSocketEnum::NONE:
+	default:
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSecondaryWeapon: drawing directly via SecondaryDrawMontage=%s"), *GetNameSafe(SecondaryDrawMontage));
+		PlayMontageReplicated(SecondaryDrawMontage, 1.0f);
+		break;
+	}
+}
+
+void ABaseUnit::SelectSpecialWeapon()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSpecialWeapon called on %s CurrentWeaponSocket=%d HasAuthority=%d LocallyControlled=%d"), *GetName(), (int32)CurrentWeaponSocket, HasAuthority(), IsLocallyControlled());
+	if (CurrentWeaponSocket == EWeaponSocketEnum::SPECIAL)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSpecialWeapon: already Special, cancelling TargetWeaponSocket"));
+		SetTargetWeaponSocketReplicated(EWeaponSocketEnum::NONE);
+		return;
+	}
+
+	SetTargetWeaponSocketReplicated(EWeaponSocketEnum::SPECIAL);
+	switch (CurrentWeaponSocket)
+	{
+	case EWeaponSocketEnum::PRIMARY:
+		// Primary<->Special fast-swap: the hand is already behind the back, so this skips the holster
+		// montage entirely (see HandleWeaponDrawingNotify's CheckFastSwap case).
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSpecialWeapon: fast-swap from Primary, no montage"));
+		SelectOverlayState(EWeaponSocketEnum::PRIMARY);
+		break;
+	case EWeaponSocketEnum::SECONDARY:
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSpecialWeapon: holstering Secondary via SecondaryHideMontage=%s"), *GetNameSafe(SecondaryHideMontage));
+		PlayMontageReplicated(SecondaryHideMontage, 1.0f);
+		break;
+	case EWeaponSocketEnum::NONE:
+	default:
+		// No dedicated Special draw montage: reuses Primary's, per the back-mounted weapon design.
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] SelectSpecialWeapon: drawing directly via PrimaryDrawMontage=%s"), *GetNameSafe(PrimaryDrawMontage));
+		PlayMontageReplicated(PrimaryDrawMontage, 1.0f);
+		break;
+	}
+}
+
+void ABaseUnit::AttachToHandOverriden_Implementation(UStaticMesh* NewStaticMesh, USkeletalMesh* NewSkeletalMesh, TSubclassOf<UAnimInstance> NewAnimClass, bool bLeftHand, FVector Offset, AActor* AttachActor)
+{
+	// Implemented in the Blueprint (mesh/anim class swap on the held-object component, hand-IK socket
+	// attach, Hand IK setup); this default only runs if no BP override exists.
+}
+
+void ABaseUnit::AttachWeaponBySocket(EWeaponSocketEnum weaponSocketType)
+{
+	WeaponToEquip = GetWeaponBySocket(weaponSocketType);
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] AttachWeaponBySocket on %s weaponSocketType=%d WeaponToEquip=%s"),
+		*GetName(), (int32)weaponSocketType, *GetNameSafe(WeaponToEquip));
+	if (!WeaponToEquip)
+	{
+		return;
+	}
+
+	GunOffset = WeaponToEquip->WeaponHeldRelativeLocation;
+	AttachToHandOverriden(nullptr, nullptr, nullptr, false, GunOffset, WeaponToEquip);
+	CurrentWeaponSocket = weaponSocketType;
+
+	if (URecoilData* WeaponRecoilData = WeaponToEquip->RecoilData)
+	{
+		EFireMode_PRAS PRASFireMode = EFireMode_PRAS::Auto;
+		if (WeaponToEquip->EBarrel)
+		{
+			switch (WeaponToEquip->EBarrel->FireMode)
+			{
+			case EFireMode::FM_Semiauto:
+			case EFireMode::FM_Manual:
+			case EFireMode::FM_Slamfire:
+				PRASFireMode = EFireMode_PRAS::Semi;
+				break;
+			case EFireMode::FM_Burst:
+			case EFireMode::FM_InterBurst:
+				PRASFireMode = EFireMode_PRAS::Burst;
+				break;
+			case EFireMode::FM_Auto:
+			case EFireMode::FM_Gatling:
+			default:
+				PRASFireMode = EFireMode_PRAS::Auto;
+				break;
+			}
+		}
+		RecoilAnimationComponent->SetFireMode(PRASFireMode);
+		const float FireRateMax = WeaponToEquip->EBarrel ? WeaponToEquip->EBarrel->FireRateMax : 0.0f;
+		RecoilAnimationComponent->Init(WeaponRecoilData, FireRateMax * 60.0f);
+
+		if (WeaponToEquip->WeaponMeshComponent)
+		{
+			PivotPointCS = WeaponToEquip->WeaponMeshComponent->GetSocketTransform(FName("Slide"), RTS_Component);
+		}
+	}
+}
+
+void ABaseUnit::PlayMontageReplicated(UAnimMontage* Montage, float PlayRate)
+{
+	if (!Montage)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] PlayMontageReplicated called on %s with a null Montage, aborting"), *GetName());
+		return;
+	}
+	EnsureWeaponMontageDelegatesBound();
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] PlayMontageReplicated on %s Montage=%s PlayRate=%f AnimInstance=%s"),
+		*GetName(), *Montage->GetName(), PlayRate, *GetNameSafe(AnimInstance));
+	if (AnimInstance)
+	{
+		const float Length = AnimInstance->Montage_Play(Montage, PlayRate);
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] PlayMontageReplicated local Montage_Play returned length=%f"), Length);
+	}
+	Server_PlayMontage(Montage, PlayRate);
+}
+
+void ABaseUnit::Server_FinishMontage_Implementation()
+{
+	ABaseWeapon* Weapon = GetActiveWeapon();
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] Server_FinishMontage on %s Weapon=%s bIsReloading=%d"),
+		*GetName(), *GetNameSafe(Weapon), Weapon ? Weapon->bIsReloading : false);
+	if (Weapon && Weapon->bIsReloading)
+	{
+		IIWeapon::Execute_ReloadComplete(Weapon);
+	}
+}
+
+bool ABaseUnit::IsWeaponMontage(const UAnimMontage* Montage) const
+{
+	if (!Montage)
+	{
+		return false;
+	}
+	if (Montage == PrimaryDrawMontage || Montage == PrimaryHideMontage ||
+		Montage == SecondaryDrawMontage || Montage == SecondaryHideMontage)
+	{
+		return true;
+	}
+	const ABaseWeapon* Weapon = GetActiveWeapon();
+	return Weapon && (Montage == Weapon->ReloadStandMontage || Montage == Weapon->ReloadCrouchMontage);
+}
+
+void ABaseUnit::OnWeaponMontageNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& BranchingPointPayload)
+{
+	UAnimMontage* NotifyMontage = Cast<UAnimMontage>(BranchingPointPayload.SequenceAsset);
+	const bool bIsWeapon = IsWeaponMontage(NotifyMontage);
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] OnWeaponMontageNotifyBegin on %s NotifyName=%s Montage=%s IsWeaponMontage=%d"),
+		*GetName(), *NotifyName.ToString(), *GetNameSafe(NotifyMontage), bIsWeapon);
+	if (bIsWeapon)
+	{
+		MontageNotifiesLogic(NotifyName);
+	}
+}
+
+void ABaseUnit::OnWeaponMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	const bool bIsWeapon = IsWeaponMontage(Montage);
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] OnWeaponMontageEnded on %s Montage=%s bInterrupted=%d IsWeaponMontage=%d"),
+		*GetName(), *GetNameSafe(Montage), bInterrupted, bIsWeapon);
+	if (!bInterrupted && bIsWeapon)
+	{
+		Server_FinishMontage();
+	}
+}
+
+void ABaseUnit::MontageNotifiesLogic(FName NotifyName)
+{
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] MontageNotifiesLogic on %s NotifyName=%s"), *GetName(), *NotifyName.ToString());
+	if (NotifyName == FName("OldMagGrab") || NotifyName == FName("GrabNewMag") || NotifyName == FName("AttachMag"))
+	{
+		HandleReloadMontageNotify(NotifyName);
+		return;
+	}
+
+	if (NotifyName == FName("DrawWeapon") || NotifyName == FName("HideWeapon") ||
+		NotifyName == FName("CheckTargetSocket") || NotifyName == FName("CheckFastSwap"))
+	{
+		HandleWeaponDrawingNotify(NotifyName);
+		return;
+	}
+
+	// Any other notify on a weapon montage: nothing to do (completion is handled by OnWeaponMontageEnded).
+}
+
+void ABaseUnit::HandleReloadMontageNotify(FName NotifyName)
+{
+	ABaseWeapon* Weapon = GetActiveWeapon();
+	if (!Weapon || !Weapon->Magazine)
+	{
+		return;
+	}
+
+	if (NotifyName == FName("OldMagGrab"))
+	{
+		Weapon->Magazine->DetachFromComponent(FDetachmentTransformRules(EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, true));
+		Weapon->Magazine->SetSimulatePhysics(true);
+	}
+	else if (NotifyName == FName("AttachMag"))
+	{
+		Weapon->Magazine->SetSimulatePhysics(false);
+		Weapon->Magazine->SetVisibility(true, false);
+		Weapon->Magazine->AttachToComponent(Weapon->WeaponMeshComponent,
+			FAttachmentTransformRules(EAttachmentRule::SnapToTarget, EAttachmentRule::SnapToTarget, EAttachmentRule::SnapToTarget, true),
+			FName("Mag"));
+	}
+	// GrabNewMag: no visual/state change defined yet.
+}
+
+void ABaseUnit::HandleWeaponDrawingNotify(FName NotifyName)
+{
+	if (NotifyName == FName("HideWeapon"))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] HideWeapon on %s TargetWeaponSocket=%d CurrentWeaponSocket=%d ActiveWeaponActor(before)=%s HasAuthority=%d LocallyControlled=%d"),
+			*GetName(), (int32)TargetWeaponSocket, (int32)CurrentWeaponSocket, *GetNameSafe(ActiveWeaponActor), HasAuthority(), IsLocallyControlled());
+		// Re-holsters whichever weapon is currently equipped.
+		SocketWeapon(GetWeaponBySocket(CurrentWeaponSocket), CurrentWeaponSocket);
+		Server_SetOverlayState(EALSOverlayState::Default, false);
+		// Cleared until DrawWeapon assigns the new weapon; RepairLocalActiveWeapon restores it from
+		// CurrentWeaponSocket if a client is left without one (e.g. the switch never completes).
+		ActiveWeaponActor = nullptr;
+		return;
+	}
+
+	if (NotifyName == FName("DrawWeapon"))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] DrawWeapon on %s TargetWeaponSocket=%d CurrentWeaponSocket(before)=%d HasAuthority=%d LocallyControlled=%d"),
+			*GetName(), (int32)TargetWeaponSocket, (int32)CurrentWeaponSocket, HasAuthority(), IsLocallyControlled());
+		// Reads TargetWeaponSocket before it gets cleared below.
+		SelectOverlayState(TargetWeaponSocket);
+
+		USoundBase* RaiseSound = nullptr;
+		switch (TargetWeaponSocket)
+		{
+		case EWeaponSocketEnum::PRIMARY:   RaiseSound = PrimaryDrawSound; break;
+		case EWeaponSocketEnum::SECONDARY: RaiseSound = SecondaryDrawSound; break;
+		case EWeaponSocketEnum::SPECIAL:   RaiseSound = SpecialDrawSound; break;
+		default: break;
+		}
+		if (RaiseSound && GetMesh())
+		{
+			UGameplayStatics::PlaySoundAtLocation(this, RaiseSound, GetMesh()->GetComponentLocation());
+		}
+
+		ActiveWeaponActor = GetWeaponBySocket(TargetWeaponSocket);
+		OnWeaponUpdated_Implementation(ActiveWeaponActor);
+		CurrentWeaponSocket = TargetWeaponSocket;
+		TargetWeaponSocket = EWeaponSocketEnum::NONE;
+		return;
+	}
+
+	if (NotifyName == FName("CheckTargetSocket"))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] CheckTargetSocket on %s TargetWeaponSocket=%d CurrentWeaponSocket=%d HasAuthority=%d LocallyControlled=%d"),
+			*GetName(), (int32)TargetWeaponSocket, (int32)CurrentWeaponSocket, HasAuthority(), IsLocallyControlled());
+		switch (TargetWeaponSocket)
+		{
+		case EWeaponSocketEnum::PRIMARY:
+			// Coming from the hip-holstered Secondary, the hand isn't already near the back socket, so
+			// Primary needs its own draw montage. Primary<->Special swaps skip this (see CheckFastSwap).
+			if (CurrentWeaponSocket == EWeaponSocketEnum::SECONDARY)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] CheckTargetSocket: TargetWeaponSocket=PRIMARY and CurrentWeaponSocket=SECONDARY, playing PrimaryDrawMontage"));
+				PlayMontageReplicated(PrimaryDrawMontage, 1.0f);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] CheckTargetSocket: TargetWeaponSocket=PRIMARY but CurrentWeaponSocket=%d (not SECONDARY), skipping draw montage"), (int32)CurrentWeaponSocket);
+			}
+			break;
+		case EWeaponSocketEnum::SECONDARY:
+			PlayMontageReplicated(SecondaryDrawMontage, 1.0f);
+			break;
+		case EWeaponSocketEnum::SPECIAL:
+			// Special is back-mounted like Primary, so by design it reuses the Primary draw montage.
+			PlayMontageReplicated(PrimaryDrawMontage, 1.0f);
+			break;
+		default:
+			break;
+		}
+		return;
+	}
+
+	if (NotifyName == FName("CheckFastSwap"))
+	{
+		// Gate only: holstering Primary/Special already moves the hand behind the back, so swapping
+		// between the two can fast-grab from there instead of playing a full draw montage.
+		return;
+	}
+}
 
 bool ABaseUnit::GetHipFire()
 {
@@ -1088,10 +1600,13 @@ void ABaseUnit::ConfigureUnit_Implementation(const FMeshCreatorPrefabStruct& Uni
 
 void ABaseUnit::ConfigureWeapon_Implementation(ABaseWeapon* Weapon, EWeaponSocketEnum SocketEnum)
 {
+	UE_LOG(LogTemp, Warning, TEXT("[WeaponDebug] ConfigureWeapon_Implementation on %s Weapon=%s SocketEnum=%d ActiveWeaponActor(before)=%s CurrentWeaponSocket(before)=%d"),
+		*GetName(), *GetNameSafe(Weapon), (int32)SocketEnum, *GetNameSafe(ActiveWeaponActor), (int32)CurrentWeaponSocket);
 	WeaponArray[(uint8)SocketEnum] = Weapon;
 	if (ActiveWeaponActor == nullptr)
 	{
 		ActiveWeaponActor = Weapon;
+		CurrentWeaponSocket = SocketEnum;
 		EALSOverlayState NewState = EALSOverlayState::Default;
 		switch (SocketEnum)
 		{

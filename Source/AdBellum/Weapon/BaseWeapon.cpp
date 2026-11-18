@@ -58,6 +58,7 @@ void ABaseWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(ABaseWeapon, EBarrel);
 	DOREPLIFETIME(ABaseWeapon, SightComponent);
 	DOREPLIFETIME(ABaseWeapon, TotalAmmo);
+	DOREPLIFETIME(ABaseWeapon, bIsReloading);
 }
 
 void ABaseWeapon::OnConstruction(const FTransform& Transform)

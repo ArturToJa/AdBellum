@@ -20,6 +20,7 @@
 #include "RecoilAnimationComponent.h"
 #include "UnitAIController.h"
 #include "Perception/AISightTargetInterface.h"
+#include "Animation/AnimNotifies/AnimNotify.h"
 #include "BaseUnit.generated.h"
 
 
@@ -112,11 +113,138 @@ public:
 	FName SecondaryWeaponSocketName = "secondaryWeaponSocket";
 	FName SpecialWeaponSocketName = "specialWeaponSocket";
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons")
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Weapons")
 	EWeaponSocketEnum CurrentWeaponSocket;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons")
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Weapons")
 	EWeaponSocketEnum TargetWeaponSocket = EWeaponSocketEnum::NONE;
+
+	// Weapon actor at weaponSocketType's slot, or null when that slot is empty/out of range.
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	ABaseWeapon* GetWeaponBySocket(EWeaponSocketEnum weaponSocketType) const;
+
+	// Weapon at CurrentWeaponSocket.
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	ABaseWeapon* GetActiveWeapon() const;
+
+	// Sets the overlay state (Rifle/PistolTwoHanded/RPG/Default) matching DesiredSocket.
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	void SelectOverlayState(EWeaponSocketEnum DesiredSocket);
+
+	//WEAPON SWITCHING
+
+	// Switches to the weapon in socket DesiredSocket: holsters whatever is currently equipped (or draws
+	// directly if nothing is), or cancels back to NONE if DesiredSocket is already equipped. Bound to the
+	// Primary/Secondary/Special weapon-select input actions.
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	void SelectPrimaryWeapon();
+
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	void SelectSecondaryWeapon();
+
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	void SelectSpecialWeapon();
+
+	// Sets TargetWeaponSocket locally and, if this machine isn't the server, forwards the same value via
+	// Server RPC so the authoritative copy is updated before its own (multicast-driven) montage notifies
+	// read it. Without this, the server's own DrawWeapon notify would read a stale TargetWeaponSocket
+	// (never set server-side for remote-client input) and corrupt CurrentWeaponSocket back to NONE, which
+	// then replicates down and stomps the client's correct local state.
+	void SetTargetWeaponSocketReplicated(EWeaponSocketEnum DesiredSocket);
+
+	UFUNCTION(Server, Reliable, Category = "Weapons")
+	void Server_SetTargetWeaponSocket(EWeaponSocketEnum DesiredSocket);
+
+	// Generic "attach to hand" logic (static/skeletal mesh + anim class swap on the held-object component,
+	// hand-IK socket attach, Hand IK setup) stays implemented in Blueprint; this just gives C++ a hook to
+	// call it, e.g. from AttachWeaponBySocket.
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Weapons")
+	void AttachToHandOverriden(UStaticMesh* NewStaticMesh, USkeletalMesh* NewSkeletalMesh, TSubclassOf<UAnimInstance> NewAnimClass, bool bLeftHand, FVector Offset, AActor* AttachActor);
+	virtual void AttachToHandOverriden_Implementation(UStaticMesh* NewStaticMesh, USkeletalMesh* NewSkeletalMesh, TSubclassOf<UAnimInstance> NewAnimClass, bool bLeftHand, FVector Offset, AActor* AttachActor);
+
+	// Weapon currently being attached to the hand via AttachWeaponBySocket.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons")
+	ABaseWeapon* WeaponToEquip;
+
+	// Relative hand offset of WeaponToEquip, passed to AttachToHandOverriden.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons")
+	FVector GunOffset;
+
+	// WeaponToEquip's "Slide" socket transform (component space), used by the recoil animation system.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons")
+	FTransform PivotPointCS;
+
+	// Attaches the weapon at weaponSocketType to the hand and sets up its recoil animation, then marks it
+	// the current weapon socket.
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	void AttachWeaponBySocket(EWeaponSocketEnum weaponSocketType);
+
+	//RELOAD / WEAPON-DRAW MONTAGE HANDLING
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Weapons|Montage")
+	UAnimMontage* PrimaryDrawMontage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Weapons|Montage")
+	UAnimMontage* PrimaryHideMontage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Weapons|Montage")
+	UAnimMontage* SecondaryDrawMontage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Weapons|Montage")
+	UAnimMontage* SecondaryHideMontage;
+
+	// Weapon-raise SFX played by the DrawWeapon montage notify, picked by the socket being drawn. Special
+	// is back-mounted like Primary and currently has no distinct draw montage/sound of its own.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons|Montage")
+	USoundBase* PrimaryDrawSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons|Montage")
+	USoundBase* SecondaryDrawSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons|Montage")
+	USoundBase* SpecialDrawSound;
+
+	// Checks ammo/stance and plays this unit's weapon reload montage. Bound to the Reload input action.
+	UFUNCTION(BlueprintCallable, Category = "Weapons|Montage")
+	void HandleReloadAction();
+
+	// Starts the weapon's authoritative reload (ammo/EBarrel mutation) on the server, regardless of which
+	// machine's input triggered HandleReloadAction.
+	UFUNCTION(Server, Reliable, Category = "Weapons|Montage")
+	void Server_StartReload(ABaseWeapon* Weapon);
+
+	// Plays Montage locally right away and replicates it through the inherited Server_PlayMontage /
+	// Multicast_PlayMontage (ALSBaseCharacter), the same RPCs rolling uses.
+	void PlayMontageReplicated(UAnimMontage* Montage, float PlayRate);
+
+	UFUNCTION(Server, Reliable, Category = "Weapons|Montage")
+	void Server_FinishMontage();
+
+	// Dispatches a weapon montage notify (reload mag notifies, weapon draw/holster notifies) by name.
+	UFUNCTION(BlueprintCallable, Category = "Weapons|Montage")
+	void MontageNotifiesLogic(FName NotifyName);
+
+private:
+	void HandleReloadMontageNotify(FName NotifyName);
+	void HandleWeaponDrawingNotify(FName NotifyName);
+
+	// Whether Montage is one this unit plays through PlayMontageReplicated (reload / draw / holster),
+	// as opposed to an unrelated montage (rolling, getup, ...) sharing the same AnimInstance delegates.
+	bool IsWeaponMontage(const UAnimMontage* Montage) const;
+
+	// (Re-)binds the notify/end delegates to the current AnimInstance. Called from BeginPlay and again
+	// from PlayMontageReplicated, since the mesh/AnimInstance can be swapped after BeginPlay (customization
+	// load) and AddUniqueDynamic is a no-op if already bound to the current AnimInstance.
+	void EnsureWeaponMontageDelegatesBound();
+
+	UFUNCTION()
+	void OnWeaponMontageNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& BranchingPointPayload);
+
+	UFUNCTION()
+	void OnWeaponMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+public:
+	//END RELOAD / WEAPON-DRAW MONTAGE HANDLING
 
 	//UFUNCTION(BlueprintCallable, Category = "Weapons")
 	//void PrepareLoadout();
@@ -288,9 +416,6 @@ public:
 
 	FTimerHandle GunnerAimSendTimer;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS|Input")
-	bool bIsReloading = false;
-
 	//Check AALSPlayerController::PrimarySelectionAction
 	//UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 	virtual void PrimarySelectionAction_Implementation() override;
@@ -301,7 +426,11 @@ public:
 	//UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
 	virtual void ThirdSelectionAction_Implementation() override;
 
-	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Weapon")
+	//Check AALSPlayerController::ReloadAction
+	//UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "ALS|Input")
+	virtual void ReloadAction_Implementation() override;
+
+	UFUNCTION(BlueprintCallable, Category = "Weapon")
 	void HandleWeaponSwitch(EWeaponSocketEnum DesiredWeaponSocket);
 
 	//0 - primary

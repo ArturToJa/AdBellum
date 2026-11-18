@@ -311,6 +311,8 @@ public:
 	virtual float GetSightMagnification_Implementation() override;
 
 	virtual void BeginPlay() override;
+
+	UPROPERTY(Replicated)
 	bool bIsReloading = false;
 	void RefillAmmo();
 	UFUNCTION(BlueprintCallable)
