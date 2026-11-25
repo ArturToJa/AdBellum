@@ -169,6 +169,11 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "ALS|Vault System")
 	FTransform VaultTargetTransform = FTransform::Identity;
 
+	// Velocity captured right before MOVE_None disables normal movement, re-applied in VaultEnd so the
+	// character carries their speed (e.g. a sprint) out of the vault instead of coming to a dead stop.
+	UPROPERTY(BlueprintReadOnly, Category = "ALS|Vault System")
+	FVector VaultPreVaultVelocity = FVector::ZeroVector;
+
 	// Blended through at the midpoint of the vault (see VaultUpdate) so the path goes up and over the
 	// ledge instead of a straight line from before the obstacle to after it, which would cut through its
 	// own volume (collision is off for the duration of the vault, so nothing else would stop that).

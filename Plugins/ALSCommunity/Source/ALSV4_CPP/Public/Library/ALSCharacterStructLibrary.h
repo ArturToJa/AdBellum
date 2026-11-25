@@ -160,6 +160,11 @@ struct FALSVaultAsset
 
 	UPROPERTY(EditAnywhere, Category = "Vault System")
 	float PlayRate = 1.0f;
+
+	// PlayRate is multiplied by this while the character is Sprinting (EALSGait::Sprinting), so vaulting
+	// feels snappier at full speed instead of always playing at the same pace regardless of gait.
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	float SprintPlayRateMultiplier = 1.0f;
 };
 
 USTRUCT(BlueprintType)

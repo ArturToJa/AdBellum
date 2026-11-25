@@ -106,10 +106,18 @@ void UALSMantleComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	if (OwnerCharacter && OwnerCharacter->GetMovementState() == EALSMovementState::InAir)
 	{
-		// Perform a mantle check if falling while movement input is pressed.
+		// Perform a mantle check if falling while movement input is pressed. This runs every tick
+		// regardless of jump input, so without trying Vault first here too, this automatic check grabs
+		// any mantleable-height obstacle via mantling before a deliberate jump press (which also tries
+		// Vault first, in OnOwnerJumpInput) ever gets a chance to - same Vault-first, Mantle-fallback
+		// pattern as that function.
 		if (OwnerCharacter->HasMovementInput())
 		{
-			MantleCheck(FallingTraceSettings, EDrawDebugTrace::Type::ForOneFrame);
+			const bool bVaulted = VaultCheck(VaultTraceSettings, EDrawDebugTrace::Type::ForOneFrame);
+			if (!bVaulted)
+			{
+				MantleCheck(FallingTraceSettings, EDrawDebugTrace::Type::ForOneFrame);
+			}
 		}
 	}
 }
@@ -745,6 +753,10 @@ bool UALSMantleComponent::VaultStart(float VaultHeight, const FALSComponentAndTr
 	VaultParams.AnimMontage = VaultAsset.AnimMontage;
 	VaultParams.PositionCorrectionCurve = VaultAsset.PositionCorrectionCurve;
 	VaultParams.PlayRate = VaultAsset.PlayRate > 0.0f ? VaultAsset.PlayRate : 1.0f;
+	if (OwnerCharacter->GetGait() == EALSGait::Sprinting && VaultAsset.SprintPlayRateMultiplier > 0.0f)
+	{
+		VaultParams.PlayRate *= VaultAsset.SprintPlayRateMultiplier;
+	}
 	VaultParams.StartingOffset = VaultAsset.StartingOffset;
 	VaultParams.ApexAlpha = FMath::Clamp(VaultAsset.ApexAlpha, 0.01f, 0.99f);
 	VaultParams.PelvisHeightAtHandContact = VaultAsset.PelvisHeightAtHandContact;
@@ -790,6 +802,7 @@ bool UALSMantleComponent::VaultStart(float VaultHeight, const FALSComponentAndTr
 		*VaultActualStartOffset.GetLocation().ToString(), *VaultAnimatedStartOffset.GetLocation().ToString(),
 		VaultParams.ApexAlpha, *VaultParams.StartingOffset.ToString());
 
+	VaultPreVaultVelocity = OwnerCharacter->GetCharacterMovement()->Velocity;
 	OwnerCharacter->GetCharacterMovement()->SetMovementMode(MOVE_None);
 
 	const float VaultDuration = VaultAsset.AnimMontage->GetPlayLength() / VaultParams.PlayRate;
@@ -905,6 +918,11 @@ void UALSMantleComponent::VaultEnd()
 		// unflushed, it gets applied all at once the instant Walking resumes, causing a sudden snap.
 		OwnerCharacter->ConsumeMovementInputVector();
 		OwnerCharacter->GetCharacterMovement()->StopMovementImmediately();
+		// StopMovementImmediately just zeroed Velocity - re-apply whatever speed/direction the character
+		// had going into the vault (e.g. a sprint) so they carry it out instead of resuming from a dead
+		// stop. CharacterMovementComponent will correct/override this on the next tick if held input
+		// disagrees, same as it would after any other momentary external velocity set.
+		OwnerCharacter->GetCharacterMovement()->Velocity = VaultPreVaultVelocity;
 		OwnerCharacter->SetMovementState(EALSMovementState::Grounded);
 
 		if (OwnerCharacter->IsA(AALSCharacter::StaticClass()))
@@ -958,7 +976,13 @@ void UALSMantleComponent::OnOwnerJumpInput()
 		}
 		else if (OwnerCharacter->GetMovementState() == EALSMovementState::InAir)
 		{
-			MantleCheck(FallingTraceSettings, EDrawDebugTrace::Type::ForDuration);
+			// Same Vault-first, Mantle-fallback pattern as the Grounded branch above - without this,
+			// falling+jump always mantled even when there was room to vault.
+			const bool bVaulted = VaultCheck(VaultTraceSettings, EDrawDebugTrace::Type::ForDuration);
+			if (!bVaulted)
+			{
+				MantleCheck(FallingTraceSettings, EDrawDebugTrace::Type::ForDuration);
+			}
 		}
 	}
 }
