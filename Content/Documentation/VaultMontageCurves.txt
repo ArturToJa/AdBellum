@@ -1,0 +1,119 @@
+VAULT MONTAGE CURVES - WHAT THEY MEAN AND HOW TO SET THEM
+============================================================
+Written while debugging ALS_Vault_montage. Source: ALSCharacterAnimInstance.cpp in
+Plugins/ALSCommunity/Source/ALSV4_CPP/Private/Character/Animation/. Every curve name
+below is read by that file via GetCurveValue(...) - that's where these meanings come
+from, not guesswork. I could not read the actual authored curve VALUES on
+ALS_Vault_montage through my tools (the Montage editor's curve data isn't exposed to
+the property-reflection API I have access to), so this document explains what each
+curve DOES and what it SHOULD be doing for a vault, so you can check/fix the values
+yourself in the Curve Editor panel of the Montage.
+
+HOW THIS SYSTEM WORKS
+----------------------
+ALS's AnimBP doesn't hardcode "this montage means climb" anywhere. Instead, every
+montage/animation that plays is expected to carry a set of named float curves (visible
+in the "Curves" panel at the bottom of the Montage/Sequence editor). Every frame, the
+AnimInstance reads whatever value each curve has AT THE CURRENT PLAYBACK POSITION and
+uses it to drive foot IK, pose layering, and transition logic. This means the SAME
+piece of C++/Blueprint logic produces completely different behavior depending on what
+curves a given montage carries - it's montage-driven configuration, not code.
+
+If a curve is simply absent from the montage, GetCurveValue returns 0.0 for it. So
+"missing curve" and "curve explicitly keyed to 0" behave the same way.
+
+THE ONE MOST LIKELY TO BE YOUR "GLUED LEGS" PROBLEM
+-----------------------------------------------------
+Enable_FootIK_L / Enable_FootIK_R
+  Range 0-1. This is the master switch for foot IK on each leg.
+  - At 0: the foot follows the RAW animated pose exactly, no adjustment. Good for a leg
+    that's mid-air, swinging over an obstacle, or doing anything that isn't standing on
+    real ground.
+  - At 1 (or any value > 0): every frame, the AnimInstance traces STRAIGHT DOWN from
+    that foot's current position to find real ground, and bends/offsets the leg via IK
+    to plant the foot exactly on whatever surface it finds (SetFootOffsets, line ~520
+    in ALSCharacterAnimInstance.cpp). It does this completely independent of what the
+    raw animation intended - it will snap the foot to the floor even if the authored
+    pose has the leg raised mid-climb.
+  This is almost certainly your "legs glued to the ground" symptom: if this curve stays
+  near 1 through the climbing/airborne portion of anim_Vault, the IK system is actively
+  pulling both feet down onto whatever ground is directly beneath the character at that
+  moment (which, mid-vault, is not where the animated pose wants them).
+  WHAT TO DO: key this to 0 through the portion of the clip where the character is off
+  the ground / climbing over the obstacle, and only ramp it back up to 1 near the very
+  end, once the feet are meant to actually plant on the landing surface.
+
+FootLock_L / FootLock_R
+  Range 0-1, only has any effect while the matching Enable_FootIK curve is > 0 (see
+  SetFootLocking, line ~408). At 1, the foot's last IK-solved position/rotation is
+  locked in component space and held there every frame regardless of capsule movement,
+  specifically to stop a planted foot from sliding while the capsule moves (e.g. during
+  a turn). This only matters once FootIK is already enabled, so it's secondary to the
+  Enable_FootIK curves above, but it's worth checking it isn't forcing a lock mid-climb
+  either.
+
+OTHER CURVES THAT MATTER FOR A SPECIAL FULL-BODY MONTAGE LIKE THIS
+---------------------------------------------------------------------
+Enable_Transition
+  Range 0-1. At >= 0.99, this tells the AnimBP "the character is currently in a stable,
+  locked full-body pose" - it's what lets turn-in-place and dynamic transitions trigger
+  (CanTurnInPlace / CanDynamicTransition), and gates whether weapon-overlay relax rules
+  consider the pose "settled" (UpdateOverlayRelaxRule, line ~1081). For a climbing
+  action like Vault you generally want this at 0 for the whole clip - the character
+  isn't in an idle/settled pose, it's mid-action.
+
+Mask_LandPrediction
+  Range 0-1. Used by CalculateLandPrediction (line ~891) specifically while the
+  character is in the InAir movement state: it fades OUT the automatic ground-prediction
+  lean/pose blend as this curve goes to 1, so an authored landing animation isn't
+  fought by the automatic system. Since Vault forces MovementState to Mantling (not
+  InAir) for its duration, this curve has no effect on Vault's own pose - only relevant
+  if you ever let Vault pass through the InAir state.
+
+BasePose_N / BasePose_CLF
+  These select which base locomotion pose layer blends under everything else (Normal
+  vs Crouched-Low-something). A vault montage playing as a full-body overlay would
+  normally want BasePose_N high during the clip so the base layer doesn't fight it, but
+  this depends on which slot/layer the montage plays into. Check what LandRoll uses
+  here as your reference.
+
+Layering_Arm_L / Layering_Arm_R / Layering_Hand_L / Layering_Hand_R / Enable_HandIK_L
+/ Enable_HandIK_R
+  These control how much of the arm/hand pose comes from the montage itself vs the
+  base layer, and whether hand IK (e.g. for weapon grip) is allowed to override it
+  (UpdateLayerValues, line ~348). If the vaulting animation should fully override hand
+  placement while climbing (hands on the ledge, not on the weapon), these should be
+  high/1 for the arms during that portion, with hand IK suppressed to let the climbing
+  pose win.
+
+Mask_AimOffset
+  Inverse mask (1 = aim offset fully suppressed) - during a vault you almost certainly
+  want this at 1 so the normal aim-offset blend doesn't fight the climbing pose.
+
+W_Gait, Feet_Position, Feet_Crossing, HipOrientation_Bias
+  These feed directional-locomotion blending logic (which stride/cycle pose to blend
+  toward) and generally don't matter for a non-looping full-body action montage like
+  Vault - they're locomotion-cycle concerns, not special-action concerns. Shouldn't
+  need authoring on anim_Vault.
+
+WHY COPYING LandRoll's CURVES HELPED
+---------------------------------------
+LandRoll is ALS's own reference full-body special-action montage, so its curves are a
+known-correct baseline for "how do I tell the AnimBP I'm doing a full-body special
+action right now" (Enable_Transition low, FootIK/HandIK suppressed appropriately,
+AimOffset masked). Copying it got you most of the way there, which is why behavior
+visibly improved. The difference you still need to author is the FootIK timing
+specifically: LandRoll is a quick ground-level roll where the feet are briefly off the
+ground for a very short, fairly uniform window. Vault has a much longer, more varied
+arc (reach up, clear the obstacle, descend, land) so Enable_FootIK_L/R likely need their
+own distinct ramp - off for the whole climb/clear portion, only ramping on right at
+the landing frames - rather than just reusing LandRoll's timing verbatim.
+
+HOW TO CHECK/EDIT THESE YOURSELF
+-----------------------------------
+In the Montage editor (or the underlying anim_Vault sequence editor), the "Curves"
+section at the bottom lists every curve by name with its keyframes graphed over time.
+Compare each name above against what anim_Vault currently has: a name that's simply
+ABSENT from that list is being read as a constant 0 by the code (same as a curve
+explicitly keyed to 0 throughout). Add any missing curve via the "+" in that panel,
+name it EXACTLY as above (case-sensitive), and key it according to the guidance above.

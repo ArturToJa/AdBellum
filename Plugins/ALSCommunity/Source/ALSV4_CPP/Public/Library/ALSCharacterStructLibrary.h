@@ -121,6 +121,48 @@ struct FALSMantleAsset
 };
 
 USTRUCT(BlueprintType)
+struct FALSVaultAsset
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	TObjectPtr<UAnimMontage> AnimMontage = nullptr;
+
+	// Optional - same role as FALSMantleAsset::PositionCorrectionCurve. If unset, VaultUpdate falls back
+	// to a plain Lerp from the actual start position to the ledge (the old behavior).
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	TObjectPtr<UCurveVector> PositionCorrectionCurve = nullptr;
+
+	// Same role as FALSMantleAsset::StartingOffset: where the animation assumes the hand-grab happens,
+	// expressed as (Y = horizontal distance back from the ledge, Z = height above the ledge). Only used
+	// when PositionCorrectionCurve is set.
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	FVector StartingOffset = FVector::ZeroVector;
+
+	// Fraction (0-1) of the montage's total playback at which the character is fully standing on the
+	// ledge/apex (climb finished, about to descend) - i.e. where VaultUpdate switches from the
+	// PositionCorrectionCurve-driven approach blend to the plain apex->landing Lerp. PositionCorrectionCurve
+	// itself is sampled only across [0, ApexAlpha] of the montage, so curve time 0..1 = montage fraction
+	// 0..ApexAlpha, NOT 0..1 of the whole clip. Set this to match where your animation actually reaches
+	// the ledge, rather than assuming it's the halfway frame.
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	float ApexAlpha = 0.5f;
+
+	// Combined Root+Pelvis bone height (animation-local, feet/mesh-origin-relative) at the frame where the
+	// hand actually touches the obstacle. Since the montage has no root motion, the mesh's own bone
+	// animation keeps rising on its own after this frame regardless of where the capsule sits - the
+	// capsule only needs to be positioned so THIS frame's hand/pelvis height lands on the obstacle's raw
+	// surface; it must NOT also add the animation's own further climb-to-apex rise on top, or the capsule
+	// (and hand) end up too high by that same amount. Read this directly off the Persona Bone Details
+	// panel at the hand-contact frame (Root.Z + Pelvis.Z, both from the same frame).
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	float PelvisHeightAtHandContact = 0.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	float PlayRate = 1.0f;
+};
+
+USTRUCT(BlueprintType)
 struct FALSMantleParams
 {
 	GENERATED_BODY()
@@ -139,6 +181,31 @@ struct FALSMantleParams
 
 	UPROPERTY(EditAnywhere, Category = "Mantle System")
 	FVector StartingOffset;
+};
+
+// Mirrors FALSMantleParams - the resolved, per-vault runtime copy of FALSVaultAsset's fields.
+USTRUCT(BlueprintType)
+struct FALSVaultParams
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	TObjectPtr<UAnimMontage> AnimMontage = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	TObjectPtr<UCurveVector> PositionCorrectionCurve = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	float PlayRate = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	FVector StartingOffset = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	float ApexAlpha = 0.5f;
+
+	UPROPERTY(EditAnywhere, Category = "Vault System")
+	float PelvisHeightAtHandContact = 0.0f;
 };
 
 USTRUCT(BlueprintType)
